@@ -18,6 +18,10 @@ export const authFilesApi = {
 
   deleteAll: () => apiClient.delete('/auth-files', { params: { all: true } }),
 
+  // Remove a specific project from a multi-project credential
+  removeProject: (name: string, projectId: string) =>
+    apiClient.patch('/auth-files/remove-project', { name, project_id: projectId }),
+
   // OAuth 排除模型
   async getOauthExcludedModels(): Promise<Record<string, string[]>> {
     const data = await apiClient.get('/oauth-excluded-models');

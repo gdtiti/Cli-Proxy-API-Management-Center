@@ -29,3 +29,4 @@ settings.local.json
 *.njsproj
 *.sln
 *.sw?
+.ace-tool/

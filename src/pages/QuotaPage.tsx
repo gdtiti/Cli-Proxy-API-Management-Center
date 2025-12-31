@@ -14,6 +14,7 @@ import type {
   GeminiCliQuotaBucketState,
   GeminiCliQuotaState
 } from '@/types';
+import { KiroQuotaSection } from './quota';
 import styles from './QuotaPage.module.scss';
 
 type ThemeColors = { bg: string; text: string; border?: string };
@@ -53,6 +54,10 @@ const TYPE_COLORS: Record<string, TypeColorSet> = {
   iflow: {
     light: { bg: '#f3e5f5', text: '#7b1fa2' },
     dark: { bg: '#4a148c', text: '#ce93d8' }
+  },
+  kiro: {
+    light: { bg: '#fff8e1', text: '#f57c00' },
+    dark: { bg: '#e65100', text: '#ffcc80' }
   },
   empty: {
     light: { bg: '#f5f5f5', text: '#616161' },
@@ -1254,6 +1259,45 @@ export function QuotaPage() {
     [t]
   );
 
+  const handleDeleteGeminiCliCredential = useCallback(
+    async (item: AuthFileItem) => {
+      const isVirtual = item.attributes?.gemini_virtual_parent;
+      const projectId = item.attributes?.gemini_virtual_project;
+      const parentName = item.attributes?.path;
+
+      let confirmMessage = t('gemini_cli_quota.delete_confirm', { name: item.name });
+      if (isVirtual && projectId) {
+        confirmMessage = t('gemini_cli_quota.delete_project_confirm', {
+          project: projectId,
+          name: parentName || item.name
+        });
+      }
+
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+
+      try {
+        if (isVirtual && projectId && parentName) {
+          // Virtual credential - remove specific project
+          await authFilesApi.removeProject(parentName, projectId);
+        } else {
+          // Regular credential - delete entire file
+          await authFilesApi.deleteFile(item.name);
+        }
+
+        // Refresh file list
+        await loadFiles();
+
+        alert(t('gemini_cli_quota.delete_success'));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : t('common.unknown_error');
+        alert(t('gemini_cli_quota.delete_failed', { message }));
+      }
+    },
+    [t, loadFiles]
+  );
+
   const renderAntigravityCard = (item: AuthFileItem) => {
     const displayType = item.type || item.provider || 'antigravity';
     const typeColor = getTypeColor(displayType);
@@ -1440,17 +1484,28 @@ export function QuotaPage() {
     return (
       <div key={item.name} className={`${styles.fileCard} ${styles.geminiCliCard}`}>
         <div className={styles.cardHeader}>
-          <span
-            className={styles.typeBadge}
-            style={{
-              backgroundColor: typeColor.bg,
-              color: typeColor.text,
-              ...(typeColor.border ? { border: typeColor.border } : {})
-            }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+            <span
+              className={styles.typeBadge}
+              style={{
+                backgroundColor: typeColor.bg,
+                color: typeColor.text,
+                ...(typeColor.border ? { border: typeColor.border } : {})
+              }}
+            >
+              {getTypeLabel(displayType)}
+            </span>
+            <span className={styles.fileName}>{item.name}</span>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleDeleteGeminiCliCredential(item)}
+            disabled={disableControls}
+            style={{ marginLeft: 'auto' }}
           >
-            {getTypeLabel(displayType)}
-          </span>
-          <span className={styles.fileName}>{item.name}</span>
+            🗑️ {t('common.delete')}
+          </Button>
         </div>
 
         <div className={styles.quotaSection}>
@@ -1805,6 +1860,8 @@ export function QuotaPage() {
           </>
         )}
       </Card>
+
+      <KiroQuotaSection files={files} disableControls={disableControls} />
     </div>
   );
 }

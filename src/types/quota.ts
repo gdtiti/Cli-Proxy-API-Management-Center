@@ -47,3 +47,38 @@ export interface CodexQuotaState {
   error?: string;
   errorStatus?: number;
 }
+
+export interface KiroBonusUsage {
+  code: string;
+  name: string;
+  current: number;
+  limit: number;
+  expiresAt?: string;
+}
+
+export interface KiroQuotaDetail {
+  id: string;
+  label: string;
+  current: number;
+  limit: number;
+  percentUsed: number;
+  expiresAt?: string;
+}
+
+export interface KiroQuotaState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  totalCurrent: number;
+  totalLimit: number;
+  totalPercentUsed: number;
+  baseLimit?: number;
+  baseCurrent?: number;
+  freeTrialLimit?: number;
+  freeTrialCurrent?: number;
+  freeTrialExpiry?: string;
+  bonuses?: KiroBonusUsage[];
+  details: KiroQuotaDetail[];
+  lastUpdated?: number;
+  nextResetDate?: string;
+  error?: string;
+  errorStatus?: number;
+}
