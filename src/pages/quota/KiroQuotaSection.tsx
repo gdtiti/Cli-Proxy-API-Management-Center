@@ -336,9 +336,11 @@ export function KiroQuotaSection({ files, disableControls }: KiroQuotaSectionPro
     [fetchKiroQuota, setKiroQuota, t]
   );
 
+  // Sync cache with current file list, but preserve cache when files temporarily empty
+  // This prevents quota data loss during tab switches when parent reloads data
   useEffect(() => {
     if (kiroFiles.length === 0) {
-      setKiroQuota({});
+      // Don't clear cache when file list is empty - it may be temporarily loading
       return;
     }
     setKiroQuota((prev) => {
