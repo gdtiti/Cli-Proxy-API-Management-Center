@@ -7,9 +7,10 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconBot, IconDownload, IconInfo, IconTrash2 } from '@/components/ui/icons';
+import { IconBot, IconDownload, IconInfo, IconTrash2, IconUpload } from '@/components/ui/icons';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
+import { AntigravityImportModal } from '@/components/antigravity/AntigravityImportModal';
 import { apiClient } from '@/services/api/client';
 import type { AuthFileItem } from '@/types';
 import type { KeyStats, KeyStatBucket, UsageDetail } from '@/utils/usage';
@@ -178,6 +179,9 @@ export function AuthFilesPage() {
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
   const [excludedForm, setExcludedForm] = useState<ExcludedFormState>({ provider: '', modelsText: '' });
   const [savingExcluded, setSavingExcluded] = useState(false);
+
+  // Antigravity 导入相关
+  const [antigravityModalOpen, setAntigravityModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadingKeyStatsRef = useRef(false);
@@ -815,6 +819,14 @@ export function AuthFilesPage() {
             <Button
               variant="secondary"
               size="sm"
+              onClick={() => setAntigravityModalOpen(true)}
+              disabled={disableControls}
+            >
+              {t('antigravity.import_button', { defaultValue: '导入 Antigravity' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleDeleteAll}
               disabled={disableControls || loading || deletingAll}
               loading={deletingAll}
@@ -1115,6 +1127,16 @@ export function AuthFilesPage() {
           <div className={styles.hint}>{t('oauth_excluded.models_hint')}</div>
         </div>
       </Modal>
+
+      {/* Antigravity 导入弹窗 */}
+      <AntigravityImportModal
+        open={antigravityModalOpen}
+        onClose={() => setAntigravityModalOpen(false)}
+        onImportComplete={() => {
+          loadFiles();
+          loadKeyStats();
+        }}
+      />
     </div>
   );
 }
