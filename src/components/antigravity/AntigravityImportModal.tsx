@@ -45,7 +45,7 @@ export function AntigravityImportModal({
   const [previewItems, setPreviewItems] = useState<AntigravityPreviewItem[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  const [importing, setImporting] = useState(false);
+  const [, setImporting] = useState(false);
 
   // 重置状态
   const resetState = useCallback(() => {

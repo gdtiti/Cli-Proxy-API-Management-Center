@@ -3,7 +3,6 @@
  */
 
 import type {
-  AntigravityExportFile,
   AntigravityExportAccount,
   ValidationResult,
 } from '@/types/antigravity';
