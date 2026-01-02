@@ -74,7 +74,7 @@ export function AntigravityPreviewTable({
               <td className={styles.tokenCell}>
                 <code>{maskToken(item.original.refresh_token)}</code>
               </td>
-              <td className={styles.nameCell}>{item.converted.name}</td>
+              <td className={styles.nameCell}>antigravity_{item.converted.email.replace(/@/g, '_')}</td>
               <td className={styles.statusCell}>
                 {item.status === 'pending' && (
                   <span className={styles.statusPending}>

@@ -17,13 +17,17 @@ export type AntigravityExportFile = AntigravityExportAccount[];
 
 /**
  * 转换后的 CliProxy 凭证格式
+ * 注意：后端期望 refresh_token 在根级别，而不是 auth_index
  */
 export interface CliProxyCredential {
-  name: string;
   type: 'antigravity';
-  provider: 'antigravity';
-  auth_index: string;
-  disabled: boolean;
+  email: string;
+  refresh_token: string;
+  access_token: string;
+  expires_in: number;
+  timestamp: number;
+  expired: string | null;
+  project_id: string;
 }
 
 /**

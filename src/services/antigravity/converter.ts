@@ -18,6 +18,7 @@ function generateId(): string {
 
 /**
  * 将单个 Antigravity 账户转换为 CliProxy 凭证格式
+ * 注意：后端期望 refresh_token 在根级别，而不是 auth_index
  */
 export function convertAntigravityAccount(
   account: AntigravityExportAccount
@@ -26,11 +27,14 @@ export function convertAntigravityAccount(
   const refreshToken = account.refresh_token?.trim() || '';
 
   return {
-    name: `antigravity_${email}`,
     type: 'antigravity',
-    provider: 'antigravity',
-    auth_index: refreshToken,
-    disabled: false,
+    email: email,
+    refresh_token: refreshToken,
+    access_token: '',
+    expires_in: 3600,
+    timestamp: 0,
+    expired: null,
+    project_id: '',
   };
 }
 
@@ -58,15 +62,16 @@ export function generateCredentialJson(credential: CliProxyCredential): string {
 
 /**
  * 生成凭证文件名
+ * 格式: antigravity_<email>.json
  */
 export function generateCredentialFileName(
   credential: CliProxyCredential
 ): string {
-  // 从 name 中提取，移除特殊字符
-  const safeName = credential.name
-    .replace(/[<>:"/\\|?*]/g, '_')
+  // 从 email 生成文件名，移除特殊字符
+  const safeEmail = credential.email
+    .replace(/[<>:"/\\|?*@]/g, '_')
     .replace(/\s+/g, '_');
-  return `${safeName}.json`;
+  return `antigravity_${safeEmail}.json`;
 }
 
 /**
