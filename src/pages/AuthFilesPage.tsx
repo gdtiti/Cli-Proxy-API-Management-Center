@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInterval } from '@/hooks/useInterval';
+import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -61,6 +62,7 @@ const TYPE_COLORS: Record<string, TypeColorSet> = {
     light: { bg: '#f5f5f5', text: '#616161' },
     dark: { bg: '#424242', text: '#bdbdbd' }
   },
+<<<<<<< HEAD
   unknown: {
     light: { bg: '#f0f0f0', text: '#666666', border: '1px dashed #999999' },
     dark: { bg: '#3a3a3a', text: '#aaaaaa', border: '1px dashed #666666' }
@@ -100,6 +102,52 @@ function normalizeAuthIndexValue(value: unknown): string | null {
 function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
   const raw = file['runtime_only'] ?? file.runtimeOnly;
   if (typeof raw === 'boolean') return raw;
+=======
+  unknown: {
+    light: { bg: '#f0f0f0', text: '#666666', border: '1px dashed #999999' },
+    dark: { bg: '#3a3a3a', text: '#aaaaaa', border: '1px dashed #666666' }
+  }
+};
+
+const OAUTH_PROVIDER_PRESETS = [
+  'gemini',
+  'gemini-cli',
+  'vertex',
+  'aistudio',
+  'antigravity',
+  'claude',
+  'codex',
+  'qwen',
+  'iflow'
+];
+
+const OAUTH_PROVIDER_EXCLUDES = new Set(['all', 'unknown', 'empty']);
+const MIN_CARD_PAGE_SIZE = 3;
+const MAX_CARD_PAGE_SIZE = 30;
+
+const clampCardPageSize = (value: number) =>
+  Math.min(MAX_CARD_PAGE_SIZE, Math.max(MIN_CARD_PAGE_SIZE, Math.round(value)));
+
+interface ExcludedFormState {
+  provider: string;
+  modelsText: string;
+}
+// 标准化 auth_index 值（与 usage.ts 中的 normalizeAuthIndex 保持一致）
+function normalizeAuthIndexValue(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toString();
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  return null;
+}
+
+function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
+  const raw = file['runtime_only'] ?? file.runtimeOnly;
+  if (typeof raw === 'boolean') return raw;
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
   if (typeof raw === 'string') return raw.trim().toLowerCase() === 'true';
   return false;
 }
@@ -177,6 +225,7 @@ export function AuthFilesPage() {
   // OAuth 排除模型相关
   const [excluded, setExcluded] = useState<Record<string, string[]>>({});
   const [excludedError, setExcludedError] = useState<'unsupported' | null>(null);
+<<<<<<< HEAD
   const [excludedModalOpen, setExcludedModalOpen] = useState(false);
   const [excludedForm, setExcludedForm] = useState<ExcludedFormState>({ provider: '', modelsText: '' });
   const [savingExcluded, setSavingExcluded] = useState(false);
@@ -192,6 +241,24 @@ export function AuthFilesPage() {
   const excludedUnsupportedRef = useRef(false);
 
   const disableControls = connectionStatus !== 'connected';
+=======
+  const [excludedModalOpen, setExcludedModalOpen] = useState(false);
+  const [excludedForm, setExcludedForm] = useState<ExcludedFormState>({ provider: '', modelsText: '' });
+  const [savingExcluded, setSavingExcluded] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const loadingKeyStatsRef = useRef(false);
+  const excludedUnsupportedRef = useRef(false);
+
+  const disableControls = connectionStatus !== 'connected';
+
+  const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget.valueAsNumber;
+    if (!Number.isFinite(value)) return;
+    setPageSize(clampCardPageSize(value));
+    setPage(1);
+  };
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
 
   // 格式化修改时间
   const formatModified = (item: AuthFileItem): string => {
@@ -262,9 +329,27 @@ export function AuthFilesPage() {
         }
         return;
       }
+<<<<<<< HEAD
       // 静默失败
     }
   }, [showNotification, t]);
+=======
+      // 静默失败
+    }
+  }, [showNotification, t]);
+
+  const handleHeaderRefresh = useCallback(async () => {
+    await Promise.all([loadFiles(), loadKeyStats(), loadExcluded()]);
+  }, [loadFiles, loadKeyStats, loadExcluded]);
+
+  useHeaderRefresh(handleHeaderRefresh);
+
+  useEffect(() => {
+    loadFiles();
+    loadKeyStats();
+    loadExcluded();
+  }, [loadFiles, loadKeyStats, loadExcluded]);
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
 
   useEffect(() => {
     loadFiles();
@@ -712,12 +797,23 @@ export function AuthFilesPage() {
   };
 
   // 渲染单个认证文件卡片
+<<<<<<< HEAD
   const renderFileCard = (item: AuthFileItem) => {
     const fileStats = resolveAuthFileStats(item, keyStats);
     const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
     const typeColor = getTypeColor(item.type || 'unknown');
 
     return (
+=======
+  const renderFileCard = (item: AuthFileItem) => {
+    const fileStats = resolveAuthFileStats(item, keyStats);
+    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
+    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
+    const showModelsButton = !isRuntimeOnly || isAistudio;
+    const typeColor = getTypeColor(item.type || 'unknown');
+
+    return (
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
       <div key={item.name} className={styles.fileCard}>
         <div className={styles.cardHeader}>
           <span
@@ -751,20 +847,20 @@ export function AuthFilesPage() {
         {renderStatusBar(item)}
 
         <div className={styles.cardActions}>
-          {isRuntimeOnly ? (
-            <div className={styles.virtualBadge}>{t('auth_files.type_virtual') || '虚拟认证文件'}</div>
-          ) : (
+          {showModelsButton && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => showModels(item)}
+              className={styles.iconButton}
+              title={t('auth_files.models_button', { defaultValue: '模型' })}
+              disabled={disableControls}
+            >
+              <IconBot className={styles.actionIcon} size={16} />
+            </Button>
+          )}
+          {!isRuntimeOnly && (
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => showModels(item)}
-                className={styles.iconButton}
-                title={t('auth_files.models_button', { defaultValue: '模型' })}
-                disabled={disableControls}
-              >
-                <IconBot className={styles.actionIcon} size={16} />
-              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -795,6 +891,7 @@ export function AuthFilesPage() {
               >
                 {deleting === item.name ? (
                   <LoadingSpinner size={14} />
+<<<<<<< HEAD
                 ) : (
                   <IconTrash2 className={styles.actionIcon} size={16} />
                 )}
@@ -808,6 +905,24 @@ export function AuthFilesPage() {
 
   return (
     <div className={styles.container}>
+=======
+                ) : (
+                  <IconTrash2 className={styles.actionIcon} size={16} />
+                )}
+              </Button>
+            </>
+          )}
+          {isRuntimeOnly && (
+            <div className={styles.virtualBadge}>{t('auth_files.type_virtual') || '虚拟认证文件'}</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className={styles.container}>
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
         <p className={styles.description}>{t('auth_files.description')}</p>
@@ -817,7 +932,12 @@ export function AuthFilesPage() {
         title={t('auth_files.title_section')}
         extra={
           <div className={styles.headerActions}>
-            <Button variant="secondary" size="sm" onClick={() => { loadFiles(); loadKeyStats(); }} disabled={loading}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleHeaderRefresh}
+              disabled={loading}
+            >
               {t('common.refresh')}
             </Button>
             <Button
@@ -879,20 +999,15 @@ export function AuthFilesPage() {
             </div>
             <div className={styles.filterItem}>
               <label>{t('auth_files.page_size_label')}</label>
-              <select
+              <input
                 className={styles.pageSizeSelect}
+                type="number"
+                min={MIN_CARD_PAGE_SIZE}
+                max={MAX_CARD_PAGE_SIZE}
+                step={1}
                 value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value) || 9);
-                  setPage(1);
-                }}
-              >
-                <option value={6}>6</option>
-                <option value={9}>9</option>
-                <option value={12}>12</option>
-                <option value={18}>18</option>
-                <option value={24}>24</option>
-              </select>
+                onChange={handlePageSizeChange}
+              />
             </div>
             <div className={styles.filterItem}>
               <label>{t('common.info')}</label>

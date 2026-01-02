@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * Quota management page - coordinates the three quota sections.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+<<<<<<< HEAD
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -804,46 +809,38 @@ function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
   return false;
 }
 
+=======
+import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
+import { useAuthStore } from '@/stores';
+import { authFilesApi, configFileApi } from '@/services/api';
+import {
+  QuotaSection,
+  ANTIGRAVITY_CONFIG,
+  CODEX_CONFIG,
+  GEMINI_CLI_CONFIG
+} from '@/components/quota';
+import type { AuthFileItem } from '@/types';
+import styles from './QuotaPage.module.scss';
+
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
 export function QuotaPage() {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
-  const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [antigravityPage, setAntigravityPage] = useState(1);
-  const [antigravityPageSize, setAntigravityPageSize] = useState(6);
-  const [codexPage, setCodexPage] = useState(1);
-  const [codexPageSize, setCodexPageSize] = useState(6);
-  const [geminiCliPage, setGeminiCliPage] = useState(1);
-  const [geminiCliPageSize, setGeminiCliPageSize] = useState(6);
-  const [antigravityLoading, setAntigravityLoading] = useState(false);
-  const [antigravityLoadingScope, setAntigravityLoadingScope] = useState<
-    'page' | 'all' | null
-  >(null);
-  const [codexLoading, setCodexLoading] = useState(false);
-  const [codexLoadingScope, setCodexLoadingScope] = useState<'page' | 'all' | null>(null);
-  const [geminiCliLoading, setGeminiCliLoading] = useState(false);
-  const [geminiCliLoadingScope, setGeminiCliLoadingScope] = useState<
-    'page' | 'all' | null
-  >(null);
-
-  const antigravityQuota = useQuotaStore((state) => state.antigravityQuota);
-  const setAntigravityQuota = useQuotaStore((state) => state.setAntigravityQuota);
-  const codexQuota = useQuotaStore((state) => state.codexQuota);
-  const setCodexQuota = useQuotaStore((state) => state.setCodexQuota);
-  const geminiCliQuota = useQuotaStore((state) => state.geminiCliQuota);
-  const setGeminiCliQuota = useQuotaStore((state) => state.setGeminiCliQuota);
-
-  const antigravityLoadingRef = useRef(false);
-  const antigravityRequestIdRef = useRef(0);
-  const codexLoadingRef = useRef(false);
-  const codexRequestIdRef = useRef(0);
-  const geminiCliLoadingRef = useRef(false);
-  const geminiCliRequestIdRef = useRef(0);
 
   const disableControls = connectionStatus !== 'connected';
+
+  const loadConfig = useCallback(async () => {
+    try {
+      await configFileApi.fetchConfigYaml();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
+      setError((prev) => prev || errorMessage);
+    }
+  }, [t]);
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -859,469 +856,15 @@ export function QuotaPage() {
     }
   }, [t]);
 
-  const antigravityFiles = useMemo(
-    () => files.filter((file) => isAntigravityFile(file)),
-    [files]
-  );
-  const antigravityTotalPages = Math.max(
-    1,
-    Math.ceil(antigravityFiles.length / antigravityPageSize)
-  );
-  const antigravityCurrentPage = Math.min(antigravityPage, antigravityTotalPages);
-  const antigravityStart = (antigravityCurrentPage - 1) * antigravityPageSize;
-  const antigravityPageItems = antigravityFiles.slice(
-    antigravityStart,
-    antigravityStart + antigravityPageSize
-  );
+  const handleHeaderRefresh = useCallback(async () => {
+    await Promise.all([loadConfig(), loadFiles()]);
+  }, [loadConfig, loadFiles]);
 
-  const codexFiles = useMemo(() => files.filter((file) => isCodexFile(file)), [files]);
-  const codexTotalPages = Math.max(1, Math.ceil(codexFiles.length / codexPageSize));
-  const codexCurrentPage = Math.min(codexPage, codexTotalPages);
-  const codexStart = (codexCurrentPage - 1) * codexPageSize;
-  const codexPageItems = codexFiles.slice(codexStart, codexStart + codexPageSize);
-
-  const geminiCliFiles = useMemo(
-    () => files.filter((file) => isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file)),
-    [files]
-  );
-  const geminiCliTotalPages = Math.max(1, Math.ceil(geminiCliFiles.length / geminiCliPageSize));
-  const geminiCliCurrentPage = Math.min(geminiCliPage, geminiCliTotalPages);
-  const geminiCliStart = (geminiCliCurrentPage - 1) * geminiCliPageSize;
-  const geminiCliPageItems = geminiCliFiles.slice(
-    geminiCliStart,
-    geminiCliStart + geminiCliPageSize
-  );
-
-  const fetchAntigravityQuota = useCallback(
-    async (authIndex: string): Promise<AntigravityQuotaGroup[]> => {
-      let lastError = '';
-      let lastStatus: number | undefined;
-      let priorityStatus: number | undefined;
-      let hadSuccess = false;
-
-      for (const url of ANTIGRAVITY_QUOTA_URLS) {
-        try {
-          const result = await apiCallApi.request({
-            authIndex,
-            method: 'POST',
-            url,
-            header: { ...ANTIGRAVITY_REQUEST_HEADERS },
-            data: '{}'
-          });
-
-          if (result.statusCode < 200 || result.statusCode >= 300) {
-            lastError = getApiCallErrorMessage(result);
-            lastStatus = result.statusCode;
-            if (result.statusCode === 403 || result.statusCode === 404) {
-              priorityStatus ??= result.statusCode;
-            }
-            continue;
-          }
-
-          hadSuccess = true;
-          const payload = parseAntigravityPayload(result.body ?? result.bodyText);
-          const models = payload?.models;
-          if (!models || typeof models !== 'object' || Array.isArray(models)) {
-            lastError = t('antigravity_quota.empty_models');
-            continue;
-          }
-
-          const groups = buildAntigravityQuotaGroups(models as AntigravityModelsPayload);
-          if (groups.length === 0) {
-            lastError = t('antigravity_quota.empty_models');
-            continue;
-          }
-
-          return groups;
-        } catch (err: unknown) {
-          lastError = err instanceof Error ? err.message : t('common.unknown_error');
-          const status = getStatusFromError(err);
-          if (status) {
-            lastStatus = status;
-            if (status === 403 || status === 404) {
-              priorityStatus ??= status;
-            }
-          }
-        }
-      }
-
-      if (hadSuccess) {
-        return [];
-      }
-
-      throw createStatusError(lastError || t('common.unknown_error'), priorityStatus ?? lastStatus);
-    },
-    [t]
-  );
-
-  const loadAntigravityQuota = useCallback(
-    async (targets: AuthFileItem[], scope: 'page' | 'all') => {
-      if (antigravityLoadingRef.current) return;
-      antigravityLoadingRef.current = true;
-      const requestId = ++antigravityRequestIdRef.current;
-      setAntigravityLoading(true);
-      setAntigravityLoadingScope(scope);
-
-      try {
-        if (targets.length === 0) return;
-
-        setAntigravityQuota((prev) => {
-          const nextState = { ...prev };
-          targets.forEach((file) => {
-            nextState[file.name] = { status: 'loading', groups: [] };
-          });
-          return nextState;
-        });
-
-        const results = await Promise.all(
-          targets.map(async (file) => {
-            const rawAuthIndex = file['auth_index'] ?? file.authIndex;
-            const authIndex = normalizeAuthIndexValue(rawAuthIndex);
-            if (!authIndex) {
-              return {
-                name: file.name,
-                status: 'error' as const,
-                error: t('antigravity_quota.missing_auth_index')
-              };
-            }
-
-            try {
-              const groups = await fetchAntigravityQuota(authIndex);
-              return { name: file.name, status: 'success' as const, groups };
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : t('common.unknown_error');
-              const errorStatus = getStatusFromError(err);
-              return { name: file.name, status: 'error' as const, error: message, errorStatus };
-            }
-          })
-        );
-
-        if (requestId !== antigravityRequestIdRef.current) return;
-
-        setAntigravityQuota((prev) => {
-          const nextState = { ...prev };
-          results.forEach((result) => {
-            if (result.status === 'success') {
-              nextState[result.name] = {
-                status: 'success',
-                groups: result.groups
-              };
-            } else {
-              nextState[result.name] = {
-                status: 'error',
-                groups: [],
-                error: result.error,
-                errorStatus: result.errorStatus
-              };
-            }
-          });
-          return nextState;
-        });
-      } finally {
-        if (requestId === antigravityRequestIdRef.current) {
-          setAntigravityLoading(false);
-          setAntigravityLoadingScope(null);
-          antigravityLoadingRef.current = false;
-        }
-      }
-    },
-    [fetchAntigravityQuota, setAntigravityQuota, t]
-  );
-
-  const buildCodexQuotaWindows = useCallback(
-    (payload: CodexUsagePayload): CodexQuotaWindow[] => {
-      const rateLimit = payload.rate_limit ?? payload.rateLimit ?? undefined;
-      const codeReviewLimit =
-        payload.code_review_rate_limit ?? payload.codeReviewRateLimit ?? undefined;
-      const windows: CodexQuotaWindow[] = [];
-      const addWindow = (
-        id: string,
-        label: string,
-        window?: CodexUsageWindow | null,
-        limitReached?: boolean,
-        allowed?: boolean
-      ) => {
-        if (!window) return;
-        const resetLabel = formatCodexResetLabel(window);
-        const usedPercentRaw = normalizeNumberValue(window.used_percent ?? window.usedPercent);
-        const isLimitReached = Boolean(limitReached) || allowed === false;
-        const usedPercent =
-          usedPercentRaw ?? (isLimitReached && resetLabel !== '-' ? 100 : null);
-        windows.push({
-          id,
-          label,
-          usedPercent,
-          resetLabel
-        });
-      };
-
-      addWindow(
-        'primary',
-        t('codex_quota.primary_window'),
-        rateLimit?.primary_window ?? rateLimit?.primaryWindow,
-        rateLimit?.limit_reached ?? rateLimit?.limitReached,
-        rateLimit?.allowed
-      );
-      addWindow(
-        'secondary',
-        t('codex_quota.secondary_window'),
-        rateLimit?.secondary_window ?? rateLimit?.secondaryWindow,
-        rateLimit?.limit_reached ?? rateLimit?.limitReached,
-        rateLimit?.allowed
-      );
-      addWindow(
-        'code-review',
-        t('codex_quota.code_review_window'),
-        codeReviewLimit?.primary_window ?? codeReviewLimit?.primaryWindow,
-        codeReviewLimit?.limit_reached ?? codeReviewLimit?.limitReached,
-        codeReviewLimit?.allowed
-      );
-
-      return windows;
-    },
-    [t]
-  );
-
-  const fetchCodexQuota = useCallback(
-    async (
-      file: AuthFileItem
-    ): Promise<{ planType: string | null; windows: CodexQuotaWindow[] }> => {
-      const rawAuthIndex = file['auth_index'] ?? file.authIndex;
-      const authIndex = normalizeAuthIndexValue(rawAuthIndex);
-      if (!authIndex) {
-        throw new Error(t('codex_quota.missing_auth_index'));
-      }
-
-      const planTypeFromFile = resolveCodexPlanType(file);
-      const accountId = resolveCodexChatgptAccountId(file);
-      if (!accountId) {
-        throw new Error(t('codex_quota.missing_account_id'));
-      }
-
-      const requestUsage = async (requestHeader: Record<string, string>) => {
-        const result = await apiCallApi.request({
-          authIndex,
-          method: 'GET',
-          url: CODEX_USAGE_URL,
-          header: requestHeader
-        });
-        if (result.statusCode < 200 || result.statusCode >= 300) {
-          throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
-        }
-        const payload = parseCodexUsagePayload(result.body ?? result.bodyText);
-        if (!payload) {
-          throw new Error(t('codex_quota.empty_windows'));
-        }
-        return payload;
-      };
-
-      const baseHeader: Record<string, string> = {
-        ...CODEX_REQUEST_HEADERS,
-        'Chatgpt-Account-Id': accountId
-      };
-
-      const payload = await requestUsage(baseHeader);
-      const planTypeFromUsage = normalizePlanType(payload.plan_type ?? payload.planType);
-      const windows = buildCodexQuotaWindows(payload);
-      return { planType: planTypeFromUsage ?? planTypeFromFile, windows };
-    },
-    [buildCodexQuotaWindows, t]
-  );
-
-  const loadCodexQuota = useCallback(
-    async (targets: AuthFileItem[], scope: 'page' | 'all') => {
-      if (codexLoadingRef.current) return;
-      codexLoadingRef.current = true;
-      const requestId = ++codexRequestIdRef.current;
-      setCodexLoading(true);
-      setCodexLoadingScope(scope);
-
-      try {
-        if (targets.length === 0) return;
-
-        setCodexQuota((prev) => {
-          const nextState = { ...prev };
-          targets.forEach((file) => {
-            nextState[file.name] = { status: 'loading', windows: [] };
-          });
-          return nextState;
-        });
-
-        const results = await Promise.all(
-          targets.map(async (file) => {
-            try {
-              const { planType, windows } = await fetchCodexQuota(file);
-              return { name: file.name, status: 'success' as const, planType, windows };
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : t('common.unknown_error');
-              const errorStatus = getStatusFromError(err);
-              return { name: file.name, status: 'error' as const, error: message, errorStatus };
-            }
-          })
-        );
-
-        if (requestId !== codexRequestIdRef.current) return;
-
-        setCodexQuota((prev) => {
-          const nextState = { ...prev };
-          results.forEach((result) => {
-            if (result.status === 'success') {
-              nextState[result.name] = {
-                status: 'success',
-                windows: result.windows,
-                planType: result.planType
-              };
-            } else {
-              nextState[result.name] = {
-                status: 'error',
-                windows: [],
-                error: result.error,
-                errorStatus: result.errorStatus
-              };
-            }
-          });
-          return nextState;
-        });
-      } finally {
-        if (requestId === codexRequestIdRef.current) {
-          setCodexLoading(false);
-          setCodexLoadingScope(null);
-          codexLoadingRef.current = false;
-        }
-      }
-    },
-    [fetchCodexQuota, setCodexQuota, t]
-  );
-
-  const fetchGeminiCliQuota = useCallback(
-    async (file: AuthFileItem): Promise<GeminiCliQuotaBucketState[]> => {
-      const rawAuthIndex = file['auth_index'] ?? file.authIndex;
-      const authIndex = normalizeAuthIndexValue(rawAuthIndex);
-      if (!authIndex) {
-        throw new Error(t('gemini_cli_quota.missing_auth_index'));
-      }
-
-      const projectId = resolveGeminiCliProjectId(file);
-      if (!projectId) {
-        throw new Error(t('gemini_cli_quota.missing_project_id'));
-      }
-
-      const result = await apiCallApi.request({
-        authIndex,
-        method: 'POST',
-        url: GEMINI_CLI_QUOTA_URL,
-        header: { ...GEMINI_CLI_REQUEST_HEADERS },
-        data: JSON.stringify({ project: projectId })
-      });
-
-      if (result.statusCode < 200 || result.statusCode >= 300) {
-        throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
-      }
-
-      const payload = parseGeminiCliQuotaPayload(result.body ?? result.bodyText);
-      const buckets = Array.isArray(payload?.buckets) ? payload?.buckets : [];
-      if (buckets.length === 0) return [];
-
-      const parsedBuckets = buckets
-        .map((bucket) => {
-          const modelId = normalizeStringValue(bucket.modelId ?? bucket.model_id);
-          if (!modelId) return null;
-          const tokenType = normalizeStringValue(bucket.tokenType ?? bucket.token_type);
-          const remainingFractionRaw = normalizeQuotaFraction(
-            bucket.remainingFraction ?? bucket.remaining_fraction
-          );
-          const remainingAmount = normalizeNumberValue(
-            bucket.remainingAmount ?? bucket.remaining_amount
-          );
-          const resetTime = normalizeStringValue(bucket.resetTime ?? bucket.reset_time) ?? undefined;
-          let fallbackFraction: number | null = null;
-          if (remainingAmount !== null) {
-            fallbackFraction = remainingAmount <= 0 ? 0 : null;
-          } else if (resetTime) {
-            fallbackFraction = 0;
-          }
-          const remainingFraction = remainingFractionRaw ?? fallbackFraction;
-          return {
-            modelId,
-            tokenType,
-            remainingFraction,
-            remainingAmount,
-            resetTime
-          };
-        })
-        .filter((bucket): bucket is GeminiCliParsedBucket => bucket !== null);
-
-      return buildGeminiCliQuotaBuckets(parsedBuckets);
-    },
-    [t]
-  );
-
-  const loadGeminiCliQuota = useCallback(
-    async (targets: AuthFileItem[], scope: 'page' | 'all') => {
-      if (geminiCliLoadingRef.current) return;
-      geminiCliLoadingRef.current = true;
-      const requestId = ++geminiCliRequestIdRef.current;
-      setGeminiCliLoading(true);
-      setGeminiCliLoadingScope(scope);
-
-      try {
-        if (targets.length === 0) return;
-
-        setGeminiCliQuota((prev) => {
-          const nextState = { ...prev };
-          targets.forEach((file) => {
-            nextState[file.name] = { status: 'loading', buckets: [] };
-          });
-          return nextState;
-        });
-
-        const results = await Promise.all(
-          targets.map(async (file) => {
-            try {
-              const buckets = await fetchGeminiCliQuota(file);
-              return { name: file.name, status: 'success' as const, buckets };
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : t('common.unknown_error');
-              const errorStatus = getStatusFromError(err);
-              return { name: file.name, status: 'error' as const, error: message, errorStatus };
-            }
-          })
-        );
-
-        if (requestId !== geminiCliRequestIdRef.current) return;
-
-        setGeminiCliQuota((prev) => {
-          const nextState = { ...prev };
-          results.forEach((result) => {
-            if (result.status === 'success') {
-              nextState[result.name] = {
-                status: 'success',
-                buckets: result.buckets
-              };
-            } else {
-              nextState[result.name] = {
-                status: 'error',
-                buckets: [],
-                error: result.error,
-                errorStatus: result.errorStatus
-              };
-            }
-          });
-          return nextState;
-        });
-      } finally {
-        if (requestId === geminiCliRequestIdRef.current) {
-          setGeminiCliLoading(false);
-          setGeminiCliLoadingScope(null);
-          geminiCliLoadingRef.current = false;
-        }
-      }
-    },
-    [fetchGeminiCliQuota, setGeminiCliQuota, t]
-  );
+  useHeaderRefresh(handleHeaderRefresh);
 
   useEffect(() => {
     loadFiles();
+<<<<<<< HEAD
   }, [loadFiles]);
 
   useEffect(() => {
@@ -1732,21 +1275,21 @@ export function QuotaPage() {
       </div>
     );
   };
+=======
+    loadConfig();
+  }, [loadFiles, loadConfig]);
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
 
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>{t('quota_management.title')}</h1>
         <p className={styles.description}>{t('quota_management.description')}</p>
-        <div className={styles.headerActions}>
-          <Button variant="secondary" size="sm" onClick={loadFiles} disabled={loading}>
-            {t('quota_management.refresh_files')}
-          </Button>
-        </div>
       </div>
 
       {error && <div className={styles.errorBox}>{error}</div>}
 
+<<<<<<< HEAD
       <Card
         title={t('antigravity_quota.title')}
         extra={
@@ -2018,6 +1561,26 @@ export function QuotaPage() {
       </Card>
 
       <KiroQuotaSection files={files} disableControls={disableControls} />
+=======
+      <QuotaSection
+        config={ANTIGRAVITY_CONFIG}
+        files={files}
+        loading={loading}
+        disabled={disableControls}
+      />
+      <QuotaSection
+        config={CODEX_CONFIG}
+        files={files}
+        loading={loading}
+        disabled={disableControls}
+      />
+      <QuotaSection
+        config={GEMINI_CLI_CONFIG}
+        files={files}
+        loading={loading}
+        disabled={disableControls}
+      />
+>>>>>>> db376c75040b4488f947d9b90787f91cfd652ec9
     </div>
   );
 }
