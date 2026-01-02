@@ -354,6 +354,7 @@ export function KiroImportModal({
       open={open}
       onClose={handleClose}
       title={t('kiro.import_title', { defaultValue: '导入 Kiro 凭证' })}
+      width={700}
     >
       <div className={styles.modalContent}>
         {step === 'upload' && renderUploadStep()}
