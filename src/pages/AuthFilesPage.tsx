@@ -11,6 +11,7 @@ import { IconBot, IconDownload, IconInfo, IconTrash2 } from '@/components/ui/ico
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
 import { AntigravityImportModal } from '@/components/antigravity/AntigravityImportModal';
+import { KiroImportModal } from '@/components/kiro/KiroImportModal';
 import { apiClient } from '@/services/api/client';
 import type { AuthFileItem } from '@/types';
 import type { KeyStats, KeyStatBucket, UsageDetail } from '@/utils/usage';
@@ -182,6 +183,9 @@ export function AuthFilesPage() {
 
   // Antigravity 导入相关
   const [antigravityModalOpen, setAntigravityModalOpen] = useState(false);
+
+  // Kiro 导入相关
+  const [kiroModalOpen, setKiroModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadingKeyStatsRef = useRef(false);
@@ -827,6 +831,14 @@ export function AuthFilesPage() {
             <Button
               variant="secondary"
               size="sm"
+              onClick={() => setKiroModalOpen(true)}
+              disabled={disableControls}
+            >
+              {t('kiro.import_button', { defaultValue: '导入 Kiro' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleDeleteAll}
               disabled={disableControls || loading || deletingAll}
               loading={deletingAll}
@@ -1132,6 +1144,16 @@ export function AuthFilesPage() {
       <AntigravityImportModal
         open={antigravityModalOpen}
         onClose={() => setAntigravityModalOpen(false)}
+        onImportComplete={() => {
+          loadFiles();
+          loadKeyStats();
+        }}
+      />
+
+      {/* Kiro 导入弹窗 */}
+      <KiroImportModal
+        open={kiroModalOpen}
+        onClose={() => setKiroModalOpen(false)}
         onImportComplete={() => {
           loadFiles();
           loadKeyStats();
