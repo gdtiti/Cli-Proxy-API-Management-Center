@@ -62,6 +62,7 @@ const TYPE_COLORS: Record<string, TypeColorSet> = {
     light: { bg: '#f5f5f5', text: '#616161' },
     dark: { bg: '#424242', text: '#bdbdbd' }
   },
+<<<<<<< HEAD
   unknown: {
     light: { bg: '#f0f0f0', text: '#666666', border: '1px dashed #999999' },
     dark: { bg: '#3a3a3a', text: '#aaaaaa', border: '1px dashed #666666' }
@@ -106,6 +107,53 @@ function normalizeAuthIndexValue(value: unknown): string | null {
 function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
   const raw = file['runtime_only'] ?? file.runtimeOnly;
   if (typeof raw === 'boolean') return raw;
+=======
+  unknown: {
+    light: { bg: '#f0f0f0', text: '#666666', border: '1px dashed #999999' },
+    dark: { bg: '#3a3a3a', text: '#aaaaaa', border: '1px dashed #666666' }
+  }
+};
+
+const OAUTH_PROVIDER_PRESETS = [
+  'gemini',
+  'gemini-cli',
+  'vertex',
+  'aistudio',
+  'antigravity',
+  'claude',
+  'codex',
+  'qwen',
+  'iflow'
+];
+
+const OAUTH_PROVIDER_EXCLUDES = new Set(['all', 'unknown', 'empty']);
+const MIN_CARD_PAGE_SIZE = 3;
+const MAX_CARD_PAGE_SIZE = 30;
+const MAX_AUTH_FILE_SIZE = 50 * 1024;
+
+const clampCardPageSize = (value: number) =>
+  Math.min(MAX_CARD_PAGE_SIZE, Math.max(MIN_CARD_PAGE_SIZE, Math.round(value)));
+
+interface ExcludedFormState {
+  provider: string;
+  modelsText: string;
+}
+// 标准化 auth_index 值（与 usage.ts 中的 normalizeAuthIndex 保持一致）
+function normalizeAuthIndexValue(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toString();
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  return null;
+}
+
+function isRuntimeOnlyAuthFile(file: AuthFileItem): boolean {
+  const raw = file['runtime_only'] ?? file.runtimeOnly;
+  if (typeof raw === 'boolean') return raw;
+>>>>>>> 71556a51c55a9690cfbbbadeb9fb8986c755d3ef
   if (typeof raw === 'string') return raw.trim().toLowerCase() === 'true';
   return false;
 }
@@ -364,9 +412,6 @@ export function AuthFilesPage() {
   const start = (currentPage - 1) * pageSize;
   const pageItems = filtered.slice(start, start + pageSize);
 
-  // 统计信息
-  const totalSize = useMemo(() => files.reduce((sum, item) => sum + (item.size || 0), 0), [files]);
-
   // 点击上传
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -380,17 +425,28 @@ export function AuthFilesPage() {
     const filesToUpload = Array.from(fileList);
     const validFiles: File[] = [];
     const invalidFiles: string[] = [];
+    const oversizedFiles: string[] = [];
 
     filesToUpload.forEach((file) => {
-      if (file.name.endsWith('.json')) {
-        validFiles.push(file);
-      } else {
+      if (!file.name.endsWith('.json')) {
         invalidFiles.push(file.name);
+        return;
       }
+      if (file.size > MAX_AUTH_FILE_SIZE) {
+        oversizedFiles.push(file.name);
+        return;
+      }
+      validFiles.push(file);
     });
 
     if (invalidFiles.length > 0) {
       showNotification(t('auth_files.upload_error_json'), 'error');
+    }
+    if (oversizedFiles.length > 0) {
+      showNotification(
+        t('auth_files.upload_error_size', { maxSize: formatFileSize(MAX_AUTH_FILE_SIZE) }),
+        'error'
+      );
     }
 
     if (validFiles.length === 0) {
@@ -816,6 +872,7 @@ export function AuthFilesPage() {
               >
                 {deleting === item.name ? (
                   <LoadingSpinner size={14} />
+<<<<<<< HEAD
                 ) : (
                   <IconTrash2 className={styles.actionIcon} size={16} />
                 )}
@@ -865,6 +922,48 @@ export function AuthFilesPage() {
             >
               {t('kiro.import_button', { defaultValue: '导入 Kiro' })}
             </Button>
+=======
+                ) : (
+                  <IconTrash2 className={styles.actionIcon} size={16} />
+                )}
+              </Button>
+            </>
+          )}
+          {isRuntimeOnly && (
+            <div className={styles.virtualBadge}>{t('auth_files.type_virtual') || '虚拟认证文件'}</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const titleNode = (
+    <div className={styles.titleWrapper}>
+      <span>{t('auth_files.title_section')}</span>
+      {files.length > 0 && <span className={styles.countBadge}>{files.length}</span>}
+    </div>
+  );
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
+        <p className={styles.description}>{t('auth_files.description')}</p>
+      </div>
+
+      <Card
+        title={titleNode}
+        extra={
+          <div className={styles.headerActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleHeaderRefresh}
+              disabled={loading}
+            >
+              {t('common.refresh')}
+            </Button>
+>>>>>>> 71556a51c55a9690cfbbbadeb9fb8986c755d3ef
             <Button
               variant="secondary"
               size="sm"
@@ -906,6 +1005,7 @@ export function AuthFilesPage() {
                 placeholder={t('auth_files.search_placeholder')}
               />
             </div>
+<<<<<<< HEAD
             <div className={styles.filterItem}>
               <label>{t('auth_files.page_size_label')}</label>
               <input
@@ -926,6 +1026,22 @@ export function AuthFilesPage() {
             </div>
           </div>
         </div>
+=======
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.page_size_label')}</label>
+              <input
+                className={styles.pageSizeSelect}
+                type="number"
+                min={MIN_CARD_PAGE_SIZE}
+                max={MAX_CARD_PAGE_SIZE}
+                step={1}
+                value={pageSize}
+                onChange={handlePageSizeChange}
+              />
+            </div>
+          </div>
+        </div>
+>>>>>>> 71556a51c55a9690cfbbbadeb9fb8986c755d3ef
 
         {/* 卡片网格 */}
         {loading ? (

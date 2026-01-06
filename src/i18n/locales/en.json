@@ -312,6 +312,7 @@
     "delete_all_confirm": "Are you sure you want to delete all auth files? This operation cannot be undone!",
     "delete_filtered_confirm": "Are you sure you want to delete all {{type}} auth files? This operation cannot be undone!",
     "upload_error_json": "Only JSON files are allowed",
+    "upload_error_size": "File size cannot exceed {{maxSize}}",
     "upload_success": "File uploaded successfully",
     "download_success": "File downloaded successfully",
     "delete_success": "File deleted successfully",
@@ -327,6 +328,9 @@
     "search_placeholder": "Filter by name, type, or provider",
     "page_size_label": "Per page",
     "page_size_unit": "items",
+    "view_mode_paged": "Paged",
+    "view_mode_all": "Show all",
+    "too_many_files_warning": "Too many credentials. Showing all may cause performance issues, please use paged view.",
     "filter_all": "All",
     "filter_qwen": "Qwen",
     "filter_gemini": "Gemini",
@@ -793,7 +797,8 @@
   "quota_management": {
     "title": "Quota Management",
     "description": "Monitor OAuth quota status for Antigravity, Codex, and Gemini CLI credentials.",
-    "refresh_files": "Refresh auth files"
+    "refresh_files": "Refresh auth files",
+    "refresh_files_and_quota": "Refresh files & quota"
   },
   "system_info": {
     "title": "Management Center Info",
