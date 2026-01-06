@@ -370,7 +370,6 @@
   border-radius: $radius-md;
 }
 
-<<<<<<< HEAD
 // Kiro specific styles
 .kiroTotalSummary {
   display: flex;
@@ -409,7 +408,8 @@
 .quotaUsage {
   font-size: 11px;
   color: var(--text-tertiary);
-=======
+}
+
 .warningOverlay {
   position: fixed;
   top: 0;
@@ -437,5 +437,4 @@
     font-size: 14px;
     line-height: 1.6;
   }
->>>>>>> 71556a51c55a9690cfbbbadeb9fb8986c755d3ef
 }
