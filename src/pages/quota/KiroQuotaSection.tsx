@@ -8,8 +8,10 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useQuotaStore, useThemeStore } from '@/stores';
-import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
+import { IconTrash2 } from '@/components/ui/icons';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useQuotaStore, useThemeStore, useNotificationStore } from '@/stores';
+import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import type { AuthFileItem, KiroQuotaState, KiroQuotaDetail, KiroBonusUsage } from '@/types';
 import {
   normalizeAuthIndexValue,
@@ -186,16 +188,19 @@ function buildKiroQuotaState(payload: KiroUsageLimitsResponse): Omit<KiroQuotaSt
 interface KiroQuotaSectionProps {
   files: AuthFileItem[];
   disableControls: boolean;
+  onFileDeleted?: (name: string) => void;
 }
 
-export function KiroQuotaSection({ files, disableControls }: KiroQuotaSectionProps) {
+export function KiroQuotaSection({ files, disableControls, onFileDeleted }: KiroQuotaSectionProps) {
   const { t } = useTranslation();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const showNotification = useNotificationStore((state) => state.showNotification);
 
   const [kiroPage, setKiroPage] = useState(1);
   const [kiroPageSize, setKiroPageSize] = useState(6);
   const [kiroLoading, setKiroLoading] = useState(false);
   const [kiroLoadingScope, setKiroLoadingScope] = useState<'page' | 'all' | null>(null);
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
 
   const kiroQuota = useQuotaStore((state) => state.kiroQuota);
   const setKiroQuota = useQuotaStore((state) => state.setKiroQuota);
@@ -372,6 +377,30 @@ export function KiroQuotaSection({ files, disableControls }: KiroQuotaSectionPro
     [t]
   );
 
+  // Delete handler
+  const handleDelete = useCallback(async (name: string) => {
+    if (!window.confirm(t('quota_management.delete_confirm', { name }))) return;
+
+    setDeletingFile(name);
+    try {
+      await authFilesApi.deleteFile(name);
+      // Clear quota cache for this credential
+      setKiroQuota((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+      // Notify parent to update file list
+      onFileDeleted?.(name);
+      showNotification(t('quota_management.delete_success'), 'success');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : t('common.unknown_error');
+      showNotification(t('quota_management.delete_failed', { message: errorMessage }), 'error');
+    } finally {
+      setDeletingFile(null);
+    }
+  }, [t, setKiroQuota, onFileDeleted, showNotification]);
+
   const renderKiroCard = (item: AuthFileItem) => {
     const displayType = item.type || item.provider || 'kiro';
     const typeColor = getTypeColor(displayType, resolvedTheme);
@@ -397,6 +426,22 @@ export function KiroQuotaSection({ files, disableControls }: KiroQuotaSectionPro
             {getTypeLabel(displayType)}
           </span>
           <span className={styles.fileName}>{item.name}</span>
+          {!isRuntimeOnlyAuthFile(item) && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => handleDelete(item.name)}
+              className={styles.deleteButton}
+              title={t('quota_management.delete_button')}
+              disabled={deletingFile === item.name}
+            >
+              {deletingFile === item.name ? (
+                <LoadingSpinner size={14} />
+              ) : (
+                <IconTrash2 size={16} />
+              )}
+            </Button>
+          )}
         </div>
 
         <div className={styles.quotaSection}>

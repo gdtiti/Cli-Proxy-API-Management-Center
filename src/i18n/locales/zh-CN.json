@@ -798,7 +798,11 @@
     "title": "配额管理",
     "description": "集中查看 OAuth 额度与剩余情况",
     "refresh_files": "刷新认证文件",
-    "refresh_files_and_quota": "刷新认证文件&额度"
+    "refresh_files_and_quota": "刷新认证文件&额度",
+    "delete_confirm": "确定要删除凭证 {{name}} 吗？",
+    "delete_success": "凭证已删除",
+    "delete_failed": "删除失败：{{message}}",
+    "delete_button": "删除凭证"
   },
   "system_info": {
     "title": "管理中心信息",

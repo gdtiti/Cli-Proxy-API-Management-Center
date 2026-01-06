@@ -27,6 +27,11 @@ export function QuotaPage() {
 
   const disableControls = connectionStatus !== 'connected';
 
+  // Handler to remove deleted file from state (Requirements 3.1)
+  const handleFileDeleted = useCallback((name: string) => {
+    setFiles((prev) => prev.filter((file) => file.name !== name));
+  }, []);
+
   const loadConfig = useCallback(async () => {
     try {
       await configFileApi.fetchConfigYaml();
@@ -75,20 +80,23 @@ export function QuotaPage() {
         files={files}
         loading={loading}
         disabled={disableControls}
+        onFileDeleted={handleFileDeleted}
       />
       <QuotaSection
         config={CODEX_CONFIG}
         files={files}
         loading={loading}
         disabled={disableControls}
+        onFileDeleted={handleFileDeleted}
       />
       <QuotaSection
         config={GEMINI_CLI_CONFIG}
         files={files}
         loading={loading}
         disabled={disableControls}
+        onFileDeleted={handleFileDeleted}
       />
-      <KiroQuotaSection files={files} disableControls={disableControls} />
+      <KiroQuotaSection files={files} disableControls={disableControls} onFileDeleted={handleFileDeleted} />
     </div>
   );
 }

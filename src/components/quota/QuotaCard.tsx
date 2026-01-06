@@ -7,6 +7,9 @@ import type { ReactElement, ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS } from '@/utils/quota';
+import { IconTrash2 } from '@/components/ui/icons';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Button } from '@/components/ui/Button';
 import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -64,6 +67,10 @@ interface QuotaCardProps<TState extends QuotaStatusState> {
   cardClassName: string;
   defaultType: string;
   renderQuotaItems: (quota: TState, t: TFunction, helpers: QuotaRenderHelpers) => ReactNode;
+  // Delete functionality props
+  onDelete?: (name: string) => void;
+  isDeleting?: boolean;
+  canDelete?: boolean;
 }
 
 export function QuotaCard<TState extends QuotaStatusState>({
@@ -73,7 +80,10 @@ export function QuotaCard<TState extends QuotaStatusState>({
   i18nPrefix,
   cardClassName,
   defaultType,
-  renderQuotaItems
+  renderQuotaItems,
+  onDelete,
+  isDeleting,
+  canDelete
 }: QuotaCardProps<TState>) {
   const { t } = useTranslation();
 
@@ -111,6 +121,22 @@ export function QuotaCard<TState extends QuotaStatusState>({
           {getTypeLabel(displayType)}
         </span>
         <span className={styles.fileName}>{item.name}</span>
+        {canDelete && onDelete && (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => onDelete(item.name)}
+            className={styles.deleteButton}
+            title={t('quota_management.delete_button')}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <LoadingSpinner size={14} />
+            ) : (
+              <IconTrash2 size={16} />
+            )}
+          </Button>
+        )}
       </div>
 
       <div className={styles.quotaSection}>

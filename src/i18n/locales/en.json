@@ -798,7 +798,11 @@
     "title": "Quota Management",
     "description": "Monitor OAuth quota status for Antigravity, Codex, and Gemini CLI credentials.",
     "refresh_files": "Refresh auth files",
-    "refresh_files_and_quota": "Refresh files & quota"
+    "refresh_files_and_quota": "Refresh files & quota",
+    "delete_confirm": "Are you sure you want to delete credential {{name}}?",
+    "delete_success": "Credential deleted successfully",
+    "delete_failed": "Delete failed: {{message}}",
+    "delete_button": "Delete credential"
   },
   "system_info": {
     "title": "Management Center Info",
