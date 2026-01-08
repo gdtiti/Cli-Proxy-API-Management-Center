@@ -76,7 +76,7 @@ export function KiroImportModal({
       // 读取文件内容
       try {
         const content = await file.text();
-        const result = validateKiroFile(content);
+        const result = validateKiroFile(content, file.name);
 
         if (!result.valid) {
           alert(

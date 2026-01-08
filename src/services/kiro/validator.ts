@@ -5,10 +5,11 @@
 import type {
   KiroExportAccount,
   KiroValidationResult,
+  KiroSingleAccountFile,
 } from '@/types/kiro';
 
 /**
- * 验证单个 Kiro 账户
+ * 验证单个 Kiro 账户（多账号格式）
  */
 function validateAccount(
   account: unknown,
@@ -80,9 +81,124 @@ function validateAccount(
 }
 
 /**
- * 验证 Kiro 导出文件
+ * 检测是否为单账号格式 (kiro-account-*.json)
  */
-export function validateKiroFile(content: string): KiroValidationResult {
+function isSingleAccountFormat(data: Record<string, unknown>): boolean {
+  // 单账号格式直接包含这些字段
+  return (
+    typeof data.accessToken === 'string' &&
+    typeof data.refreshToken === 'string' &&
+    typeof data.clientId === 'string' &&
+    typeof data.clientSecret === 'string' &&
+    typeof data.provider === 'string'
+  );
+}
+
+/**
+ * 验证单账号格式文件
+ */
+function validateSingleAccountFile(
+  data: Record<string, unknown>
+): { valid: boolean; errors: string[]; warnings: string[]; singleAccount?: KiroSingleAccountFile } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // 验证必需字段
+  if (!data.accessToken || typeof data.accessToken !== 'string') {
+    errors.push('缺少 accessToken 字段');
+  }
+
+  if (!data.refreshToken || typeof data.refreshToken !== 'string') {
+    errors.push('缺少 refreshToken 字段');
+  } else if ((data.refreshToken as string).length < 10) {
+    warnings.push('refreshToken 长度过短');
+  }
+
+  if (!data.clientId || typeof data.clientId !== 'string') {
+    errors.push('缺少 clientId 字段');
+  }
+
+  if (!data.clientSecret || typeof data.clientSecret !== 'string') {
+    errors.push('缺少 clientSecret 字段');
+  }
+
+  if (!data.provider || typeof data.provider !== 'string') {
+    errors.push('缺少 provider 字段');
+  } else {
+    const validProviders = ['IdC', 'BuilderId', 'IAM'];
+    if (!validProviders.includes(data.provider as string)) {
+      warnings.push(`未知的 provider "${data.provider}"，将映射为 builder-id`);
+    }
+  }
+
+  if (!data.expiresAt || typeof data.expiresAt !== 'string') {
+    warnings.push('缺少 expiresAt 字段');
+  }
+
+  if (!data.region || typeof data.region !== 'string') {
+    warnings.push('缺少 region 字段，将使用默认值 us-east-1');
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors, warnings };
+  }
+
+  return {
+    valid: true,
+    errors,
+    warnings,
+    singleAccount: data as unknown as KiroSingleAccountFile,
+  };
+}
+
+/**
+ * 将单账号格式转换为多账号格式
+ */
+function convertSingleToMultiFormat(
+  singleAccount: KiroSingleAccountFile,
+  fileName: string
+): KiroExportAccount {
+  // 解析 expiresAt 字符串为时间戳
+  // 格式: "2026/01/08 10:52:06"
+  let expiresAtTimestamp: number;
+  try {
+    const dateStr = singleAccount.expiresAt.replace(/\//g, '-');
+    expiresAtTimestamp = new Date(dateStr).getTime();
+    if (isNaN(expiresAtTimestamp)) {
+      expiresAtTimestamp = Date.now() + 3600000; // 默认 1 小时后
+    }
+  } catch {
+    expiresAtTimestamp = Date.now() + 3600000;
+  }
+
+  // 从文件名提取 email 或生成一个
+  // 文件名格式: kiro-account-1767837125291.json
+  const timestamp = fileName.match(/kiro-account-(\d+)\.json/i)?.[1] || Date.now().toString();
+  const email = `kiro-${timestamp}@imported.local`;
+
+  return {
+    email,
+    status: 'active',
+    credentials: {
+      accessToken: singleAccount.accessToken,
+      refreshToken: singleAccount.refreshToken,
+      clientId: singleAccount.clientId,
+      clientSecret: singleAccount.clientSecret,
+      authMethod: singleAccount.provider,
+      expiresAt: expiresAtTimestamp,
+      region: singleAccount.region || 'us-east-1',
+      // 保留机器码信息
+      machineId: singleAccount.machineId,
+    } as KiroSingleAccountFile['machineId'] extends string
+      ? KiroExportAccount['credentials'] & { machineId?: string }
+      : KiroExportAccount['credentials'],
+  };
+}
+
+/**
+ * 验证 Kiro 导出文件（支持多账号和单账号两种格式）
+ */
+export function validateKiroFile(content: string, fileName?: string): KiroValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -109,11 +225,40 @@ export function validateKiroFile(content: string): KiroValidationResult {
 
   const data = parsed as Record<string, unknown>;
 
-  // 验证 accounts 数组
+  // 检测文件格式
+  if (isSingleAccountFormat(data)) {
+    // 单账号格式 (kiro-account-*.json)
+    const result = validateSingleAccountFile(data);
+    if (!result.valid) {
+      return {
+        valid: false,
+        errors: result.errors,
+        warnings: result.warnings,
+      };
+    }
+
+    // 转换为多账号格式
+    const account = convertSingleToMultiFormat(
+      result.singleAccount!,
+      fileName || 'kiro-account.json'
+    );
+
+    // 保存原始机器码到 account 中以便后续使用
+    (account as KiroExportAccount & { _machineId?: string })._machineId = data.machineId as string | undefined;
+
+    return {
+      valid: true,
+      data: { accounts: [account] },
+      errors: [],
+      warnings: [...result.warnings, '检测到单账号格式，已自动转换'],
+    };
+  }
+
+  // 多账号格式 - 验证 accounts 数组
   if (!Array.isArray(data.accounts)) {
     return {
       valid: false,
-      errors: ['文件必须包含 accounts 数组'],
+      errors: ['文件必须包含 accounts 数组，或者是单账号格式（包含 accessToken、refreshToken 等字段）'],
       warnings: [],
     };
   }
@@ -171,9 +316,12 @@ export function validateKiroFile(content: string): KiroValidationResult {
  * 检测文件名是否符合 Kiro 导出格式
  */
 export function isKiroFileName(fileName: string): boolean {
-  // Kiro 导出文件通常命名为 kiro-accounts-*.json 或类似格式
+  // Kiro 导出文件通常命名为:
+  // - kiro-accounts-*.json (多账号格式)
+  // - kiro-account-*.json (单账号格式)
+  // - kiro-export-*.json
   const patterns = [
-    /^kiro[-_]?accounts/i,
+    /^kiro[-_]?accounts?/i,
     /^kiro[-_]?export/i,
     /^accounts[-_]?kiro/i,
   ];

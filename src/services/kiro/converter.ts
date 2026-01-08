@@ -72,14 +72,28 @@ function emailToFilename(email: string): string {
 }
 
 /**
+ * 扩展的账户类型，包含可能的机器码
+ */
+type ExtendedKiroAccount = KiroExportAccount & {
+  _machineId?: string;
+  credentials: KiroExportAccount['credentials'] & { machineId?: string };
+};
+
+/**
  * 将单个 Kiro 账户转换为 CliProxy 凭证格式
  */
 export function convertKiroAccount(
   account: KiroExportAccount
 ): KiroCliProxyCredential {
   const { email, credentials } = account;
+  const extAccount = account as ExtendedKiroAccount;
   const expiresAt = credentials.expiresAt || Date.now() + 3600000;
   const lastRefresh = expiresAt - 60 * 60 * 1000; // 减去 1 小时
+
+  // 优先使用原始文件中的机器码，否则生成新的
+  const machineId = extAccount._machineId ||
+    extAccount.credentials.machineId ||
+    generateUUID();
 
   return {
     type: 'kiro',
@@ -92,7 +106,7 @@ export function convertKiroAccount(
     refresh_token: credentials.refreshToken || '',
     expires_at: formatTimestamp(expiresAt),
     last_refresh: formatTimestamp(lastRefresh),
-    machine_id: generateUUID(),
+    machine_id: machineId,
     region: credentials.region || 'us-east-1',
   };
 }

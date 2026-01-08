@@ -3,7 +3,7 @@
  */
 
 /**
- * Kiro 导出文件中的凭证信息
+ * Kiro 导出文件中的凭证信息（多账号格式）
  */
 export interface KiroCredentials {
   accessToken: string;
@@ -16,7 +16,7 @@ export interface KiroCredentials {
 }
 
 /**
- * Kiro 导出文件中的单个账户
+ * Kiro 导出文件中的单个账户（多账号格式）
  */
 export interface KiroExportAccount {
   email: string;
@@ -25,10 +25,27 @@ export interface KiroExportAccount {
 }
 
 /**
- * Kiro 导出文件格式
+ * Kiro 导出文件格式（多账号格式）
  */
 export interface KiroExportFile {
   accounts: KiroExportAccount[];
+}
+
+/**
+ * Kiro 单账号导出格式 (kiro-account-*.json)
+ * 直接包含凭证字段，不嵌套在 accounts 数组中
+ */
+export interface KiroSingleAccountFile {
+  version?: string;
+  exportedAt?: string;
+  accessToken: string;
+  refreshToken: string;
+  clientId: string;
+  clientSecret: string;
+  expiresAt: string; // 格式: "2026/01/08 10:52:06"
+  provider: string; // "BuilderId" | "IdC" | "IAM"
+  region: string;
+  machineId?: string; // 可选的机器码
 }
 
 /**
