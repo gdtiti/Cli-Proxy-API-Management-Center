@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
@@ -50,11 +50,6 @@ export function LoginPage() {
     init();
   }, [detectedBase, restoreSession, storedBase, storedKey, storedRememberPassword]);
 
-  if (isAuthenticated) {
-    const redirect = (location.state as any)?.from?.pathname || '/';
-    return <Navigate to={redirect} replace />;
-  }
-
   const handleSubmit = async () => {
     if (!managementKey.trim()) {
       setError(t('login.error_required'));
@@ -80,6 +75,21 @@ export function LoginPage() {
       setLoading(false);
     }
   };
+
+  const handleSubmitKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter' && !loading) {
+        event.preventDefault();
+        handleSubmit();
+      }
+    },
+    [loading, handleSubmit]
+  );
+
+  if (isAuthenticated) {
+    const redirect = (location.state as any)?.from?.pathname || '/';
+    return <Navigate to={redirect} replace />;
+  }
 
   return (
     <div className="login-page">
@@ -129,11 +139,13 @@ export function LoginPage() {
         )}
 
         <Input
+          autoFocus
           label={t('login.management_key_label')}
           placeholder={t('login.management_key_placeholder')}
           type={showKey ? 'text' : 'password'}
           value={managementKey}
           onChange={(e) => setManagementKey(e.target.value)}
+          onKeyDown={handleSubmitKeyDown}
           rightElement={
             <button
               type="button"

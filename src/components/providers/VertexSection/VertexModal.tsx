@@ -4,34 +4,35 @@ import { Button } from '@/components/ui/Button';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import type { GeminiKeyConfig } from '@/types';
+import { ModelInputList, modelsToEntries } from '@/components/ui/ModelInputList';
+import type { ProviderKeyConfig } from '@/types';
 import { headersToEntries } from '@/utils/headers';
-import { excludedModelsToText } from '../utils';
-import type { GeminiFormState, ProviderModalProps } from '../types';
+import type { ProviderModalProps, VertexFormState } from '../types';
 
-interface GeminiModalProps extends ProviderModalProps<GeminiKeyConfig, GeminiFormState> {
+interface VertexModalProps extends ProviderModalProps<ProviderKeyConfig, VertexFormState> {
   isSaving: boolean;
 }
 
-const buildEmptyForm = (): GeminiFormState => ({
+const buildEmptyForm = (): VertexFormState => ({
   apiKey: '',
   prefix: '',
   baseUrl: '',
+  proxyUrl: '',
   headers: [],
-  excludedModels: [],
-  excludedText: '',
+  models: [],
+  modelEntries: [{ name: '', alias: '' }],
 });
 
-export function GeminiModal({
+export function VertexModal({
   isOpen,
   editIndex,
   initialData,
   onClose,
   onSave,
   isSaving,
-}: GeminiModalProps) {
+}: VertexModalProps) {
   const { t } = useTranslation();
-  const [form, setForm] = useState<GeminiFormState>(buildEmptyForm);
+  const [form, setForm] = useState<VertexFormState>(buildEmptyForm);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -40,16 +41,12 @@ export function GeminiModal({
       setForm({
         ...initialData,
         headers: headersToEntries(initialData.headers),
-        excludedText: excludedModelsToText(initialData.excludedModels),
+        modelEntries: modelsToEntries(initialData.models),
       });
       return;
     }
     setForm(buildEmptyForm());
   }, [initialData, isOpen]);
-
-  const handleSave = () => {
-    void onSave(form, editIndex);
-  };
 
   return (
     <Modal
@@ -57,23 +54,23 @@ export function GeminiModal({
       onClose={onClose}
       title={
         editIndex !== null
-          ? t('ai_providers.gemini_edit_modal_title')
-          : t('ai_providers.gemini_add_modal_title')
+          ? t('ai_providers.vertex_edit_modal_title')
+          : t('ai_providers.vertex_add_modal_title')
       }
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSaving}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleSave} loading={isSaving}>
+          <Button onClick={() => void onSave(form, editIndex)} loading={isSaving}>
             {t('common.save')}
           </Button>
         </>
       }
     >
       <Input
-        label={t('ai_providers.gemini_add_modal_key_label')}
-        placeholder={t('ai_providers.gemini_add_modal_key_placeholder')}
+        label={t('ai_providers.vertex_add_modal_key_label')}
+        placeholder={t('ai_providers.vertex_add_modal_key_placeholder')}
         value={form.apiKey}
         onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
       />
@@ -85,10 +82,16 @@ export function GeminiModal({
         hint={t('ai_providers.prefix_hint')}
       />
       <Input
-        label={t('ai_providers.gemini_base_url_label')}
-        placeholder={t('ai_providers.gemini_base_url_placeholder')}
+        label={t('ai_providers.vertex_add_modal_url_label')}
+        placeholder={t('ai_providers.vertex_add_modal_url_placeholder')}
         value={form.baseUrl ?? ''}
         onChange={(e) => setForm((prev) => ({ ...prev, baseUrl: e.target.value }))}
+      />
+      <Input
+        label={t('ai_providers.vertex_add_modal_proxy_label')}
+        placeholder={t('ai_providers.vertex_add_modal_proxy_placeholder')}
+        value={form.proxyUrl ?? ''}
+        onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
       />
       <HeaderInputList
         entries={form.headers}
@@ -98,15 +101,16 @@ export function GeminiModal({
         valuePlaceholder={t('common.custom_headers_value_placeholder')}
       />
       <div className="form-group">
-        <label>{t('ai_providers.excluded_models_label')}</label>
-        <textarea
-          className="input"
-          placeholder={t('ai_providers.excluded_models_placeholder')}
-          value={form.excludedText}
-          onChange={(e) => setForm((prev) => ({ ...prev, excludedText: e.target.value }))}
-          rows={4}
+        <label>{t('ai_providers.vertex_models_label')}</label>
+        <ModelInputList
+          entries={form.modelEntries}
+          onChange={(entries) => setForm((prev) => ({ ...prev, modelEntries: entries }))}
+          addLabel={t('ai_providers.vertex_models_add_btn')}
+          namePlaceholder={t('common.model_name_placeholder')}
+          aliasPlaceholder={t('common.model_alias_placeholder')}
+          disabled={isSaving}
         />
-        <div className="hint">{t('ai_providers.excluded_models_hint')}</div>
+        <div className="hint">{t('ai_providers.vertex_models_hint')}</div>
       </div>
     </Modal>
   );
