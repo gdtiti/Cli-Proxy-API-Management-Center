@@ -31,3 +31,6 @@ settings.local.json
 *.sln
 *.sw?
 .ace-tool/
+
+# Temporary account files
+kiro-account-*.json
