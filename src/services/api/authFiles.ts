@@ -60,6 +60,14 @@ export const authFilesApi = {
   removeProject: (name: string, projectId: string) =>
     apiClient.patch('/auth-files/remove-project', { name, project_id: projectId }),
 
+  downloadText: async (name: string): Promise<string> => {
+    const response = await apiClient.getRaw(`/auth-files/download?name=${encodeURIComponent(name)}`, {
+      responseType: 'blob'
+    });
+    const blob = response.data as Blob;
+    return blob.text();
+  },
+
   // OAuth 排除模型
   async getOauthExcludedModels(): Promise<Record<string, string[]>> {
     const data = await apiClient.get('/oauth-excluded-models');
