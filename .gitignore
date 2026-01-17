@@ -34,3 +34,9 @@ settings.local.json
 
 # Temporary account files
 kiro-account-*.json
+
+# Custom Web UI and temporary files
+自定义 Web UI
+tmpclaude*
+.claude
+CLIProxyAPI-服务端
