@@ -71,7 +71,6 @@ const TYPE_COLORS: Record<string, TypeColorSet> = {
 };
 
 const OAUTH_PROVIDER_PRESETS = [
-  'gemini',
   'gemini-cli',
   'vertex',
   'aistudio',
@@ -108,7 +107,6 @@ const buildEmptyMappingEntry = (): OAuthModelMappingFormEntry => ({
   alias: '',
   fork: false
 });
-
 // 标准化 auth_index 值（与 usage.ts 中的 normalizeAuthIndex 保持一致）
 function normalizeAuthIndexValue(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -166,7 +164,6 @@ function resolveAuthFileStats(
 
   return defaultStats;
 }
-
 
 export function AuthFilesPage() {
   const { t } = useTranslation();
@@ -229,7 +226,6 @@ export function AuthFilesPage() {
 
   const disableControls = connectionStatus !== 'connected';
 
-
   const normalizeProviderKey = (value: string) => value.trim().toLowerCase();
 
   const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,7 +281,6 @@ export function AuthFilesPage() {
       loadingKeyStatsRef.current = false;
     }
   }, []);
-
 
   // 加载 OAuth 排除列表
   const loadExcluded = useCallback(async () => {
@@ -355,7 +350,6 @@ export function AuthFilesPage() {
   // 定时刷新状态数据（每240秒）
   useInterval(loadKeyStats, 240_000);
 
-
   // 提取所有存在的类型
   const existingTypes = useMemo(() => {
     const types = new Set<string>(['all']);
@@ -366,6 +360,7 @@ export function AuthFilesPage() {
     });
     return Array.from(types);
   }, [files]);
+
 
   const excludedProviderLookup = useMemo(() => {
     const lookup = new Map<string, string>();
@@ -418,7 +413,6 @@ export function AuthFilesPage() {
 
     return [...OAUTH_PROVIDER_PRESETS, ...extraList];
   }, [excluded, files, modelMappings]);
-
 
   // 过滤和搜索
   const filtered = useMemo(() => {
@@ -512,7 +506,6 @@ export function AuthFilesPage() {
     event.target.value = '';
   };
 
-
   // 删除单个文件
   const handleDelete = async (name: string) => {
     if (!window.confirm(`${t('auth_files.delete_confirm')} "${name}" ?`)) return;
@@ -595,7 +588,6 @@ export function AuthFilesPage() {
     }
   };
 
-
   // 下载文件
   const handleDownload = async (name: string) => {
     try {
@@ -660,7 +652,6 @@ export function AuthFilesPage() {
     });
   };
 
-
   // 获取类型标签显示文本
   const getTypeLabel = (type: string): string => {
     const key = `auth_files.filter_${type}`;
@@ -718,7 +709,6 @@ export function AuthFilesPage() {
     }
   };
 
-
   const deleteExcluded = async (provider: string) => {
     const providerLabel = provider.trim() || provider;
     if (!window.confirm(t('oauth_excluded.delete_confirm', { provider: providerLabel }))) return;
@@ -750,7 +740,7 @@ export function AuthFilesPage() {
   };
 
   // OAuth 模型映射相关方法
-  const normalizeMappingEntries = (entries?: OAuthModelMappingEntry[]) => {
+  const normalizeMappingEntries = (entries?: OAuthModelMappingEntry[]): OAuthModelMappingFormEntry[] => {
     if (!Array.isArray(entries) || entries.length === 0) {
       return [buildEmptyMappingEntry()];
     }
@@ -775,7 +765,6 @@ export function AuthFilesPage() {
     });
     setMappingModalOpen(true);
   };
-
 
   const updateMappingEntry = (index: number, field: keyof OAuthModelMappingEntry, value: string | boolean) => {
     setMappingForm((prev) => ({
@@ -841,7 +830,6 @@ export function AuthFilesPage() {
     }
   };
 
-
   const deleteModelMappings = async (provider: string) => {
     if (!window.confirm(t('oauth_model_mappings.delete_confirm', { provider }))) return;
     try {
@@ -866,9 +854,9 @@ export function AuthFilesPage() {
             key={type}
             className={`${styles.filterTag} ${isActive ? styles.filterTagActive : ''}`}
             style={{
-              background: isActive ? color.text : color.bg,
+              backgroundColor: isActive ? color.text : color.bg,
               color: isActive ? activeTextColor : color.text,
-              border: (color as ThemeColors).border || 'none'
+              borderColor: color.text
             }}
             onClick={() => {
               setFilter(type);
@@ -882,543 +870,501 @@ export function AuthFilesPage() {
     </div>
   );
 
+  // 预计算所有认证文件的状态栏数据（避免每次渲染重复计算）
+  const statusBarCache = useMemo(() => {
+    const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
 
-  // 渲染文件卡片
+    files.forEach((file) => {
+      const rawAuthIndex = file['auth_index'] ?? file.authIndex;
+      const authIndexKey = normalizeAuthIndexValue(rawAuthIndex);
+
+      if (authIndexKey) {
+        // 过滤出属于该认证文件的 usage 明细
+        const filteredDetails = usageDetails.filter((detail) => {
+          const detailAuthIndex = normalizeAuthIndexValue(detail.auth_index);
+          return detailAuthIndex !== null && detailAuthIndex === authIndexKey;
+        });
+        cache.set(authIndexKey, calculateStatusBarData(filteredDetails));
+      }
+    });
+
+    return cache;
+  }, [usageDetails, files]);
+
+  // 渲染状态监测栏
+  const renderStatusBar = (item: AuthFileItem) => {
+    // 认证文件使用 authIndex 来匹配 usage 数据
+    const rawAuthIndex = item['auth_index'] ?? item.authIndex;
+    const authIndexKey = normalizeAuthIndexValue(rawAuthIndex);
+
+    const statusData = (authIndexKey && statusBarCache.get(authIndexKey)) || calculateStatusBarData([]);
+    const hasData = statusData.totalSuccess + statusData.totalFailure > 0;
+    const rateClass = !hasData
+      ? ''
+      : statusData.successRate >= 90
+        ? styles.statusRateHigh
+        : statusData.successRate >= 50
+          ? styles.statusRateMedium
+          : styles.statusRateLow;
+
+    return (
+      <div className={styles.statusBar}>
+        <div className={styles.statusBlocks}>
+          {statusData.blocks.map((state, idx) => {
+            const blockClass =
+              state === 'success'
+                ? styles.statusBlockSuccess
+                : state === 'failure'
+                  ? styles.statusBlockFailure
+                  : state === 'mixed'
+                    ? styles.statusBlockMixed
+                    : styles.statusBlockIdle;
+            return <div key={idx} className={`${styles.statusBlock} ${blockClass}`} />;
+          })}
+        </div>
+        <span className={`${styles.statusRate} ${rateClass}`}>
+          {hasData ? `${statusData.successRate.toFixed(1)}%` : '--'}
+        </span>
+      </div>
+    );
+  };
+
+  // 渲染单个认证文件卡片
   const renderFileCard = (item: AuthFileItem) => {
-    const stats = resolveAuthFileStats(item, keyStats);
-    const statusBarData = calculateStatusBarData(usageDetails, item.name);
-    const isRuntime = isRuntimeOnlyAuthFile(item);
+    const fileStats = resolveAuthFileStats(item, keyStats);
+    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
+    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
+    const showModelsButton = !isRuntimeOnly || isAistudio;
     const typeColor = getTypeColor(item.type || 'unknown');
 
     return (
-      <Card key={item.name} className={styles.fileCard}>
+      <div key={item.name} className={styles.fileCard}>
         <div className={styles.cardHeader}>
-          <div className={styles.cardTitle}>
-            <span className={styles.fileName} title={item.name}>
-              {item.name}
-            </span>
-            {isRuntime && (
-              <span className={styles.runtimeBadge} title={t('auth_files.runtime_only_hint')}>
-                {t('auth_files.runtime_only')}
-              </span>
-            )}
-          </div>
-          <div className={styles.cardActions}>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => showModels(item)}
-              title={t('auth_files.view_models')}
-              aria-label={t('auth_files.view_models')}
-            >
-              <IconBot size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => showDetails(item)}
-              title={t('auth_files.view_details')}
-              aria-label={t('auth_files.view_details')}
-            >
-              <IconInfo size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDownload(item.name)}
-              disabled={disableControls || isRuntime}
-              title={isRuntime ? t('auth_files.runtime_only_hint') : t('auth_files.download')}
-              aria-label={t('auth_files.download')}
-            >
-              <IconDownload size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDelete(item.name)}
-              disabled={disableControls || deleting === item.name || isRuntime}
-              loading={deleting === item.name}
-              title={isRuntime ? t('auth_files.runtime_only_hint') : t('auth_files.delete')}
-              aria-label={t('auth_files.delete')}
-            >
-              <IconTrash2 size={16} />
-            </Button>
-          </div>
-        </div>
-
-        <div className={styles.cardMeta}>
           <span
             className={styles.typeBadge}
             style={{
-              background: typeColor.bg,
+              backgroundColor: typeColor.bg,
               color: typeColor.text,
-              border: typeColor.border || 'none'
+              ...(typeColor.border ? { border: typeColor.border } : {})
             }}
           >
             {getTypeLabel(item.type || 'unknown')}
           </span>
-          <span className={styles.modified}>{formatModified(item)}</span>
+          <span className={styles.fileName}>{item.name}</span>
         </div>
 
-        {/* 状态栏 */}
-        <div className={styles.statusBar}>
-          <div
-            className={styles.statusSuccess}
-            style={{ width: `${statusBarData.successRate}%` }}
-            title={`${t('auth_files.success')}: ${statusBarData.totalSuccess}`}
-          />
-          <div
-            className={styles.statusFailure}
-            style={{ width: `${100 - statusBarData.successRate}%` }}
-            title={`${t('auth_files.failure')}: ${statusBarData.totalFailure}`}
-          />
+        <div className={styles.cardMeta}>
+          <span>{t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}</span>
+          <span>{t('auth_files.file_modified')}: {formatModified(item)}</span>
         </div>
-        <div className={styles.statsRow}>
-          <span className={styles.statSuccess}>
-            {t('auth_files.success')}: {stats.success}
+
+        <div className={styles.cardStats}>
+          <span className={`${styles.statPill} ${styles.statSuccess}`}>
+            {t('stats.success')}: {fileStats.success}
           </span>
-          <span className={styles.statFailure}>
-            {t('auth_files.failure')}: {stats.failure}
+          <span className={`${styles.statPill} ${styles.statFailure}`}>
+            {t('stats.failure')}: {fileStats.failure}
           </span>
         </div>
-      </Card>
+
+        {/* 状态监测栏 */}
+        {renderStatusBar(item)}
+
+        <div className={styles.cardActions}>
+          {showModelsButton && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => showModels(item)}
+              className={styles.iconButton}
+              title={t('auth_files.models_button', { defaultValue: '模型' })}
+              disabled={disableControls}
+            >
+              <IconBot className={styles.actionIcon} size={16} />
+            </Button>
+          )}
+          {!isRuntimeOnly && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => showDetails(item)}
+                className={styles.iconButton}
+                title={t('common.info', { defaultValue: '关于' })}
+                disabled={disableControls}
+              >
+                <IconInfo className={styles.actionIcon} size={16} />
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleDownload(item.name)}
+                className={styles.iconButton}
+                title={t('auth_files.download_button')}
+                disabled={disableControls}
+              >
+                <IconDownload className={styles.actionIcon} size={16} />
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => handleDelete(item.name)}
+                className={styles.iconButton}
+                title={t('auth_files.delete_button')}
+                disabled={disableControls || deleting === item.name}
+              >
+                {deleting === item.name ? (
+                  <LoadingSpinner size={14} />
+                ) : (
+                  <IconTrash2 className={styles.actionIcon} size={16} />
+                )}
+              </Button>
+            </>
+          )}
+          {isRuntimeOnly && (
+            <div className={styles.virtualBadge}>{t('auth_files.type_virtual') || '虚拟认证文件'}</div>
+          )}
+        </div>
+      </div>
     );
   };
 
+  const titleNode = (
+    <div className={styles.titleWrapper}>
+      <span>{t('auth_files.title_section')}</span>
+      {files.length > 0 && <span className={styles.countBadge}>{files.length}</span>}
+    </div>
+  );
 
-  // 渲染 OAuth 排除列表
-  const renderExcludedSection = () => {
-    if (excludedError === 'unsupported') return null;
+  return (
+    <div className={styles.container}>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
+        <p className={styles.description}>{t('auth_files.description')}</p>
+      </div>
 
-    const entries = Object.entries(excluded).filter(([, models]) => models.length > 0);
+      <Card
+        title={titleNode}
+        extra={
+          <div className={styles.headerActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleHeaderRefresh}
+              disabled={loading}
+            >
+              {t('common.refresh')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDeleteAll}
+              disabled={disableControls || loading || deletingAll}
+              loading={deletingAll}
+            >
+              {filter === 'all' ? t('auth_files.delete_all_button') : `${t('common.delete')} ${getTypeLabel(filter)}`}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setAntigravityModalOpen(true)}
+              disabled={disableControls}
+            >
+              {t('auth_files.import_antigravity')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setKiroModalOpen(true)}
+              disabled={disableControls}
+            >
+              {t('auth_files.import_kiro')}
+            </Button>
+            <Button size="sm" onClick={handleUploadClick} disabled={disableControls || uploading} loading={uploading}>
+              {t('auth_files.upload_button')}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+          </div>
+        }
+      >
+        {error && <div className={styles.errorBox}>{error}</div>}
 
-    return (
-      <div className={styles.oauthSection}>
-        <div className={styles.oauthHeader}>
-          <h3>{t('oauth_excluded.title')}</h3>
+        {/* 筛选区域 */}
+        <div className={styles.filterSection}>
+          {renderFilterTags()}
+
+          <div className={styles.filterControls}>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.search_label')}</label>
+              <Input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder={t('auth_files.search_placeholder')}
+              />
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.page_size_label')}</label>
+              <input
+                className={styles.pageSizeSelect}
+                type="number"
+                min={MIN_CARD_PAGE_SIZE}
+                max={MAX_CARD_PAGE_SIZE}
+                step={1}
+                value={pageSize}
+                onChange={handlePageSizeChange}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 卡片网格 */}
+        {loading ? (
+          <div className={styles.hint}>{t('common.loading')}</div>
+        ) : pageItems.length === 0 ? (
+          <EmptyState title={t('auth_files.search_empty_title')} description={t('auth_files.search_empty_desc')} />
+        ) : (
+          <div className={styles.fileGrid}>
+            {pageItems.map(renderFileCard)}
+          </div>
+        )}
+
+        {/* 分页 */}
+        {!loading && filtered.length > pageSize && (
+          <div className={styles.pagination}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+            >
+              {t('auth_files.pagination_prev')}
+            </Button>
+            <div className={styles.pageInfo}>
+              {t('auth_files.pagination_info', {
+                current: currentPage,
+                total: totalPages,
+                count: filtered.length
+              })}
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              {t('auth_files.pagination_next')}
+            </Button>
+          </div>
+        )}
+      </Card>
+
+      {/* OAuth 排除列表卡片 */}
+      <Card
+        title={t('oauth_excluded.title')}
+        extra={
           <Button
-            variant="secondary"
             size="sm"
             onClick={() => openExcludedModal()}
-            disabled={disableControls}
+            disabled={disableControls || excludedError === 'unsupported'}
           >
             {t('oauth_excluded.add')}
           </Button>
-        </div>
-        {entries.length === 0 ? (
-          <p className={styles.oauthEmpty}>{t('oauth_excluded.empty')}</p>
+        }
+      >
+        {excludedError === 'unsupported' ? (
+          <EmptyState
+            title={t('oauth_excluded.upgrade_required_title')}
+            description={t('oauth_excluded.upgrade_required_desc')}
+          />
+        ) : Object.keys(excluded).length === 0 ? (
+          <EmptyState title={t('oauth_excluded.list_empty_all')} />
         ) : (
-          <div className={styles.oauthList}>
-            {entries.map(([provider, models]) => (
-              <div key={provider} className={styles.oauthItem}>
-                <div className={styles.oauthItemHeader}>
-                  <span className={styles.oauthProvider}>{getTypeLabel(provider)}</span>
-                  <div className={styles.oauthItemActions}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openExcludedModal(provider)}
-                      disabled={disableControls}
-                    >
-                      {t('common.edit')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteExcluded(provider)}
-                      disabled={disableControls}
-                    >
-                      <IconTrash2 size={14} />
-                    </Button>
+          <div className={styles.excludedList}>
+            {Object.entries(excluded).map(([provider, models]) => (
+              <div key={provider} className={styles.excludedItem}>
+                <div className={styles.excludedInfo}>
+                  <div className={styles.excludedProvider}>{provider}</div>
+                  <div className={styles.excludedModels}>
+                    {models?.length
+                      ? t('oauth_excluded.model_count', { count: models.length })
+                      : t('oauth_excluded.no_models')}
                   </div>
                 </div>
-                <div className={styles.oauthModels}>
-                  {models.map((model) => (
-                    <span key={model} className={styles.oauthModel}>
-                      {model}
-                    </span>
-                  ))}
+                <div className={styles.excludedActions}>
+                  <Button variant="secondary" size="sm" onClick={() => openExcludedModal(provider)}>
+                    {t('common.edit')}
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => deleteExcluded(provider)}>
+                    {t('oauth_excluded.delete')}
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
-    );
-  };
+      </Card>
 
-
-  // 渲染 OAuth 模型映射列表
-  const renderMappingsSection = () => {
-    if (modelMappingsError === 'unsupported') return null;
-
-    const entries = Object.entries(modelMappings).filter(([, mappings]) => mappings.length > 0);
-
-    return (
-      <div className={styles.oauthSection}>
-        <div className={styles.oauthHeader}>
-          <h3>{t('oauth_model_mappings.title')}</h3>
+      {/* OAuth 模型映射卡片 */}
+      <Card
+        title={t('oauth_model_mappings.title')}
+        extra={
           <Button
-            variant="secondary"
             size="sm"
             onClick={() => openMappingsModal()}
-            disabled={disableControls}
+            disabled={disableControls || modelMappingsError === 'unsupported'}
           >
             {t('oauth_model_mappings.add')}
           </Button>
-        </div>
-        {entries.length === 0 ? (
-          <p className={styles.oauthEmpty}>{t('oauth_model_mappings.empty')}</p>
+        }
+      >
+        {modelMappingsError === 'unsupported' ? (
+          <EmptyState
+            title={t('oauth_model_mappings.upgrade_required_title')}
+            description={t('oauth_model_mappings.upgrade_required_desc')}
+          />
+        ) : Object.keys(modelMappings).length === 0 ? (
+          <EmptyState title={t('oauth_model_mappings.list_empty_all')} />
         ) : (
-          <div className={styles.oauthList}>
-            {entries.map(([provider, mappings]) => (
-              <div key={provider} className={styles.oauthItem}>
-                <div className={styles.oauthItemHeader}>
-                  <span className={styles.oauthProvider}>{getTypeLabel(provider)}</span>
-                  <div className={styles.oauthItemActions}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openMappingsModal(provider)}
-                      disabled={disableControls}
-                    >
-                      {t('common.edit')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteModelMappings(provider)}
-                      disabled={disableControls}
-                    >
-                      <IconTrash2 size={14} />
-                    </Button>
+          <div className={styles.excludedList}>
+            {Object.entries(modelMappings).map(([provider, mappings]) => (
+              <div key={provider} className={styles.excludedItem}>
+                <div className={styles.excludedInfo}>
+                  <div className={styles.excludedProvider}>{provider}</div>
+                  <div className={styles.excludedModels}>
+                    {mappings?.length
+                      ? t('oauth_model_mappings.model_count', { count: mappings.length })
+                      : t('oauth_model_mappings.no_models')}
                   </div>
                 </div>
-                <div className={styles.oauthMappings}>
-                  {mappings.map((mapping, idx) => (
-                    <span key={idx} className={styles.oauthMapping}>
-                      {mapping.name} → {mapping.alias}
-                      {mapping.fork && <span className={styles.forkBadge}>fork</span>}
-                    </span>
-                  ))}
+                <div className={styles.excludedActions}>
+                  <Button variant="secondary" size="sm" onClick={() => openMappingsModal(provider)}>
+                    {t('common.edit')}
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => deleteModelMappings(provider)}>
+                    {t('oauth_model_mappings.delete')}
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
-    );
-  };
-
-
-  // 主渲染
-  return (
-    <div className={styles.container}>
-      {/* 工具栏 */}
-      <div className={styles.toolbar}>
-        <div className={styles.toolbarLeft}>
-          <Input
-            placeholder={t('auth_files.search_placeholder')}
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className={styles.searchInput}
-          />
-          {renderFilterTags()}
-        </div>
-        <div className={styles.toolbarRight}>
-          <div className={styles.pageSizeControl}>
-            <label>{t('auth_files.page_size')}:</label>
-            <input
-              type="number"
-              min={MIN_CARD_PAGE_SIZE}
-              max={MAX_CARD_PAGE_SIZE}
-              value={pageSize}
-              onChange={handlePageSizeChange}
-              className={styles.pageSizeInput}
-            />
-          </div>
-          <Button
-            variant="secondary"
-            onClick={() => setAntigravityModalOpen(true)}
-            disabled={disableControls}
-          >
-            {t('auth_files.import_antigravity')}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setKiroModalOpen(true)}
-            disabled={disableControls}
-          >
-            {t('auth_files.import_kiro')}
-          </Button>
-          <Button variant="primary" onClick={handleUploadClick} disabled={disableControls || uploading} loading={uploading}>
-            {t('auth_files.upload')}
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
-          <Button
-            variant="danger"
-            onClick={handleDeleteAll}
-            disabled={disableControls || deletingAll || files.length === 0}
-            loading={deletingAll}
-          >
-            {filter === 'all' ? t('auth_files.delete_all') : t('auth_files.delete_filtered')}
-          </Button>
-        </div>
-      </div>
-
-
-      {/* 内容区域 */}
-      {loading ? (
-        <div className={styles.loadingContainer}>
-          <LoadingSpinner />
-        </div>
-      ) : error ? (
-        <div className={styles.errorContainer}>
-          <p>{error}</p>
-          <Button variant="secondary" onClick={loadFiles}>
-            {t('common.retry')}
-          </Button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title={t('auth_files.empty_title')}
-          description={t('auth_files.empty_description')}
-        />
-      ) : (
-        <>
-          <div className={styles.cardGrid}>{pageItems.map(renderFileCard)}</div>
-
-          {/* 分页 */}
-          {totalPages > 1 && (
-            <div className={styles.pagination}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                {t('common.prev')}
-              </Button>
-              <span className={styles.pageInfo}>
-                {currentPage} / {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                {t('common.next')}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* OAuth 配置区域 */}
-      <div className={styles.oauthContainer}>
-        {renderExcludedSection()}
-        {renderMappingsSection()}
-      </div>
-
+      </Card>
 
       {/* 详情弹窗 */}
       <Modal
         open={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
-        title={selectedFile?.name || t('auth_files.details')}
-      >
-        {selectedFile && (
-          <div className={styles.detailContent}>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>{t('auth_files.detail_name')}:</span>
-              <span className={styles.detailValue}>{selectedFile.name}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>{t('auth_files.detail_type')}:</span>
-              <span className={styles.detailValue}>{getTypeLabel(selectedFile.type || 'unknown')}</span>
-            </div>
-            {selectedFile.provider && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>{t('auth_files.detail_provider')}:</span>
-                <span className={styles.detailValue}>{selectedFile.provider}</span>
-              </div>
-            )}
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>{t('auth_files.detail_modified')}:</span>
-              <span className={styles.detailValue}>{formatModified(selectedFile)}</span>
-            </div>
-            {selectedFile.size !== undefined && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>{t('auth_files.detail_size')}:</span>
-                <span className={styles.detailValue}>{formatFileSize(selectedFile.size)}</span>
-              </div>
-            )}
-            {isRuntimeOnlyAuthFile(selectedFile) && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>{t('auth_files.runtime_only')}:</span>
-                <span className={styles.detailValue}>{t('common.yes')}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
-
-
-      {/* 模型列表弹窗 */}
-      <Modal
-        open={modelsModalOpen}
-        onClose={() => setModelsModalOpen(false)}
-        title={`${t('auth_files.models_for')} ${modelsFileName}`}
-      >
-        {modelsLoading ? (
-          <div className={styles.modalLoading}>
-            <LoadingSpinner />
-          </div>
-        ) : modelsError === 'unsupported' ? (
-          <div className={styles.modalError}>
-            <p>{t('auth_files.models_unsupported')}</p>
-          </div>
-        ) : modelsList.length === 0 ? (
-          <div className={styles.modalEmpty}>
-            <p>{t('auth_files.models_empty')}</p>
-          </div>
-        ) : (
-          <div className={styles.modelsList}>
-            {modelsList.map((model) => {
-              const isExcluded = isModelExcluded(model.id, modelsFileType);
-              return (
-                <div
-                  key={model.id}
-                  className={`${styles.modelItem} ${isExcluded ? styles.modelExcluded : ''}`}
-                >
-                  <span className={styles.modelId}>{model.id}</span>
-                  {model.display_name && model.display_name !== model.id && (
-                    <span className={styles.modelDisplayName}>{model.display_name}</span>
-                  )}
-                  {model.type && <span className={styles.modelType}>{model.type}</span>}
-                  {isExcluded && (
-                    <span className={styles.excludedBadge}>{t('oauth_excluded.excluded')}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Modal>
-      <Modal
-        open={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
-        title={selectedFile?.name || t('auth_files.details')}
-      >
-        {selectedFile && (
-          <div className={styles.detailContent}>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>{t('auth_files.detail_name')}:</span>
-              <span className={styles.detailValue}>{selectedFile.name}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>{t('auth_files.detail_type')}:</span>
-              <span className={styles.detailValue}>{getTypeLabel(selectedFile.type || 'unknown')}</span>
-            </div>
-            {selectedFile.provider && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>{t('auth_files.detail_provider')}:</span>
-                <span className={styles.detailValue}>{selectedFile.provider}</span>
-              </div>
-            )}
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>{t('auth_files.detail_modified')}:</span>
-              <span className={styles.detailValue}>{formatModified(selectedFile)}</span>
-            </div>
-            {selectedFile.size !== undefined && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>{t('auth_files.detail_size')}:</span>
-                <span className={styles.detailValue}>{formatFileSize(selectedFile.size)}</span>
-              </div>
-            )}
-            {isRuntimeOnlyAuthFile(selectedFile) && (
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>{t('auth_files.runtime_only')}:</span>
-                <span className={styles.detailValue}>{t('common.yes')}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
-
-
-      {/* 模型列表弹窗 */}
-      <Modal
-        open={modelsModalOpen}
-        onClose={() => setModelsModalOpen(false)}
-        title={`${t('auth_files.models_for')} ${modelsFileName}`}
-      >
-        {modelsLoading ? (
-          <div className={styles.modalLoading}>
-            <LoadingSpinner />
-          </div>
-        ) : modelsError === 'unsupported' ? (
-          <div className={styles.modalError}>
-            <p>{t('auth_files.models_unsupported')}</p>
-          </div>
-        ) : modelsList.length === 0 ? (
-          <div className={styles.modalEmpty}>
-            <p>{t('auth_files.models_empty')}</p>
-          </div>
-        ) : (
-          <div className={styles.modelsList}>
-            {modelsList.map((model) => {
-              const isExcluded = isModelExcluded(model.id, modelsFileType);
-              return (
-                <div
-                  key={model.id}
-                  className={`${styles.modelItem} ${isExcluded ? styles.modelExcluded : ''}`}
-                >
-                  <span className={styles.modelId}>{model.id}</span>
-                  {model.display_name && model.display_name !== model.id && (
-                    <span className={styles.modelDisplayName}>{model.display_name}</span>
-                  )}
-                  {model.type && <span className={styles.modelType}>{model.type}</span>}
-                  {isExcluded && (
-                    <span className={styles.excludedBadge}>{t('oauth_excluded.excluded')}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Modal>
-
-
-      {/* OAuth 排除模型弹窗 */}
-      <Modal
-        open={excludedModalOpen}
-        onClose={() => setExcludedModalOpen(false)}
-        title={t('oauth_excluded.modal_title')}
+        title={selectedFile?.name || t('auth_files.title_section')}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setExcludedModalOpen(false)} disabled={savingExcluded}>
-              {t('common.cancel')}
+            <Button variant="secondary" onClick={() => setDetailModalOpen(false)}>
+              {t('common.close')}
             </Button>
-            <Button variant="primary" onClick={saveExcludedModels} loading={savingExcluded}>
-              {t('common.save')}
+            <Button
+              onClick={() => {
+                if (selectedFile) {
+                  const text = JSON.stringify(selectedFile, null, 2);
+                  navigator.clipboard.writeText(text).then(() => {
+                    showNotification(t('notification.link_copied'), 'success');
+                  });
+                }
+              }}
+            >
+              {t('common.copy')}
             </Button>
           </>
         }
       >
-        <div className={styles.formGroup}>
+        {selectedFile && (
+          <div className={styles.detailContent}>
+            <pre className={styles.jsonContent}>{JSON.stringify(selectedFile, null, 2)}</pre>
+          </div>
+        )}
+      </Modal>
+
+      {/* 模型列表弹窗 */}
+      <Modal
+        open={modelsModalOpen}
+        onClose={() => setModelsModalOpen(false)}
+        title={t('auth_files.models_title', { defaultValue: '支持的模型' }) + ` - ${modelsFileName}`}
+        footer={
+          <Button variant="secondary" onClick={() => setModelsModalOpen(false)}>
+            {t('common.close')}
+          </Button>
+        }
+      >
+        {modelsLoading ? (
+          <div className={styles.hint}>{t('auth_files.models_loading', { defaultValue: '正在加载模型列表...' })}</div>
+        ) : modelsError === 'unsupported' ? (
+          <EmptyState
+            title={t('auth_files.models_unsupported', { defaultValue: '当前版本不支持此功能' })}
+            description={t('auth_files.models_unsupported_desc', { defaultValue: '请更新 CLI Proxy API 到最新版本后重试' })}
+          />
+        ) : modelsList.length === 0 ? (
+          <EmptyState
+            title={t('auth_files.models_empty', { defaultValue: '该凭证暂无可用模型' })}
+            description={t('auth_files.models_empty_desc', { defaultValue: '该认证凭证可能尚未被服务器加载或没有绑定任何模型' })}
+          />
+        ) : (
+          <div className={styles.modelsList}>
+            {modelsList.map((model) => {
+              const isExcluded = isModelExcluded(model.id, modelsFileType);
+              return (
+                <div
+                  key={model.id}
+                  className={`${styles.modelItem} ${isExcluded ? styles.modelItemExcluded : ''}`}
+                  onClick={() => {
+                    navigator.clipboard.writeText(model.id);
+                    showNotification(t('notification.link_copied', { defaultValue: '已复制到剪贴板' }), 'success');
+                  }}
+                  title={isExcluded ? t('auth_files.models_excluded_hint', { defaultValue: '此模型已被 OAuth 排除' }) : t('common.copy', { defaultValue: '点击复制' })}
+                >
+                  <span className={styles.modelId}>{model.id}</span>
+                  {model.display_name && model.display_name !== model.id && (
+                    <span className={styles.modelDisplayName}>{model.display_name}</span>
+                  )}
+                  {model.type && (
+                    <span className={styles.modelType}>{model.type}</span>
+                  )}
+                  {isExcluded && (
+                    <span className={styles.modelExcludedBadge}>{t('auth_files.models_excluded_badge', { defaultValue: '已排除' })}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Modal>
+
+      {/* OAuth 排除弹窗 */}
+      <Modal
+        open={excludedModalOpen}
+        onClose={() => setExcludedModalOpen(false)}
+        title={t('oauth_excluded.add_title')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setExcludedModalOpen(false)} disabled={savingExcluded}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={saveExcludedModels} loading={savingExcluded}>
+              {t('oauth_excluded.save')}
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.providerField}>
           <Input
+            id="oauth-excluded-provider"
             list="oauth-excluded-provider-options"
             label={t('oauth_excluded.provider_label')}
             hint={t('oauth_excluded.provider_hint')}
@@ -1454,36 +1400,35 @@ export function AuthFilesPage() {
         <div className={styles.formGroup}>
           <label>{t('oauth_excluded.models_label')}</label>
           <textarea
-            className={styles.modelsTextarea}
+            className={styles.textarea}
+            rows={4}
             placeholder={t('oauth_excluded.models_placeholder')}
             value={excludedForm.modelsText}
             onChange={(e) => setExcludedForm((prev) => ({ ...prev, modelsText: e.target.value }))}
-            rows={6}
-            disabled={savingExcluded}
           />
           <div className={styles.hint}>{t('oauth_excluded.models_hint')}</div>
         </div>
       </Modal>
 
-
       {/* OAuth 模型映射弹窗 */}
       <Modal
         open={mappingModalOpen}
         onClose={() => setMappingModalOpen(false)}
-        title={t('oauth_model_mappings.modal_title')}
+        title={t('oauth_model_mappings.add_title')}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setMappingModalOpen(false)} disabled={savingMappings}>
+            <Button variant="secondary" onClick={() => setMappingModalOpen(false)} disabled={savingMappings}>
               {t('common.cancel')}
             </Button>
-            <Button variant="primary" onClick={saveModelMappings} loading={savingMappings}>
-              {t('common.save')}
+            <Button onClick={saveModelMappings} loading={savingMappings}>
+              {t('oauth_model_mappings.save')}
             </Button>
           </>
         }
       >
-        <div className={styles.formGroup}>
+        <div className={styles.providerField}>
           <Input
+            id="oauth-model-alias-provider"
             list="oauth-model-alias-provider-options"
             label={t('oauth_model_mappings.provider_label')}
             hint={t('oauth_model_mappings.provider_hint')}
@@ -1516,7 +1461,6 @@ export function AuthFilesPage() {
             </div>
           )}
         </div>
-
         <div className={styles.formGroup}>
           <label>{t('oauth_model_mappings.mappings_label')}</label>
           <div className="header-input-list">
@@ -1573,7 +1517,6 @@ export function AuthFilesPage() {
           <div className={styles.hint}>{t('oauth_model_mappings.mappings_hint')}</div>
         </div>
       </Modal>
-
 
       {/* Antigravity 导入弹窗 */}
       <AntigravityImportModal
