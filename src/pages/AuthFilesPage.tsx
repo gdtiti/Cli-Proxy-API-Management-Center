@@ -886,7 +886,7 @@ export function AuthFilesPage() {
   // 渲染文件卡片
   const renderFileCard = (item: AuthFileItem) => {
     const stats = resolveAuthFileStats(item, keyStats);
-    const statusBarData = calculateStatusBarData(stats, usageDetails, item.name);
+    const statusBarData = calculateStatusBarData(usageDetails, item.name);
     const isRuntime = isRuntimeOnlyAuthFile(item);
     const typeColor = getTypeColor(item.type || 'unknown');
 
@@ -964,13 +964,13 @@ export function AuthFilesPage() {
         <div className={styles.statusBar}>
           <div
             className={styles.statusSuccess}
-            style={{ width: `${statusBarData.successPercent}%` }}
-            title={`${t('auth_files.success')}: ${stats.success}`}
+            style={{ width: `${statusBarData.successRate}%` }}
+            title={`${t('auth_files.success')}: ${statusBarData.totalSuccess}`}
           />
           <div
             className={styles.statusFailure}
-            style={{ width: `${statusBarData.failurePercent}%` }}
-            title={`${t('auth_files.failure')}: ${stats.failure}`}
+            style={{ width: `${100 - statusBarData.successRate}%` }}
+            title={`${t('auth_files.failure')}: ${statusBarData.totalFailure}`}
           />
         </div>
         <div className={styles.statsRow}>
@@ -1311,52 +1311,11 @@ export function AuthFilesPage() {
                     <span className={styles.excludedBadge}>{t('oauth_excluded.excluded')}</span>
                   )}
                 </div>
-    dal>
-      </Mo}
-        )     </div> })}
-          );
-                
-
-        />
-      ) : (
-        <>
-          <div className={styles.cardGrid}>{pageItems.map(renderFileCard)}</div>
-
-          {/* 分页 */}
-          {totalPages > 1 && (
-            <div className={styles.pagination}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                {t('common.prev')}
-              </Button>
-              <span className={styles.pageInfo}>
-                {currentPage} / {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                {t('common.next')}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* OAuth 配置区域 */}
-      <div className={styles.oauthContainer}>
-        {renderExcludedSection()}
-        {renderMappingsSection()}
-      </div>
-
-
-      {/* 详情弹窗 */}
+              );
+            })}
+          </div>
+        )}
+      </Modal>
       <Modal
         open={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
