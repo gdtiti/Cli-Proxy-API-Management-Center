@@ -111,7 +111,15 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 
   /* Removed useRef */
   const [columns, gridRef] = useGridColumns(380); // Min card width 380px matches SCSS
-  const [viewMode, setViewMode] = useState<ViewMode>('paged');
+  const storageKey = `quota_view_mode_${config.type}`;
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem(storageKey);
+    return saved === 'all' ? 'all' : 'paged';
+  });
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
+    localStorage.setItem(storageKey, mode);
+  }, [storageKey]);
   const [showTooManyWarning, setShowTooManyWarning] = useState(false);
 
   const filteredFiles = useMemo(() => files.filter((file) => config.filterFn(file)), [
@@ -147,7 +155,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     return () => {
       cancelled = true;
     };
-  }, [showAllAllowed, viewMode]);
+  }, [showAllAllowed, viewMode, setViewMode]);
 
   // Update page size based on view mode and columns
   useEffect(() => {

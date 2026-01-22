@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconBot, IconDownload, IconInfo, IconTrash2, IconX } from '@/components/ui/icons';
+import { IconBot, IconCode, IconDownload, IconTrash2, IconX, IconZap, IconEye, IconEyeOff, IconShield, IconSlidersHorizontal } from '@/components/ui/icons';
+import { JsonEditorModal, UserAgentGroupModal, BatchProxyModal, useQuickSetUserAgent } from '@/components/auth-files';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
@@ -178,12 +179,22 @@ export function AuthFilesPage() {
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
+  const [fileProxies, setFileProxies] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(9);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem('auth_files_page_size');
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (Number.isFinite(parsed)) {
+        return clampCardPageSize(parsed);
+      }
+    }
+    return 9;
+  });
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -192,7 +203,7 @@ export function AuthFilesPage() {
 
   // 详情弹窗相关
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
+  const [selectedFile, _setSelectedFile] = useState<AuthFileItem | null>(null);
 
   // 模型列表弹窗相关
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
@@ -219,6 +230,23 @@ export function AuthFilesPage() {
   });
   const [savingMappings, setSavingMappings] = useState(false);
 
+  // JSON 编辑器相关
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<AuthFileItem | null>(null);
+
+  // User-Agent 组设置
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
+  const { quickSetting, quickSetUserAgent } = useQuickSetUserAgent();
+  
+  // Content Masking
+  const [isMasked, setIsMasked] = useState(() => {
+    const saved = localStorage.getItem('auth_files_is_masked');
+    return saved === 'true';
+  });
+
+  // Batch Proxy Settings
+  const [proxyModalOpen, setProxyModalOpen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadingKeyStatsRef = useRef(false);
   const excludedUnsupportedRef = useRef(false);
@@ -231,20 +259,19 @@ export function AuthFilesPage() {
   const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.currentTarget.valueAsNumber;
     if (!Number.isFinite(value)) return;
-    setPageSize(clampCardPageSize(value));
+    const clamped = clampCardPageSize(value);
+    setPageSize(clamped);
     setPage(1);
   };
 
-  // 格式化修改时间
-  const formatModified = (item: AuthFileItem): string => {
-    const raw = item['modtime'] ?? item.modified;
-    if (!raw) return '-';
-    const asNumber = Number(raw);
-    const date =
-      Number.isFinite(asNumber) && !Number.isNaN(asNumber)
-        ? new Date(asNumber < 1e12 ? asNumber * 1000 : asNumber)
-        : new Date(String(raw));
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+  const handlePageSizeBlur = () => {
+    localStorage.setItem('auth_files_page_size', String(pageSize));
+  };
+
+  const maskString = (str: string) => {
+    if (!str) return '';
+    if (str.length <= 10) return '******';
+    return `${str.slice(0, 4)}****${str.slice(-4)}`;
   };
 
   // 加载文件列表
@@ -253,7 +280,44 @@ export function AuthFilesPage() {
     setError('');
     try {
       const data = await authFilesApi.list();
-      setFiles(data?.files || []);
+      const initialFiles = data?.files || [];
+      setFiles(initialFiles);
+
+      // Async load user agents and proxies
+      (async () => {
+        const uaUpdates = new Map<string, string>();
+        const proxyUpdates: Record<string, string> = {};
+
+        await Promise.all(initialFiles.map(async (file) => {
+          try {
+            const content = await authFilesApi.downloadText(file.name);
+            try {
+              const json = JSON.parse(content);
+              
+              if (json.proxy_url) {
+                proxyUpdates[file.name] = json.proxy_url;
+              }
+
+              if (file.type === 'antigravity' && !((file as any).user_agent || (file as any).userAgent)) {
+                 const ua = json.user_agent || json.userAgent;
+                 if (ua) uaUpdates.set(file.name, ua);
+              }
+            } catch { /* ignore */ }
+          } catch { /* ignore */ }
+        }));
+
+        setFileProxies(proxyUpdates);
+
+        if (uaUpdates.size > 0) {
+          setFiles(prev => prev.map(f => {
+            if (uaUpdates.has(f.name)) {
+              return { ...f, user_agent: uaUpdates.get(f.name) };
+            }
+            return f;
+          }));
+        }
+      })();
+
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
       setError(errorMessage);
@@ -608,12 +672,6 @@ export function AuthFilesPage() {
     }
   };
 
-  // 显示详情弹窗
-  const showDetails = (file: AuthFileItem) => {
-    setSelectedFile(file);
-    setDetailModalOpen(true);
-  };
-
   // 显示模型列表
   const showModels = async (item: AuthFileItem) => {
     setModelsFileName(item.name);
@@ -842,6 +900,22 @@ export function AuthFilesPage() {
     }
   };
 
+  // 打开 JSON 编辑器
+  const openEditModal = (item: AuthFileItem) => {
+    setEditingFile(item);
+    setEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingFile(null);
+  };
+
+  // 快速设置 User-Agent
+  const handleQuickSetUserAgent = (item: AuthFileItem) => {
+    quickSetUserAgent(item, loadFiles);
+  };
+
   // 渲染标签筛选器
   const renderFilterTags = () => (
     <div className={styles.filterTags}>
@@ -935,6 +1009,7 @@ export function AuthFilesPage() {
     const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
     const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
     const showModelsButton = !isRuntimeOnly || isAistudio;
+    const showEditButton = !isRuntimeOnly;
     const typeColor = getTypeColor(item.type || 'unknown');
 
     return (
@@ -950,12 +1025,24 @@ export function AuthFilesPage() {
           >
             {getTypeLabel(item.type || 'unknown')}
           </span>
-          <span className={styles.fileName}>{item.name}</span>
+          <span className={styles.fileName} title={isMasked ? undefined : item.name}>
+            {isMasked ? maskString(item.name) : item.name}
+          </span>
         </div>
 
         <div className={styles.cardMeta}>
-          <span>{t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}</span>
-          <span>{t('auth_files.file_modified')}: {formatModified(item)}</span>
+          {/* <span>{t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}</span>
+          <span>{t('auth_files.file_modified')}: {formatModified(item)}</span> */}
+          {((item as any).user_agent || (item as any).userAgent) && (
+             <span className={styles.userAgent} title={isMasked ? undefined : ((item as any).user_agent || (item as any).userAgent)}>
+               User-Agent: {isMasked ? maskString((item as any).user_agent || (item as any).userAgent) : ((item as any).user_agent || (item as any).userAgent)}
+             </span>
+          )}
+          {fileProxies[item.name] && (
+             <span className={styles.proxyInfo} title={isMasked ? undefined : fileProxies[item.name]}>
+               Proxy: {isMasked ? maskString(fileProxies[item.name]) : fileProxies[item.name]}
+             </span>
+          )}
         </div>
 
         <div className={styles.cardStats}>
@@ -983,18 +1070,36 @@ export function AuthFilesPage() {
               <IconBot className={styles.actionIcon} size={16} />
             </Button>
           )}
+          {showEditButton && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openEditModal(item)}
+              className={styles.iconButton}
+              title={t('auth_files.edit_button', { defaultValue: '编辑JSON' })}
+              disabled={disableControls}
+            >
+              <IconCode className={styles.actionIcon} size={16} />
+            </Button>
+          )}
+          {item.type === 'antigravity' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleQuickSetUserAgent(item)}
+              className={styles.iconButton}
+              title={t('auth_files.quick_set_ua')}
+              disabled={disableControls || quickSetting === item.name}
+            >
+               {quickSetting === item.name ? (
+                  <LoadingSpinner size={14} />
+               ) : (
+                  <IconZap className={styles.actionIcon} size={16} />
+               )}
+            </Button>
+          )}
           {!isRuntimeOnly && (
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => showDetails(item)}
-                className={styles.iconButton}
-                title={t('common.info', { defaultValue: '关于' })}
-                disabled={disableControls}
-              >
-                <IconInfo className={styles.actionIcon} size={16} />
-              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -1064,6 +1169,7 @@ export function AuthFilesPage() {
             >
               {filter === 'all' ? t('auth_files.delete_all_button') : `${t('common.delete')} ${getTypeLabel(filter)}`}
             </Button>
+            
             <Button size="sm" onClick={handleUploadClick} disabled={disableControls || uploading} loading={uploading}>
               {t('auth_files.upload_button')}
             </Button>
@@ -1098,15 +1204,52 @@ export function AuthFilesPage() {
             </div>
             <div className={styles.filterItem}>
               <label>{t('auth_files.page_size_label')}</label>
-              <input
-                className={styles.pageSizeSelect}
-                type="number"
-                min={MIN_CARD_PAGE_SIZE}
-                max={MAX_CARD_PAGE_SIZE}
-                step={1}
-                value={pageSize}
-                onChange={handlePageSizeChange}
-              />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  className={styles.pageSizeSelect}
+                  type="number"
+                  min={MIN_CARD_PAGE_SIZE}
+                  max={MAX_CARD_PAGE_SIZE}
+                  step={1}
+                  value={pageSize}
+                  onChange={handlePageSizeChange}
+                  onBlur={handlePageSizeBlur}
+                />
+                {filter === 'antigravity' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setGroupSettingsOpen(true)}
+                    className={styles.iconButton}
+                    title={t('auth_files.group_settings')}
+                  >
+                    <IconSlidersHorizontal className={styles.actionIcon} size={16} />
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setProxyModalOpen(true)}
+                  disabled={disableControls}
+                  className={styles.iconButton}
+                  title={t('auth_files.proxy_settings')}
+                >
+                  <IconShield className={styles.actionIcon} size={16} />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const newValue = !isMasked;
+                    setIsMasked(newValue);
+                    localStorage.setItem('auth_files_is_masked', String(newValue));
+                  }}
+                  className={styles.iconButton}
+                  title={isMasked ? t('auth_files.show_content') : t('auth_files.hide_content')}
+                >
+                  {isMasked ? <IconEyeOff className={styles.actionIcon} size={16} /> : <IconEye className={styles.actionIcon} size={16} />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -1501,6 +1644,33 @@ export function AuthFilesPage() {
           <div className={styles.hint}>{t('oauth_model_mappings.mappings_hint')}</div>
         </div>
       </Modal>
+
+      {/* JSON 编辑器弹窗 */}
+      <JsonEditorModal
+        open={editModalOpen}
+        onClose={closeEditModal}
+        file={editingFile}
+        onSaved={loadFiles}
+      />
+
+      {/* User-Agent 组设置弹窗 */}
+      <UserAgentGroupModal
+        open={groupSettingsOpen}
+        onClose={() => setGroupSettingsOpen(false)}
+        files={files}
+        onBatchComplete={loadFiles}
+      />
+
+      {/* 批量代理设置弹窗 */}
+      <BatchProxyModal
+        open={proxyModalOpen}
+        onClose={() => setProxyModalOpen(false)}
+        files={files}
+        fileProxies={fileProxies}
+        existingTypes={existingTypes}
+        getTypeLabel={getTypeLabel}
+        onComplete={loadFiles}
+      />
     </div>
   );
 }
