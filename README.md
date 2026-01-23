@@ -18,8 +18,7 @@
 ### 界面预览
 
 管理界面展示
-
-![Dashboard Preview](dashboard-preview.png)
+<img width="1920" height="954" alt="image" src="https://github.com/user-attachments/assets/a10d982e-e325-4299-9bfd-b8110724c620" />
 
 
 为认证文件 单独/批量代理配置：
