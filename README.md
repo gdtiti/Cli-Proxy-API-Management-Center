@@ -6,9 +6,6 @@
 
 ---
 
-## 关于本项目
-
-本项目是基于官方 [CLI Proxy API WebUI](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) 进行开发的日志监控和数据可视化管理界面
 
 ### 与官方版本的区别
 
