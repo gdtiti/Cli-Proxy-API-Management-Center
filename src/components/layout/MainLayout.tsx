@@ -16,7 +16,6 @@ import { PageTransition } from '@/components/common/PageTransition';
 import { MainRoutes } from '@/router/MainRoutes';
 import {
   IconBot,
-  IconChartLine,
   IconFileText,
   IconInfo,
   IconKey,
@@ -47,7 +46,6 @@ const sidebarIcons: Record<string, ReactNode> = {
   authFiles: <IconFileText size={18} />,
   oauth: <IconShield size={18} />,
   quota: <IconTimer size={18} />,
-  usage: <IconChartLine size={18} />,
   config: <IconSettings size={18} />,
   logs: <IconScrollText size={18} />,
   system: <IconInfo size={18} />,
@@ -358,20 +356,19 @@ export function MainLayout() {
           : 'muted';
 
   const navItems = [
-    { path: '/', label: t('nav.dashboard'), icon: sidebarIcons.dashboard },
+    { path: '/', label: t('nav.monitor'), icon: sidebarIcons.monitor },
+    { path: '/dashboard', label: t('nav.dashboard'), icon: sidebarIcons.dashboard },
     { path: '/settings', label: t('nav.basic_settings'), icon: sidebarIcons.settings },
     { path: '/api-keys', label: t('nav.api_keys'), icon: sidebarIcons.apiKeys },
     { path: '/ai-providers', label: t('nav.ai_providers'), icon: sidebarIcons.aiProviders },
     { path: '/auth-files', label: t('nav.auth_files'), icon: sidebarIcons.authFiles },
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
-    { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
     { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),
     { path: '/system', label: t('nav.system_info'), icon: sidebarIcons.system },
-    { path: '/monitor', label: t('nav.monitor'), icon: sidebarIcons.monitor },
   ];
   const navOrder = navItems.map((item) => item.path);
   const getRouteOrder = (pathname: string) => {
