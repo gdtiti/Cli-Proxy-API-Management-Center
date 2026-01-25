@@ -108,18 +108,6 @@ interface ModelMappingsFormState {
   mappings: OAuthModelMappingFormEntry[];
 }
 
-interface PrefixProxyEditorState {
-  fileName: string;
-  loading: boolean;
-  saving: boolean;
-  error: string | null;
-  originalText: string;
-  rawText: string;
-  json: Record<string, unknown> | null;
-  prefix: string;
-  proxyUrl: string;
-}
-
 const buildEmptyMappingEntry = (): OAuthModelMappingFormEntry => ({
   id: generateId(),
   name: '',
@@ -270,7 +258,6 @@ export function AuthFilesPage() {
 
   // Batch Proxy Settings
   const [proxyModalOpen, setProxyModalOpen] = useState(false);
-  const [prefixProxyEditor, setPrefixProxyEditor] = useState<PrefixProxyEditorState | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadingKeyStatsRef = useRef(false);
@@ -375,30 +362,6 @@ export function AuthFilesPage() {
       cancelled = true;
     };
   }, [mappingModalOpen, mappingModelsFileName, showNotification, t]);
-
-  const prefixProxyUpdatedText = useMemo(() => {
-    if (!prefixProxyEditor?.json) return prefixProxyEditor?.rawText ?? '';
-    const next: Record<string, unknown> = { ...prefixProxyEditor.json };
-    if ('prefix' in next || prefixProxyEditor.prefix.trim()) {
-      next.prefix = prefixProxyEditor.prefix;
-    }
-    if ('proxy_url' in next || prefixProxyEditor.proxyUrl.trim()) {
-      next.proxy_url = prefixProxyEditor.proxyUrl;
-    }
-    return JSON.stringify(next);
-  }, [
-    prefixProxyEditor?.json,
-    prefixProxyEditor?.prefix,
-    prefixProxyEditor?.proxyUrl,
-    prefixProxyEditor?.rawText,
-  ]);
-
-  const prefixProxyDirty = useMemo(() => {
-    if (!prefixProxyEditor?.json) return false;
-    if (!prefixProxyEditor.originalText) return false;
-    return prefixProxyUpdatedText !== prefixProxyEditor.originalText;
-  }, [prefixProxyEditor?.json, prefixProxyEditor?.originalText, prefixProxyUpdatedText]);
-
   const commitPageSizeInput = (rawValue: string) => {
     const trimmed = rawValue.trim();
     if (!trimmed) {
@@ -1171,84 +1134,6 @@ export function AuthFilesPage() {
       showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
     } finally {
       setStatusUpdating((prev) => ({ ...prev, [item.name]: false }));
-    }
-  };
-
-  // 代理与前缀编辑器
-  const openPrefixProxyEditor = async (fileName: string) => {
-    setPrefixProxyEditor({
-      fileName,
-      loading: true,
-      saving: false,
-      error: null,
-      originalText: '',
-      rawText: '',
-      json: null,
-      prefix: '',
-      proxyUrl: '',
-    });
-
-    try {
-      const content = await authFilesApi.downloadText(fileName);
-      let json: Record<string, unknown> | null = null;
-      let prefix = '';
-      let proxyUrl = '';
-
-      try {
-        json = JSON.parse(content);
-        prefix = String(json?.prefix || '');
-        proxyUrl = String(json?.proxy_url || '');
-      } catch {
-        // Not a valid JSON or doesn't have these fields
-      }
-
-      setPrefixProxyEditor((prev) =>
-        prev
-          ? {
-              ...prev,
-              loading: false,
-              originalText: content,
-              rawText: content,
-              json,
-              prefix,
-              proxyUrl,
-            }
-          : null
-      );
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load file';
-      setPrefixProxyEditor((prev) => (prev ? { ...prev, loading: false, error: errorMessage } : null));
-    }
-  };
-
-  const handlePrefixProxyChange = (field: 'prefix' | 'proxyUrl', value: string) => {
-    setPrefixProxyEditor((prev) => (prev ? { ...prev, [field]: value } : null));
-  };
-
-  const handlePrefixProxySave = async () => {
-    if (!prefixProxyEditor || !prefixProxyEditor.json) return;
-
-    setPrefixProxyEditor((prev) => (prev ? { ...prev, saving: true, error: null } : null));
-
-    try {
-      const updatedJson = {
-        ...prefixProxyEditor.json,
-        prefix: prefixProxyEditor.prefix,
-        proxy_url: prefixProxyEditor.proxyUrl,
-      };
-      const content = JSON.stringify(updatedJson, null, 2);
-
-      const blob = new Blob([content], { type: 'application/json' });
-      const file = new File([blob], prefixProxyEditor.fileName, { type: 'application/json' });
-
-      await authFilesApi.upload(file);
-
-      showNotification(t('auth_files.prefix_proxy_save_success'), 'success');
-      setPrefixProxyEditor(null);
-      await loadFiles();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Save failed';
-      setPrefixProxyEditor((prev) => (prev ? { ...prev, saving: false, error: errorMessage } : null));
     }
   };
 
