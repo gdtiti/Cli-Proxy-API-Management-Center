@@ -209,6 +209,7 @@ export function AuthFilesPage() {
     }
     return 9;
   });
+  const [pageSizeInput, setPageSizeInput] = useState(String(pageSize));
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -1155,6 +1156,102 @@ export function AuthFilesPage() {
     setEditingFile(null);
   };
 
+  // 处理状态切换
+  const handleStatusToggle = async (item: AuthFileItem, checked: boolean) => {
+    const disabled = !checked;
+    setStatusUpdating((prev) => ({ ...prev, [item.name]: true }));
+    try {
+      await authFilesApi.setStatus(item.name, disabled);
+      setFiles((prev) =>
+        prev.map((f) => (f.name === item.name ? { ...f, disabled } : f))
+      );
+      showNotification(t('auth_files.status_update_success'), 'success');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
+    } finally {
+      setStatusUpdating((prev) => ({ ...prev, [item.name]: false }));
+    }
+  };
+
+  // 代理与前缀编辑器
+  const openPrefixProxyEditor = async (fileName: string) => {
+    setPrefixProxyEditor({
+      fileName,
+      loading: true,
+      saving: false,
+      error: null,
+      originalText: '',
+      rawText: '',
+      json: null,
+      prefix: '',
+      proxyUrl: '',
+    });
+
+    try {
+      const content = await authFilesApi.downloadText(fileName);
+      let json: Record<string, unknown> | null = null;
+      let prefix = '';
+      let proxyUrl = '';
+
+      try {
+        json = JSON.parse(content);
+        prefix = String(json?.prefix || '');
+        proxyUrl = String(json?.proxy_url || '');
+      } catch {
+        // Not a valid JSON or doesn't have these fields
+      }
+
+      setPrefixProxyEditor((prev) =>
+        prev
+          ? {
+              ...prev,
+              loading: false,
+              originalText: content,
+              rawText: content,
+              json,
+              prefix,
+              proxyUrl,
+            }
+          : null
+      );
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load file';
+      setPrefixProxyEditor((prev) => (prev ? { ...prev, loading: false, error: errorMessage } : null));
+    }
+  };
+
+  const handlePrefixProxyChange = (field: 'prefix' | 'proxyUrl', value: string) => {
+    setPrefixProxyEditor((prev) => (prev ? { ...prev, [field]: value } : null));
+  };
+
+  const handlePrefixProxySave = async () => {
+    if (!prefixProxyEditor || !prefixProxyEditor.json) return;
+
+    setPrefixProxyEditor((prev) => (prev ? { ...prev, saving: true, error: null } : null));
+
+    try {
+      const updatedJson = {
+        ...prefixProxyEditor.json,
+        prefix: prefixProxyEditor.prefix,
+        proxy_url: prefixProxyEditor.proxyUrl,
+      };
+      const content = JSON.stringify(updatedJson, null, 2);
+
+      const blob = new Blob([content], { type: 'application/json' });
+      const file = new File([blob], prefixProxyEditor.fileName, { type: 'application/json' });
+
+      await authFilesApi.upload(file);
+
+      showNotification(t('auth_files.prefix_proxy_save_success'), 'success');
+      setPrefixProxyEditor(null);
+      await loadFiles();
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Save failed';
+      setPrefixProxyEditor((prev) => (prev ? { ...prev, saving: false, error: errorMessage } : null));
+    }
+  };
+
   // 快速设置 User-Agent
   const handleQuickSetUserAgent = (item: AuthFileItem) => {
     quickSetUserAgent(item, loadFiles);
@@ -1362,16 +1459,6 @@ export function AuthFilesPage() {
                 <IconDownload className={styles.actionIcon} size={16} />
               </Button>
               <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void openPrefixProxyEditor(item.name)}
-                className={styles.iconButton}
-                title={t('auth_files.prefix_proxy_button')}
-                disabled={disableControls}
-              >
-                <IconCode className={styles.actionIcon} size={16} />
-              </Button>
-              <Button
                 variant="danger"
                 size="sm"
                 onClick={() => handleDelete(item.name)}
@@ -1485,8 +1572,13 @@ export function AuthFilesPage() {
                   min={MIN_CARD_PAGE_SIZE}
                   max={MAX_CARD_PAGE_SIZE}
                   step={1}
-                  value={pageSize}
+                  value={pageSizeInput}
                   onChange={handlePageSizeChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      commitPageSizeInput(e.currentTarget.value);
+                    }
+                  }}
                   onBlur={handlePageSizeBlur}
                 />
                 {filter === 'antigravity' && (
@@ -1761,89 +1853,6 @@ export function AuthFilesPage() {
                 </div>
               );
             })}
-          </div>
-        )}
-      </Modal>
-
-      {/* prefix/proxy_url 编辑弹窗 */}
-      <Modal
-        open={Boolean(prefixProxyEditor)}
-        onClose={() => setPrefixProxyEditor(null)}
-        closeDisabled={prefixProxyEditor?.saving === true}
-        width={720}
-        title={
-          prefixProxyEditor?.fileName
-            ? `${t('auth_files.prefix_proxy_button')} - ${prefixProxyEditor.fileName}`
-            : t('auth_files.prefix_proxy_button')
-        }
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setPrefixProxyEditor(null)}
-              disabled={prefixProxyEditor?.saving === true}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={() => void handlePrefixProxySave()}
-              loading={prefixProxyEditor?.saving === true}
-              disabled={
-                disableControls ||
-                prefixProxyEditor?.saving === true ||
-                !prefixProxyDirty ||
-                !prefixProxyEditor?.json
-              }
-            >
-              {t('common.save')}
-            </Button>
-          </>
-        }
-      >
-        {prefixProxyEditor && (
-          <div className={styles.prefixProxyEditor}>
-            {prefixProxyEditor.loading ? (
-              <div className={styles.prefixProxyLoading}>
-                <LoadingSpinner size={14} />
-                <span>{t('auth_files.prefix_proxy_loading')}</span>
-              </div>
-            ) : (
-              <>
-                {prefixProxyEditor.error && (
-                  <div className={styles.prefixProxyError}>{prefixProxyEditor.error}</div>
-                )}
-                <div className={styles.prefixProxyJsonWrapper}>
-                  <label className={styles.prefixProxyLabel}>
-                    {t('auth_files.prefix_proxy_source_label')}
-                  </label>
-                  <textarea
-                    className={styles.prefixProxyTextarea}
-                    rows={10}
-                    readOnly
-                    value={prefixProxyUpdatedText}
-                  />
-                </div>
-                <div className={styles.prefixProxyFields}>
-                  <Input
-                    label={t('auth_files.prefix_label')}
-                    value={prefixProxyEditor.prefix}
-                    disabled={
-                      disableControls || prefixProxyEditor.saving || !prefixProxyEditor.json
-                    }
-                    onChange={(e) => handlePrefixProxyChange('prefix', e.target.value)}
-                  />
-                  <Input
-                    label={t('auth_files.proxy_url_label')}
-                    value={prefixProxyEditor.proxyUrl}
-                    placeholder={t('auth_files.proxy_url_placeholder')}
-                    disabled={
-                      disableControls || prefixProxyEditor.saving || !prefixProxyEditor.json
-                    }
-                    onChange={(e) => handlePrefixProxyChange('proxyUrl', e.target.value)}
-                  />
-                </div>
-              </>
-            )}
           </div>
         )}
       </Modal>
