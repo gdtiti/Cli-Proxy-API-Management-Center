@@ -25,11 +25,16 @@ function validateAccount(
 
   const acc = account as Record<string, unknown>;
 
-  // 验证 email
-  if (!acc.email || typeof acc.email !== 'string') {
-    errors.push(`账户 #${index + 1}: 缺少 email 字段`);
-  } else if (!acc.email.includes('@')) {
+  // 验证 email（允许为空，Enterprise 账户可能没有 email）
+  if (acc.email && typeof acc.email === 'string' && acc.email.trim() && !acc.email.includes('@')) {
     errors.push(`账户 #${index + 1}: email 格式无效`);
+  }
+  
+  // 如果没有 email，检查是否有其他标识符
+  if (!acc.email || (typeof acc.email === 'string' && !acc.email.trim())) {
+    if (!acc.nickname && !acc.userId) {
+      errors.push(`账户 #${index + 1}: 缺少 email、nickname 或 userId 标识`);
+    }
   }
 
   // 验证 status

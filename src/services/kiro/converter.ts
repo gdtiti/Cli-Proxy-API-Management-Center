@@ -65,10 +65,10 @@ function formatTimestamp(timestamp: number): string {
 }
 
 /**
- * 邮箱转安全文件名
+ * 邮箱或标识符转安全文件名
  */
-function emailToFilename(email: string): string {
-  return email.replace(/@/g, '_').replace(/\./g, '_');
+function identifierToFilename(identifier: string): string {
+  return identifier.replace(/@/g, '_').replace(/\./g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 /**
@@ -95,10 +95,16 @@ export function convertKiroAccount(
     extAccount.credentials.machineId ||
     generateUUID();
 
+  // 获取标识符：优先 email，其次 nickname，最后 userId
+  const identifier = (email && email.trim()) ||
+    (account as Record<string, unknown>).nickname as string ||
+    (account as Record<string, unknown>).userId as string ||
+    `kiro-${Date.now()}`;
+
   return {
     type: 'kiro',
     provider: 'AWS',
-    email: email.trim(),
+    email: identifier,
     access_token: credentials.accessToken || '',
     auth_method: mapAuthMethod(credentials.authMethod),
     client_id: credentials.clientId || '',
@@ -138,13 +144,13 @@ export function generateCredentialJson(
 
 /**
  * 生成凭证文件名
- * 格式: kiro-aws-<email_safe>.json
+ * 格式: kiro-aws-<identifier_safe>.json
  */
 export function generateCredentialFileName(
   credential: KiroCliProxyCredential
 ): string {
-  const safeEmail = emailToFilename(credential.email);
-  return `kiro-aws-${safeEmail}.json`;
+  const safeIdentifier = identifierToFilename(credential.email || `kiro-${Date.now()}`);
+  return `kiro-aws-${safeIdentifier}.json`;
 }
 
 /**
