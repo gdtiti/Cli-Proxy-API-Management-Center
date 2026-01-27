@@ -96,9 +96,10 @@ export function convertKiroAccount(
     generateUUID();
 
   // 获取标识符：优先 email，其次 nickname，最后 userId
+  const extAcc = account as unknown as Record<string, unknown>;
   const identifier = (email && email.trim()) ||
-    (account as Record<string, unknown>).nickname as string ||
-    (account as Record<string, unknown>).userId as string ||
+    (extAcc.nickname as string) ||
+    (extAcc.userId as string) ||
     `kiro-${Date.now()}`;
 
   return {
