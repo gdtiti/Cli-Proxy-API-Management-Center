@@ -335,6 +335,8 @@
     "title_section": "认证文件",
     "description": "这里集中管理 CLI Proxy 支持的所有 JSON 认证文件（如 Qwen、Gemini、Vertex 等），上传后即可在运行时启用相应的 AI 服务。",
     "upload_button": "上传文件",
+    "import_antigravity": "导入 Antigravity",
+    "import_kiro": "导入 Kiro",
     "delete_all_button": "删除全部",
     "empty_title": "暂无认证文件",
     "empty_desc": "点击上方按钮上传第一个文件",
