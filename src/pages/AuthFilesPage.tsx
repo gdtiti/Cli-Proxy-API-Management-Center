@@ -830,6 +830,55 @@ export function AuthFilesPage() {
     }
   };
 
+  // 批量导出文件（根据当前筛选）
+  const [exporting, setExporting] = useState(false);
+  
+  const handleExportAll = async () => {
+    // 获取要导出的文件列表（根据当前筛选，排除运行时虚拟凭证）
+    const filesToExport = filtered.filter((file) => !isRuntimeOnlyAuthFile(file));
+    
+    if (filesToExport.length === 0) {
+      showNotification(t('auth_files.export_empty'), 'info');
+      return;
+    }
+
+    setExporting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const file of filesToExport) {
+      try {
+        const response = await apiClient.getRaw(
+          `/auth-files/download?name=${encodeURIComponent(file.name)}`,
+          { responseType: 'blob' }
+        );
+        const blob = new Blob([response.data]);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        successCount++;
+        // 添加小延迟避免浏览器阻止多个下载
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      } catch {
+        failCount++;
+      }
+    }
+
+    setExporting(false);
+    
+    if (failCount === 0) {
+      showNotification(t('auth_files.export_success', { count: successCount }), 'success');
+    } else {
+      showNotification(
+        t('auth_files.export_partial', { success: successCount, failed: failCount }),
+        'warning'
+      );
+    }
+  };
+
   // 显示模型列表
   const showModels = async (item: AuthFileItem) => {
     setModelsFileName(item.name);
@@ -1443,8 +1492,16 @@ export function AuthFilesPage() {
             >
               {t('auth_files.import_kiro')}
             </Button>
-            <Button size="sm" onClick={handleUploadClick} disabled={disableControls || uploading} loading={uploading}>
-              {t('auth_files.upload_button')}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleExportAll}
+              disabled={disableControls || loading || exporting || filtered.filter((f) => !isRuntimeOnlyAuthFile(f)).length === 0}
+              loading={exporting}
+            >
+              {filter === 'all'
+                ? t('auth_files.export_all_button')
+                : t('auth_files.export_filtered_button', { type: getTypeLabel(filter) })}
             </Button>
             <input
               ref={fileInputRef}
