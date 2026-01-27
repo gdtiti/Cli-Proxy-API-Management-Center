@@ -5,6 +5,8 @@ import path from 'path';
 import { execSync } from 'child_process';
 import fs from 'fs';
 
+
+
 // Get version from environment, git tag, or package.json
 function getVersion(): string {
   // 1. Environment variable (set by GitHub Actions)
