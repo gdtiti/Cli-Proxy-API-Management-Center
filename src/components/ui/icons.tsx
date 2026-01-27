@@ -315,6 +315,14 @@ export function IconLayoutDashboard({ size = 20, ...props }: IconProps) {
   );
 }
 
+export function IconZap({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
+  );
+}
+
 export function IconActivity({ size = 20, ...props }: IconProps) {
   return (
     <svg {...baseSvgProps} width={size} height={size} {...props}>

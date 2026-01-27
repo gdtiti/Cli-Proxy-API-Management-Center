@@ -10,14 +10,8 @@ import { AutocompleteInput } from '@/components/ui/AutocompleteInput';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import {
-  IconBot,
-  IconCode,
-  IconDownload,
-  IconInfo,
-  IconTrash2,
-  IconX,
-} from '@/components/ui/icons';
+import { IconBot, IconCode, IconDownload, IconTrash2, IconX, IconZap, IconEye, IconEyeOff, IconShield, IconSlidersHorizontal } from '@/components/ui/icons';
+import { JsonEditorModal, UserAgentGroupModal, BatchProxyModal, useQuickSetUserAgent } from '@/components/auth-files';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
 import { AntigravityImportModal } from '@/components/antigravity/AntigravityImportModal';
@@ -116,18 +110,6 @@ interface ModelMappingsFormState {
   mappings: OAuthModelMappingFormEntry[];
 }
 
-interface PrefixProxyEditorState {
-  fileName: string;
-  loading: boolean;
-  saving: boolean;
-  error: string | null;
-  originalText: string;
-  rawText: string;
-  json: Record<string, unknown> | null;
-  prefix: string;
-  proxyUrl: string;
-}
-
 const buildEmptyMappingEntry = (): OAuthModelMappingFormEntry => ({
   id: generateId(),
   name: '',
@@ -201,13 +183,23 @@ export function AuthFilesPage() {
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
+  const [fileProxies, setFileProxies] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(9);
-  const [pageSizeInput, setPageSizeInput] = useState('9');
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem('auth_files_page_size');
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (Number.isFinite(parsed)) {
+        return clampCardPageSize(parsed);
+      }
+    }
+    return 9;
+  });
+  const [pageSizeInput, setPageSizeInput] = useState(String(pageSize));
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -217,7 +209,7 @@ export function AuthFilesPage() {
 
   // 详情弹窗相关
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
+  const [selectedFile, _setSelectedFile] = useState<AuthFileItem | null>(null);
 
   // 模型列表弹窗相关
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
@@ -258,7 +250,22 @@ export function AuthFilesPage() {
   // Kiro 导入相关
   const [kiroModalOpen, setKiroModalOpen] = useState(false);
 
-  const [prefixProxyEditor, setPrefixProxyEditor] = useState<PrefixProxyEditorState | null>(null);
+  // JSON 编辑器相关
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingFile, setEditingFile] = useState<AuthFileItem | null>(null);
+
+  // User-Agent 组设置
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
+  const { quickSetting, quickSetUserAgent } = useQuickSetUserAgent();
+  
+  // Content Masking
+  const [isMasked, setIsMasked] = useState(() => {
+    const saved = localStorage.getItem('auth_files_is_masked');
+    return saved === 'true';
+  });
+
+  // Batch Proxy Settings
+  const [proxyModalOpen, setProxyModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadingKeyStatsRef = useRef(false);
@@ -363,30 +370,6 @@ export function AuthFilesPage() {
       cancelled = true;
     };
   }, [mappingModalOpen, mappingModelsFileName, showNotification, t]);
-
-  const prefixProxyUpdatedText = useMemo(() => {
-    if (!prefixProxyEditor?.json) return prefixProxyEditor?.rawText ?? '';
-    const next: Record<string, unknown> = { ...prefixProxyEditor.json };
-    if ('prefix' in next || prefixProxyEditor.prefix.trim()) {
-      next.prefix = prefixProxyEditor.prefix;
-    }
-    if ('proxy_url' in next || prefixProxyEditor.proxyUrl.trim()) {
-      next.proxy_url = prefixProxyEditor.proxyUrl;
-    }
-    return JSON.stringify(next);
-  }, [
-    prefixProxyEditor?.json,
-    prefixProxyEditor?.prefix,
-    prefixProxyEditor?.proxyUrl,
-    prefixProxyEditor?.rawText,
-  ]);
-
-  const prefixProxyDirty = useMemo(() => {
-    if (!prefixProxyEditor?.json) return false;
-    if (!prefixProxyEditor.originalText) return false;
-    return prefixProxyUpdatedText !== prefixProxyEditor.originalText;
-  }, [prefixProxyEditor?.json, prefixProxyEditor?.originalText, prefixProxyUpdatedText]);
-
   const commitPageSizeInput = (rawValue: string) => {
     const trimmed = rawValue.trim();
     if (!trimmed) {
@@ -423,16 +406,14 @@ export function AuthFilesPage() {
     setPage(1);
   };
 
-  // 格式化修改时间
-  const formatModified = (item: AuthFileItem): string => {
-    const raw = item['modtime'] ?? item.modified;
-    if (!raw) return '-';
-    const asNumber = Number(raw);
-    const date =
-      Number.isFinite(asNumber) && !Number.isNaN(asNumber)
-        ? new Date(asNumber < 1e12 ? asNumber * 1000 : asNumber)
-        : new Date(String(raw));
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+  const handlePageSizeBlur = () => {
+    localStorage.setItem('auth_files_page_size', String(pageSize));
+  };
+
+  const maskString = (str: string) => {
+    if (!str) return '';
+    if (str.length <= 10) return '******';
+    return `${str.slice(0, 4)}****${str.slice(-4)}`;
   };
 
   // 加载文件列表
@@ -441,7 +422,44 @@ export function AuthFilesPage() {
     setError('');
     try {
       const data = await authFilesApi.list();
-      setFiles(data?.files || []);
+      const initialFiles = data?.files || [];
+      setFiles(initialFiles);
+
+      // Async load user agents and proxies
+      (async () => {
+        const uaUpdates = new Map<string, string>();
+        const proxyUpdates: Record<string, string> = {};
+
+        await Promise.all(initialFiles.map(async (file) => {
+          try {
+            const content = await authFilesApi.downloadText(file.name);
+            try {
+              const json = JSON.parse(content);
+              
+              if (json.proxy_url) {
+                proxyUpdates[file.name] = json.proxy_url;
+              }
+
+              if (file.type === 'antigravity' && !((file as any).user_agent || (file as any).userAgent)) {
+                 const ua = json.user_agent || json.userAgent;
+                 if (ua) uaUpdates.set(file.name, ua);
+              }
+            } catch { /* ignore */ }
+          } catch { /* ignore */ }
+        }));
+
+        setFileProxies(proxyUpdates);
+
+        if (uaUpdates.size > 0) {
+          setFiles(prev => prev.map(f => {
+            if (uaUpdates.has(f.name)) {
+              return { ...f, user_agent: uaUpdates.get(f.name) };
+            }
+            return f;
+          }));
+        }
+      })();
+
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
       setError(errorMessage);
@@ -812,173 +830,6 @@ export function AuthFilesPage() {
     }
   };
 
-  const openPrefixProxyEditor = async (name: string) => {
-    if (disableControls) return;
-    if (prefixProxyEditor?.fileName === name) {
-      setPrefixProxyEditor(null);
-      return;
-    }
-
-    setPrefixProxyEditor({
-      fileName: name,
-      loading: true,
-      saving: false,
-      error: null,
-      originalText: '',
-      rawText: '',
-      json: null,
-      prefix: '',
-      proxyUrl: '',
-    });
-
-    try {
-      const rawText = await authFilesApi.downloadText(name);
-      const trimmed = rawText.trim();
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(trimmed) as unknown;
-      } catch {
-        setPrefixProxyEditor((prev) => {
-          if (!prev || prev.fileName !== name) return prev;
-          return {
-            ...prev,
-            loading: false,
-            error: t('auth_files.prefix_proxy_invalid_json'),
-            rawText: trimmed,
-            originalText: trimmed,
-          };
-        });
-        return;
-      }
-
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setPrefixProxyEditor((prev) => {
-          if (!prev || prev.fileName !== name) return prev;
-          return {
-            ...prev,
-            loading: false,
-            error: t('auth_files.prefix_proxy_invalid_json'),
-            rawText: trimmed,
-            originalText: trimmed,
-          };
-        });
-        return;
-      }
-
-      const json = parsed as Record<string, unknown>;
-      const originalText = JSON.stringify(json);
-      const prefix = typeof json.prefix === 'string' ? json.prefix : '';
-      const proxyUrl = typeof json.proxy_url === 'string' ? json.proxy_url : '';
-
-      setPrefixProxyEditor((prev) => {
-        if (!prev || prev.fileName !== name) return prev;
-        return {
-          ...prev,
-          loading: false,
-          originalText,
-          rawText: originalText,
-          json,
-          prefix,
-          proxyUrl,
-          error: null,
-        };
-      });
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : t('notification.download_failed');
-      setPrefixProxyEditor((prev) => {
-        if (!prev || prev.fileName !== name) return prev;
-        return { ...prev, loading: false, error: errorMessage, rawText: '' };
-      });
-      showNotification(`${t('notification.download_failed')}: ${errorMessage}`, 'error');
-    }
-  };
-
-  const handlePrefixProxyChange = (field: 'prefix' | 'proxyUrl', value: string) => {
-    setPrefixProxyEditor((prev) => {
-      if (!prev) return prev;
-      if (field === 'prefix') return { ...prev, prefix: value };
-      return { ...prev, proxyUrl: value };
-    });
-  };
-
-  const handlePrefixProxySave = async () => {
-    if (!prefixProxyEditor?.json) return;
-    if (!prefixProxyDirty) return;
-
-    const name = prefixProxyEditor.fileName;
-    const payload = prefixProxyUpdatedText;
-    const fileSize = new Blob([payload]).size;
-    if (fileSize > MAX_AUTH_FILE_SIZE) {
-      showNotification(
-        t('auth_files.upload_error_size', { maxSize: formatFileSize(MAX_AUTH_FILE_SIZE) }),
-        'error'
-      );
-      return;
-    }
-
-    setPrefixProxyEditor((prev) => {
-      if (!prev || prev.fileName !== name) return prev;
-      return { ...prev, saving: true };
-    });
-
-    try {
-      const file = new File([payload], name, { type: 'application/json' });
-      await authFilesApi.upload(file);
-      showNotification(t('auth_files.prefix_proxy_saved_success', { name }), 'success');
-      await loadFiles();
-      await loadKeyStats();
-      setPrefixProxyEditor(null);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      showNotification(`${t('notification.upload_failed')}: ${errorMessage}`, 'error');
-      setPrefixProxyEditor((prev) => {
-        if (!prev || prev.fileName !== name) return prev;
-        return { ...prev, saving: false };
-      });
-    }
-  };
-
-  const handleStatusToggle = async (item: AuthFileItem, enabled: boolean) => {
-    const name = item.name;
-    const nextDisabled = !enabled;
-    const previousDisabled = item.disabled === true;
-
-    setStatusUpdating((prev) => ({ ...prev, [name]: true }));
-    // Optimistic update for snappy UI.
-    setFiles((prev) => prev.map((f) => (f.name === name ? { ...f, disabled: nextDisabled } : f)));
-
-    try {
-      const res = await authFilesApi.setStatus(name, nextDisabled);
-      setFiles((prev) => prev.map((f) => (f.name === name ? { ...f, disabled: res.disabled } : f)));
-      showNotification(
-        enabled
-          ? t('auth_files.status_enabled_success', { name })
-          : t('auth_files.status_disabled_success', { name }),
-        'success'
-      );
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      setFiles((prev) =>
-        prev.map((f) => (f.name === name ? { ...f, disabled: previousDisabled } : f))
-      );
-      showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
-    } finally {
-      setStatusUpdating((prev) => {
-        if (!prev[name]) return prev;
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    }
-  };
-
-  // 显示详情弹窗
-  const showDetails = (file: AuthFileItem) => {
-    setSelectedFile(file);
-    setDetailModalOpen(true);
-  };
-
   // 显示模型列表
   const showModels = async (item: AuthFileItem) => {
     setModelsFileName(item.name);
@@ -1265,6 +1116,40 @@ export function AuthFilesPage() {
     });
   };
 
+  // 打开 JSON 编辑器
+  const openEditModal = (item: AuthFileItem) => {
+    setEditingFile(item);
+    setEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setEditModalOpen(false);
+    setEditingFile(null);
+  };
+
+  // 处理状态切换
+  const handleStatusToggle = async (item: AuthFileItem, checked: boolean) => {
+    const disabled = !checked;
+    setStatusUpdating((prev) => ({ ...prev, [item.name]: true }));
+    try {
+      await authFilesApi.setStatus(item.name, disabled);
+      setFiles((prev) =>
+        prev.map((f) => (f.name === item.name ? { ...f, disabled } : f))
+      );
+      showNotification(t('auth_files.status_update_success'), 'success');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      showNotification(`${t('notification.update_failed')}: ${errorMessage}`, 'error');
+    } finally {
+      setStatusUpdating((prev) => ({ ...prev, [item.name]: false }));
+    }
+  };
+
+  // 快速设置 User-Agent
+  const handleQuickSetUserAgent = (item: AuthFileItem) => {
+    quickSetUserAgent(item, loadFiles);
+  };
+
   // 渲染标签筛选器
   const renderFilterTags = () => (
     <div className={styles.filterTags}>
@@ -1363,6 +1248,7 @@ export function AuthFilesPage() {
 	    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
 	    const showModelsButton = !isRuntimeOnly || isAistudio;
 	    const typeColor = getTypeColor(item.type || 'unknown');
+      const showEditButton = !isRuntimeOnly;
 
 	    return (
 	      <div
@@ -1380,16 +1266,24 @@ export function AuthFilesPage() {
           >
             {getTypeLabel(item.type || 'unknown')}
           </span>
-          <span className={styles.fileName}>{item.name}</span>
+          <span className={styles.fileName} title={isMasked ? undefined : item.name}>
+            {isMasked ? maskString(item.name) : item.name}
+          </span>
         </div>
 
         <div className={styles.cardMeta}>
-          <span>
-            {t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}
-          </span>
-          <span>
-            {t('auth_files.file_modified')}: {formatModified(item)}
-          </span>
+          {/* <span>{t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}</span>
+          <span>{t('auth_files.file_modified')}: {formatModified(item)}</span> */}
+          {((item as any).user_agent || (item as any).userAgent) && (
+             <span className={styles.userAgent} title={isMasked ? undefined : ((item as any).user_agent || (item as any).userAgent)}>
+               User-Agent: {isMasked ? maskString((item as any).user_agent || (item as any).userAgent) : ((item as any).user_agent || (item as any).userAgent)}
+             </span>
+          )}
+          {fileProxies[item.name] && (
+             <span className={styles.proxyInfo} title={isMasked ? undefined : fileProxies[item.name]}>
+               Proxy: {isMasked ? maskString(fileProxies[item.name]) : fileProxies[item.name]}
+             </span>
+          )}
         </div>
 
         <div className={styles.cardStats}>
@@ -1417,18 +1311,36 @@ export function AuthFilesPage() {
               <IconBot className={styles.actionIcon} size={16} />
             </Button>
           )}
+          {showEditButton && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openEditModal(item)}
+              className={styles.iconButton}
+              title={t('auth_files.edit_button', { defaultValue: '编辑JSON' })}
+              disabled={disableControls}
+            >
+              <IconCode className={styles.actionIcon} size={16} />
+            </Button>
+          )}
+          {item.type === 'antigravity' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleQuickSetUserAgent(item)}
+              className={styles.iconButton}
+              title={t('auth_files.quick_set_ua')}
+              disabled={disableControls || quickSetting === item.name}
+            >
+               {quickSetting === item.name ? (
+                  <LoadingSpinner size={14} />
+               ) : (
+                  <IconZap className={styles.actionIcon} size={16} />
+               )}
+            </Button>
+          )}
           {!isRuntimeOnly && (
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => showDetails(item)}
-                className={styles.iconButton}
-                title={t('common.info', { defaultValue: '关于' })}
-                disabled={disableControls}
-              >
-                <IconInfo className={styles.actionIcon} size={16} />
-              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -1438,16 +1350,6 @@ export function AuthFilesPage() {
                 disabled={disableControls}
               >
                 <IconDownload className={styles.actionIcon} size={16} />
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void openPrefixProxyEditor(item.name)}
-                className={styles.iconButton}
-                title={t('auth_files.prefix_proxy_button')}
-                disabled={disableControls}
-              >
-                <IconCode className={styles.actionIcon} size={16} />
               </Button>
               <Button
                 variant="danger"
@@ -1575,21 +1477,57 @@ export function AuthFilesPage() {
             </div>
             <div className={styles.filterItem}>
               <label>{t('auth_files.page_size_label')}</label>
-              <input
-                className={styles.pageSizeSelect}
-                type="number"
-                min={MIN_CARD_PAGE_SIZE}
-                max={MAX_CARD_PAGE_SIZE}
-                step={1}
-                value={pageSizeInput}
-                onChange={handlePageSizeChange}
-                onBlur={(e) => commitPageSizeInput(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur();
-                  }
-                }}
-              />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  className={styles.pageSizeSelect}
+                  type="number"
+                  min={MIN_CARD_PAGE_SIZE}
+                  max={MAX_CARD_PAGE_SIZE}
+                  step={1}
+                  value={pageSizeInput}
+                  onChange={handlePageSizeChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      commitPageSizeInput(e.currentTarget.value);
+                    }
+                  }}
+                  onBlur={handlePageSizeBlur}
+                />
+                {filter === 'antigravity' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setGroupSettingsOpen(true)}
+                    className={styles.iconButton}
+                    title={t('auth_files.group_settings')}
+                  >
+                    <IconSlidersHorizontal className={styles.actionIcon} size={16} />
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setProxyModalOpen(true)}
+                  disabled={disableControls}
+                  className={styles.iconButton}
+                  title={t('auth_files.proxy_settings')}
+                >
+                  <IconShield className={styles.actionIcon} size={16} />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const newValue = !isMasked;
+                    setIsMasked(newValue);
+                    localStorage.setItem('auth_files_is_masked', String(newValue));
+                  }}
+                  className={styles.iconButton}
+                  title={isMasked ? t('auth_files.show_content') : t('auth_files.hide_content')}
+                >
+                  {isMasked ? <IconEyeOff className={styles.actionIcon} size={16} /> : <IconEye className={styles.actionIcon} size={16} />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -1831,89 +1769,6 @@ export function AuthFilesPage() {
         )}
       </Modal>
 
-      {/* prefix/proxy_url 编辑弹窗 */}
-      <Modal
-        open={Boolean(prefixProxyEditor)}
-        onClose={() => setPrefixProxyEditor(null)}
-        closeDisabled={prefixProxyEditor?.saving === true}
-        width={720}
-        title={
-          prefixProxyEditor?.fileName
-            ? `${t('auth_files.prefix_proxy_button')} - ${prefixProxyEditor.fileName}`
-            : t('auth_files.prefix_proxy_button')
-        }
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setPrefixProxyEditor(null)}
-              disabled={prefixProxyEditor?.saving === true}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={() => void handlePrefixProxySave()}
-              loading={prefixProxyEditor?.saving === true}
-              disabled={
-                disableControls ||
-                prefixProxyEditor?.saving === true ||
-                !prefixProxyDirty ||
-                !prefixProxyEditor?.json
-              }
-            >
-              {t('common.save')}
-            </Button>
-          </>
-        }
-      >
-        {prefixProxyEditor && (
-          <div className={styles.prefixProxyEditor}>
-            {prefixProxyEditor.loading ? (
-              <div className={styles.prefixProxyLoading}>
-                <LoadingSpinner size={14} />
-                <span>{t('auth_files.prefix_proxy_loading')}</span>
-              </div>
-            ) : (
-              <>
-                {prefixProxyEditor.error && (
-                  <div className={styles.prefixProxyError}>{prefixProxyEditor.error}</div>
-                )}
-                <div className={styles.prefixProxyJsonWrapper}>
-                  <label className={styles.prefixProxyLabel}>
-                    {t('auth_files.prefix_proxy_source_label')}
-                  </label>
-                  <textarea
-                    className={styles.prefixProxyTextarea}
-                    rows={10}
-                    readOnly
-                    value={prefixProxyUpdatedText}
-                  />
-                </div>
-                <div className={styles.prefixProxyFields}>
-                  <Input
-                    label={t('auth_files.prefix_label')}
-                    value={prefixProxyEditor.prefix}
-                    disabled={
-                      disableControls || prefixProxyEditor.saving || !prefixProxyEditor.json
-                    }
-                    onChange={(e) => handlePrefixProxyChange('prefix', e.target.value)}
-                  />
-                  <Input
-                    label={t('auth_files.proxy_url_label')}
-                    value={prefixProxyEditor.proxyUrl}
-                    placeholder={t('auth_files.proxy_url_placeholder')}
-                    disabled={
-                      disableControls || prefixProxyEditor.saving || !prefixProxyEditor.json
-                    }
-                    onChange={(e) => handlePrefixProxyChange('proxyUrl', e.target.value)}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </Modal>
-
       {/* OAuth 排除弹窗 */}
       <Modal
         open={excludedModalOpen}
@@ -2129,6 +1984,33 @@ export function AuthFilesPage() {
           loadFiles();
           loadKeyStats();
         }}
+      />
+
+      {/* JSON 编辑器弹窗 */}
+      <JsonEditorModal
+        open={editModalOpen}
+        onClose={closeEditModal}
+        file={editingFile}
+        onSaved={loadFiles}
+      />
+
+      {/* User-Agent 组设置弹窗 */}
+      <UserAgentGroupModal
+        open={groupSettingsOpen}
+        onClose={() => setGroupSettingsOpen(false)}
+        files={files}
+        onBatchComplete={loadFiles}
+      />
+
+      {/* 批量代理设置弹窗 */}
+      <BatchProxyModal
+        open={proxyModalOpen}
+        onClose={() => setProxyModalOpen(false)}
+        files={files}
+        fileProxies={fileProxies}
+        existingTypes={existingTypes}
+        getTypeLabel={getTypeLabel}
+        onComplete={loadFiles}
       />
     </div>
   );

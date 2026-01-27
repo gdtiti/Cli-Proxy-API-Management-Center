@@ -491,6 +491,27 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.userAgent {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.proxyInfo {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-family: monospace;
+  font-size: 11px;
+}
+
 .cardStats {
   display: flex;
   flex-wrap: wrap;
@@ -994,4 +1015,184 @@
   border-radius: 8px;
   border: 1px solid var(--danger-color);
   flex-shrink: 0;
+}
+
+// JSON 编辑器
+.editorWrapper {
+  height: 450px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+
+  :global(.cm-editor) {
+    height: 100%;
+    flex: 1;
+    font-size: 13px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  }
+
+  :global(.cm-scroller) {
+    overflow: auto;
+  }
+}
+
+.editLoadingWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-md;
+  padding: $spacing-xl;
+  min-height: 300px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.editStatus {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-right: auto;
+  padding: 4px 8px;
+  border-radius: $radius-sm;
+  background-color: var(--bg-secondary);
+}
+
+.proxyModalContent {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  max-height: 600px;
+}
+
+.fileListSection {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  background-color: var(--bg-secondary);
+}
+
+.fileListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: $spacing-xs;
+}
+
+.selectionCount {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.fileList {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  max-height: 300px;
+}
+
+.typeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+}
+
+.typeGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background-color: var(--bg-tertiary);
+  border-radius: $radius-sm;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-primary);
+
+  &:hover {
+    background-color: var(--bg-hover);
+  }
+}
+
+.typeGroupFiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  padding-left: 12px;
+}
+
+.fileItem {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-sm;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  &:hover {
+    border-color: var(--primary-color);
+    color: var(--text-primary);
+  }
+}
+
+.fileItemSelected {
+  background-color: rgba(var(--primary-rgb), 0.1);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.fileItemHasProxy {
+  background-color: rgba(253, 224, 71, 0.15); // Yellow-300 with low opacity
+  border-color: rgba(250, 204, 21, 0.5); // Yellow-400
+  color: #854d0e; // Yellow-800
+
+  .fileName {
+    color: inherit;
+  }
+
+  &:hover {
+    background-color: rgba(253, 224, 71, 0.25);
+    border-color: #eab308; // Yellow-500
+  }
+}
+
+.fileItemSelected.fileItemHasProxy {
+  background-color: rgba(253, 224, 71, 0.3);
+  border-color: var(--primary-color);
+}
+
+.proxyIndicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  min-width: 6px;
+  background-color: #f59e0b; // Amber-500
+  border-radius: 50%;
+}
+
+.proxyConfigSection {
+  border-top: 1px solid var(--border-color);
+  padding-top: $spacing-md;
 }

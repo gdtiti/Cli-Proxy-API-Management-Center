@@ -6,14 +6,13 @@ import { AiProvidersPage } from '@/pages/AiProvidersPage';
 import { AuthFilesPage } from '@/pages/AuthFilesPage';
 import { OAuthPage } from '@/pages/OAuthPage';
 import { QuotaPage } from '@/pages/QuotaPage';
-import { UsagePage } from '@/pages/UsagePage';
 import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
 import { MonitorPage } from '@/pages/MonitorPage';
 
 const mainRoutes = [
-  { path: '/', element: <DashboardPage /> },
+  { path: '/', element: <MonitorPage /> },
   { path: '/dashboard', element: <DashboardPage /> },
   { path: '/settings', element: <SettingsPage /> },
   { path: '/api-keys', element: <ApiKeysPage /> },
@@ -21,7 +20,6 @@ const mainRoutes = [
   { path: '/auth-files', element: <AuthFilesPage /> },
   { path: '/oauth', element: <OAuthPage /> },
   { path: '/quota', element: <QuotaPage /> },
-  { path: '/usage', element: <UsagePage /> },
   { path: '/config', element: <ConfigPage /> },
   { path: '/logs', element: <LogsPage /> },
   { path: '/system', element: <SystemPage /> },
