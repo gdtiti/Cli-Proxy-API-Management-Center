@@ -1,23 +1,38 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useInterval } from '@/hooks/useInterval';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Input } from '@/components/ui/Input';
-import { AutocompleteInput } from '@/components/ui/AutocompleteInput';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconBot, IconCode, IconDownload, IconTrash2, IconX, IconZap, IconEye, IconEyeOff, IconShield, IconSlidersHorizontal } from '@/components/ui/icons';
-import { JsonEditorModal, UserAgentGroupModal, BatchProxyModal, useQuickSetUserAgent } from '@/components/auth-files';
+import {
+  IconBot,
+  IconCode,
+  IconDownload,
+  IconTrash2,
+  IconZap,
+  IconEye,
+  IconEyeOff,
+  IconShield,
+  IconSlidersHorizontal,
+} from '@/components/ui/icons';
+import {
+  JsonEditorModal,
+  UserAgentGroupModal,
+  BatchProxyModal,
+  useQuickSetUserAgent,
+} from '@/components/auth-files';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
 import { AntigravityImportModal } from '@/components/antigravity/AntigravityImportModal';
 import { KiroImportModal } from '@/components/kiro/KiroImportModal';
 import { apiClient } from '@/services/api/client';
-import type { AuthFileItem, OAuthModelMappingEntry } from '@/types';
+import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
 import {
   calculateStatusBarData,
   collectUsageDetails,
@@ -27,7 +42,6 @@ import {
   type UsageDetail,
 } from '@/utils/usage';
 import { formatFileSize } from '@/utils/format';
-import { generateId } from '@/utils/helpers';
 import styles from './AuthFilesPage.module.scss';
 
 type ThemeColors = { bg: string; text: string; border?: string };
@@ -35,7 +49,7 @@ type TypeColorSet = { light: ThemeColors; dark?: ThemeColors };
 type ResolvedTheme = 'light' | 'dark';
 type AuthFileModelItem = { id: string; display_name?: string; type?: string; owned_by?: string };
 
-// 标签类型颜色配置（对齐重构前 styles.css 的 file-type-badge 颜色）
+// 标签类型颜色配置
 const TYPE_COLORS: Record<string, TypeColorSet> = {
   qwen: {
     light: { bg: '#e8f5e9', text: '#2e7d32' },
@@ -79,44 +93,43 @@ const TYPE_COLORS: Record<string, TypeColorSet> = {
   },
 };
 
-const OAUTH_PROVIDER_PRESETS = [
-  'gemini-cli',
-  'vertex',
-  'aistudio',
-  'antigravity',
-  'claude',
-  'codex',
-  'qwen',
-  'iflow',
-];
-
-const OAUTH_PROVIDER_EXCLUDES = new Set(['all', 'unknown', 'empty']);
 const MIN_CARD_PAGE_SIZE = 3;
 const MAX_CARD_PAGE_SIZE = 30;
 const MAX_AUTH_FILE_SIZE = 50 * 1024;
+const AUTH_FILES_UI_STATE_KEY = 'authFilesPage.uiState';
 
 const clampCardPageSize = (value: number) =>
   Math.min(MAX_CARD_PAGE_SIZE, Math.max(MIN_CARD_PAGE_SIZE, Math.round(value)));
 
-interface ExcludedFormState {
-  provider: string;
-  modelsText: string;
-}
+type AuthFilesUiState = {
+  filter?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+};
 
-type OAuthModelMappingFormEntry = OAuthModelMappingEntry & { id: string };
+const readAuthFilesUiState = (): AuthFilesUiState | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_FILES_UI_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AuthFilesUiState;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
 
-interface ModelMappingsFormState {
-  provider: string;
-  mappings: OAuthModelMappingFormEntry[];
-}
+const writeAuthFilesUiState = (state: AuthFilesUiState) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(AUTH_FILES_UI_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+};
 
-const buildEmptyMappingEntry = (): OAuthModelMappingFormEntry => ({
-  id: generateId(),
-  name: '',
-  alias: '',
-  fork: false,
-});
-// 标准化 auth_index 值（与 usage.ts 中的 normalizeAuthIndex 保持一致）
+// 标准化 auth_index 值
 function normalizeAuthIndexValue(value: unknown): string | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value.toString();
@@ -140,16 +153,13 @@ function resolveAuthFileStats(file: AuthFileItem, stats: KeyStats): KeyStatBucke
   const defaultStats: KeyStatBucket = { success: 0, failure: 0 };
   const rawFileName = file?.name || '';
 
-  // 兼容 auth_index 和 authIndex 两种字段名（API 返回的是 auth_index）
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndexKey = normalizeAuthIndexValue(rawAuthIndex);
 
-  // 尝试根据 authIndex 匹配
   if (authIndexKey && stats.byAuthIndex?.[authIndexKey]) {
     return stats.byAuthIndex[authIndexKey];
   }
 
-  // 尝试根据 source (文件名) 匹配
   const fileNameId = rawFileName ? normalizeUsageSourceId(rawFileName) : '';
   if (fileNameId && stats.bySource?.[fileNameId]) {
     const fromName = stats.bySource[fileNameId];
@@ -158,7 +168,6 @@ function resolveAuthFileStats(file: AuthFileItem, stats: KeyStats): KeyStatBucke
     }
   }
 
-  // 尝试去掉扩展名后匹配
   if (rawFileName) {
     const nameWithoutExt = rawFileName.replace(/\.[^/.]+$/, '');
     if (nameWithoutExt && nameWithoutExt !== rawFileName) {
@@ -181,6 +190,7 @@ export function AuthFilesPage() {
   const { showNotification, showConfirmation } = useNotificationStore();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const navigate = useNavigate();
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [fileProxies, setFileProxies] = useState<Record<string, string>>({});
@@ -223,26 +233,10 @@ export function AuthFilesPage() {
   // OAuth 排除模型相关
   const [excluded, setExcluded] = useState<Record<string, string[]>>({});
   const [excludedError, setExcludedError] = useState<'unsupported' | null>(null);
-  const [excludedModalOpen, setExcludedModalOpen] = useState(false);
-  const [excludedForm, setExcludedForm] = useState<ExcludedFormState>({
-    provider: '',
-    modelsText: '',
-  });
-  const [savingExcluded, setSavingExcluded] = useState(false);
 
   // OAuth 模型映射相关
-  const [modelMappings, setModelMappings] = useState<Record<string, OAuthModelMappingEntry[]>>({});
-  const [modelMappingsError, setModelMappingsError] = useState<'unsupported' | null>(null);
-  const [mappingModalOpen, setMappingModalOpen] = useState(false);
-  const [mappingForm, setMappingForm] = useState<ModelMappingsFormState>({
-    provider: '',
-    mappings: [buildEmptyMappingEntry()],
-  });
-  const [mappingModelsFileName, setMappingModelsFileName] = useState('');
-  const [mappingModelsList, setMappingModelsList] = useState<AuthFileModelItem[]>([]);
-  const [mappingModelsLoading, setMappingModelsLoading] = useState(false);
-  const [mappingModelsError, setMappingModelsError] = useState<'unsupported' | null>(null);
-  const [savingMappings, setSavingMappings] = useState(false);
+  const [modelAlias, setModelAlias] = useState<Record<string, OAuthModelAliasEntry[]>>({});
+  const [modelAliasError, setModelAliasError] = useState<'unsupported' | null>(null);
 
   // Antigravity 导入相关
   const [antigravityModalOpen, setAntigravityModalOpen] = useState(false);
@@ -257,7 +251,7 @@ export function AuthFilesPage() {
   // User-Agent 组设置
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   const { quickSetting, quickSetUserAgent } = useQuickSetUserAgent();
-  
+
   // Content Masking
   const [isMasked, setIsMasked] = useState(() => {
     const saved = localStorage.getItem('auth_files_is_masked');
@@ -277,99 +271,31 @@ export function AuthFilesPage() {
   const disableControls = connectionStatus !== 'connected';
 
   useEffect(() => {
+    const persisted = readAuthFilesUiState();
+    if (!persisted) return;
+
+    if (typeof persisted.filter === 'string' && persisted.filter.trim()) {
+      setFilter(persisted.filter);
+    }
+    if (typeof persisted.search === 'string') {
+      setSearch(persisted.search);
+    }
+    if (typeof persisted.page === 'number' && Number.isFinite(persisted.page)) {
+      setPage(Math.max(1, Math.round(persisted.page)));
+    }
+    if (typeof persisted.pageSize === 'number' && Number.isFinite(persisted.pageSize)) {
+      setPageSize(clampCardPageSize(persisted.pageSize));
+    }
+  }, []);
+
+  useEffect(() => {
+    writeAuthFilesUiState({ filter, search, page, pageSize });
+  }, [filter, search, page, pageSize]);
+
+  useEffect(() => {
     setPageSizeInput(String(pageSize));
   }, [pageSize]);
 
-  const modelSourceFileOptions = useMemo(() => {
-    const normalizedProvider = normalizeProviderKey(mappingForm.provider);
-    const matching: string[] = [];
-    const others: string[] = [];
-    const seen = new Set<string>();
-
-    files.forEach((file) => {
-      const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
-      const isAistudio = (file.type || '').toLowerCase() === 'aistudio';
-      const canShowModels = !isRuntimeOnly || isAistudio;
-      if (!canShowModels) return;
-
-      const fileName = String(file.name || '').trim();
-      if (!fileName) return;
-      if (seen.has(fileName)) return;
-      seen.add(fileName);
-
-      if (!normalizedProvider) {
-        matching.push(fileName);
-        return;
-      }
-
-      const typeKey = normalizeProviderKey(String(file.type || ''));
-      const providerKey = normalizeProviderKey(String(file.provider || ''));
-      const isMatch = typeKey === normalizedProvider || providerKey === normalizedProvider;
-      if (isMatch) {
-        matching.push(fileName);
-      } else {
-        others.push(fileName);
-      }
-    });
-
-    matching.sort((a, b) => a.localeCompare(b));
-    others.sort((a, b) => a.localeCompare(b));
-    return [...matching, ...others];
-  }, [files, mappingForm.provider]);
-
-  useEffect(() => {
-    if (!mappingModalOpen) return;
-
-    const fileName = mappingModelsFileName.trim();
-    if (!fileName) {
-      setMappingModelsList([]);
-      setMappingModelsError(null);
-      setMappingModelsLoading(false);
-      return;
-    }
-
-    const cached = modelsCacheRef.current.get(fileName);
-    if (cached) {
-      setMappingModelsList(cached);
-      setMappingModelsError(null);
-      setMappingModelsLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setMappingModelsLoading(true);
-    setMappingModelsError(null);
-
-    authFilesApi
-      .getModelsForAuthFile(fileName)
-      .then((models) => {
-        if (cancelled) return;
-        modelsCacheRef.current.set(fileName, models);
-        setMappingModelsList(models);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const errorMessage = err instanceof Error ? err.message : '';
-        if (
-          errorMessage.includes('404') ||
-          errorMessage.includes('not found') ||
-          errorMessage.includes('Not Found')
-        ) {
-          setMappingModelsList([]);
-          setMappingModelsError('unsupported');
-          return;
-        }
-        showNotification(`${t('notification.load_failed')}: ${errorMessage}`, 'error');
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setMappingModelsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mappingModalOpen, mappingModelsFileName, showNotification, t]);
   const commitPageSizeInput = (rawValue: string) => {
     const trimmed = rawValue.trim();
     if (!trimmed) {
@@ -430,36 +356,46 @@ export function AuthFilesPage() {
         const uaUpdates = new Map<string, string>();
         const proxyUpdates: Record<string, string> = {};
 
-        await Promise.all(initialFiles.map(async (file) => {
-          try {
-            const content = await authFilesApi.downloadText(file.name);
+        await Promise.all(
+          initialFiles.map(async (file) => {
             try {
-              const json = JSON.parse(content);
-              
-              if (json.proxy_url) {
-                proxyUpdates[file.name] = json.proxy_url;
-              }
+              const content = await authFilesApi.downloadText(file.name);
+              try {
+                const json = JSON.parse(content);
 
-              if (file.type === 'antigravity' && !((file as any).user_agent || (file as any).userAgent)) {
-                 const ua = json.user_agent || json.userAgent;
-                 if (ua) uaUpdates.set(file.name, ua);
+                if (json.proxy_url) {
+                  proxyUpdates[file.name] = json.proxy_url;
+                }
+
+                if (
+                  file.type === 'antigravity' &&
+                  !((file as Record<string, unknown>).user_agent || (file as Record<string, unknown>).userAgent)
+                ) {
+                  const ua = json.user_agent || json.userAgent;
+                  if (ua) uaUpdates.set(file.name, ua);
+                }
+              } catch {
+                /* ignore */
               }
-            } catch { /* ignore */ }
-          } catch { /* ignore */ }
-        }));
+            } catch {
+              /* ignore */
+            }
+          })
+        );
 
         setFileProxies(proxyUpdates);
 
         if (uaUpdates.size > 0) {
-          setFiles(prev => prev.map(f => {
-            if (uaUpdates.has(f.name)) {
-              return { ...f, user_agent: uaUpdates.get(f.name) };
-            }
-            return f;
-          }));
+          setFiles((prev) =>
+            prev.map((f) => {
+              if (uaUpdates.has(f.name)) {
+                return { ...f, user_agent: uaUpdates.get(f.name) };
+              }
+              return f;
+            })
+          );
         }
       })();
-
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
       setError(errorMessage);
@@ -468,9 +404,8 @@ export function AuthFilesPage() {
     }
   }, [t]);
 
-  // 加载 key 统计和 usage 明细（API 层已有60秒超时）
+  // 加载 key 统计和 usage 明细
   const loadKeyStats = useCallback(async () => {
-    // 防止重复请求
     if (loadingKeyStatsRef.current) return;
     loadingKeyStatsRef.current = true;
     try {
@@ -478,7 +413,6 @@ export function AuthFilesPage() {
       const usageData = usageResponse?.usage ?? usageResponse;
       const stats = await usageApi.getKeyStats(usageData);
       setKeyStats(stats);
-      // 收集 usage 明细用于状态栏
       const details = collectUsageDetails(usageData);
       setUsageDetails(details);
     } catch {
@@ -510,17 +444,16 @@ export function AuthFilesPage() {
         }
         return;
       }
-      // 静默失败
     }
   }, [showNotification, t]);
 
   // 加载 OAuth 模型映射
-  const loadModelMappings = useCallback(async () => {
+  const loadModelAlias = useCallback(async () => {
     try {
-      const res = await authFilesApi.getOauthModelMappings();
+      const res = await authFilesApi.getOauthModelAlias();
       mappingsUnsupportedRef.current = false;
-      setModelMappings(res || {});
-      setModelMappingsError(null);
+      setModelAlias(res || {});
+      setModelAliasError(null);
     } catch (err: unknown) {
       const status =
         typeof err === 'object' && err !== null && 'status' in err
@@ -528,21 +461,20 @@ export function AuthFilesPage() {
           : undefined;
 
       if (status === 404) {
-        setModelMappings({});
-        setModelMappingsError('unsupported');
+        setModelAlias({});
+        setModelAliasError('unsupported');
         if (!mappingsUnsupportedRef.current) {
           mappingsUnsupportedRef.current = true;
-          showNotification(t('oauth_model_mappings.upgrade_required'), 'warning');
+          showNotification(t('oauth_model_alias.upgrade_required'), 'warning');
         }
         return;
       }
-      // 静默失败
     }
   }, [showNotification, t]);
 
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadFiles(), loadKeyStats(), loadExcluded(), loadModelMappings()]);
-  }, [loadFiles, loadKeyStats, loadExcluded, loadModelMappings]);
+    await Promise.all([loadFiles(), loadKeyStats(), loadExcluded(), loadModelAlias()]);
+  }, [loadFiles, loadKeyStats, loadExcluded, loadModelAlias]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
@@ -550,8 +482,8 @@ export function AuthFilesPage() {
     loadFiles();
     loadKeyStats();
     loadExcluded();
-    loadModelMappings();
-  }, [loadFiles, loadKeyStats, loadExcluded, loadModelMappings]);
+    loadModelAlias();
+  }, [loadFiles, loadKeyStats, loadExcluded, loadModelAlias]);
 
   // 定时刷新状态数据（每240秒）
   useInterval(loadKeyStats, 240_000);
@@ -567,57 +499,14 @@ export function AuthFilesPage() {
     return Array.from(types);
   }, [files]);
 
-  const excludedProviderLookup = useMemo(() => {
-    const lookup = new Map<string, string>();
-    Object.keys(excluded).forEach((provider) => {
-      const key = provider.trim().toLowerCase();
-      if (key && !lookup.has(key)) {
-        lookup.set(key, provider);
-      }
-    });
-    return lookup;
-  }, [excluded]);
-
-  const mappingProviderLookup = useMemo(() => {
-    const lookup = new Map<string, string>();
-    Object.keys(modelMappings).forEach((provider) => {
-      const key = provider.trim().toLowerCase();
-      if (key && !lookup.has(key)) {
-        lookup.set(key, provider);
-      }
-    });
-    return lookup;
-  }, [modelMappings]);
-
-  const providerOptions = useMemo(() => {
-    const extraProviders = new Set<string>();
-
-    Object.keys(excluded).forEach((provider) => {
-      extraProviders.add(provider);
-    });
-    Object.keys(modelMappings).forEach((provider) => {
-      extraProviders.add(provider);
-    });
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: files.length };
     files.forEach((file) => {
-      if (typeof file.type === 'string') {
-        extraProviders.add(file.type);
-      }
-      if (typeof file.provider === 'string') {
-        extraProviders.add(file.provider);
-      }
+      if (!file.type) return;
+      counts[file.type] = (counts[file.type] || 0) + 1;
     });
-
-    const normalizedExtras = Array.from(extraProviders)
-      .map((value) => value.trim())
-      .filter((value) => value && !OAUTH_PROVIDER_EXCLUDES.has(value.toLowerCase()));
-
-    const baseSet = new Set(OAUTH_PROVIDER_PRESETS.map((value) => value.toLowerCase()));
-    const extraList = normalizedExtras
-      .filter((value) => !baseSet.has(value.toLowerCase()))
-      .sort((a, b) => a.localeCompare(b));
-
-    return [...OAUTH_PROVIDER_PRESETS, ...extraList];
-  }, [excluded, files, modelMappings]);
+    return counts;
+  }, [files]);
 
   // 过滤和搜索
   const filtered = useMemo(() => {
@@ -737,6 +626,15 @@ export function AuthFilesPage() {
     });
   };
 
+  // 获取类型标签显示文本
+  const getTypeLabel = (type: string): string => {
+    const key = `auth_files.filter_${type}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+    if (type.toLowerCase() === 'iflow') return 'iFlow';
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
   // 删除全部（根据筛选类型）
   const handleDeleteAll = async () => {
     const isFiltered = filter !== 'all';
@@ -754,13 +652,13 @@ export function AuthFilesPage() {
         setDeletingAll(true);
         try {
           if (!isFiltered) {
-            // 删除全部
             await authFilesApi.deleteAll();
             showNotification(t('auth_files.delete_all_success'), 'success');
             setFiles((prev) => prev.filter((file) => isRuntimeOnlyAuthFile(file)));
           } else {
-            // 删除筛选类型的文件
-            const filesToDelete = files.filter((f) => f.type === filter && !isRuntimeOnlyAuthFile(f));
+            const filesToDelete = files.filter(
+              (f) => f.type === filter && !isRuntimeOnlyAuthFile(f)
+            );
 
             if (filesToDelete.length === 0) {
               showNotification(t('auth_files.delete_filtered_none', { type: typeLabel }), 'info');
@@ -812,9 +710,7 @@ export function AuthFilesPage() {
     try {
       const response = await apiClient.getRaw(
         `/auth-files/download?name=${encodeURIComponent(name)}`,
-        {
-          responseType: 'blob',
-        }
+        { responseType: 'blob' }
       );
       const blob = new Blob([response.data]);
       const url = window.URL.createObjectURL(blob);
@@ -830,13 +726,12 @@ export function AuthFilesPage() {
     }
   };
 
-  // 批量导出文件（根据当前筛选）
+  // 批量导出文件
   const [exporting, setExporting] = useState(false);
-  
+
   const handleExportAll = async () => {
-    // 获取要导出的文件列表（根据当前筛选，排除运行时虚拟凭证）
     const filesToExport = filtered.filter((file) => !isRuntimeOnlyAuthFile(file));
-    
+
     if (filesToExport.length === 0) {
       showNotification(t('auth_files.export_empty'), 'info');
       return;
@@ -860,7 +755,6 @@ export function AuthFilesPage() {
         a.click();
         window.URL.revokeObjectURL(url);
         successCount++;
-        // 添加小延迟避免浏览器阻止多个下载
         await new Promise((resolve) => setTimeout(resolve, 150));
       } catch {
         failCount++;
@@ -868,7 +762,7 @@ export function AuthFilesPage() {
     }
 
     setExporting(false);
-    
+
     if (failCount === 0) {
       showNotification(t('auth_files.export_success', { count: successCount }), 'success');
     } else {
@@ -900,7 +794,6 @@ export function AuthFilesPage() {
       modelsCacheRef.current.set(item.name, models);
       setModelsList(models);
     } catch (err) {
-      // 检测是否是 API 不支持的错误 (404 或特定错误消息)
       const errorMessage = err instanceof Error ? err.message : '';
       if (
         errorMessage.includes('404') ||
@@ -922,21 +815,11 @@ export function AuthFilesPage() {
     const excludedModels = excluded[providerKey] || excluded[providerType] || [];
     return excludedModels.some((pattern) => {
       if (pattern.includes('*')) {
-        // 支持通配符匹配
         const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$', 'i');
         return regex.test(modelId);
       }
       return pattern.toLowerCase() === modelId.toLowerCase();
     });
-  };
-
-  // 获取类型标签显示文本
-  const getTypeLabel = (type: string): string => {
-    const key = `auth_files.filter_${type}`;
-    const translated = t(key);
-    if (translated !== key) return translated;
-    if (type.toLowerCase() === 'iflow') return 'iFlow';
-    return type.charAt(0).toUpperCase() + type.slice(1);
   };
 
   // 获取类型颜色
@@ -945,46 +828,16 @@ export function AuthFilesPage() {
     return resolvedTheme === 'dark' && set.dark ? set.dark : set.light;
   };
 
-  // OAuth 排除相关方法
-  const openExcludedModal = (provider?: string) => {
-    const normalizedProvider = normalizeProviderKey(provider || '');
-    const fallbackProvider =
-      normalizedProvider || (filter !== 'all' ? normalizeProviderKey(String(filter)) : '');
-    const lookupKey = fallbackProvider ? excludedProviderLookup.get(fallbackProvider) : undefined;
-    const models = lookupKey ? excluded[lookupKey] : [];
-    setExcludedForm({
-      provider: lookupKey || fallbackProvider,
-      modelsText: Array.isArray(models) ? models.join('\n') : '',
+  const openExcludedEditor = (provider?: string) => {
+    const providerValue = (provider || (filter !== 'all' ? String(filter) : '')).trim();
+    const params = new URLSearchParams();
+    if (providerValue) {
+      params.set('provider', providerValue);
+    }
+    const search = params.toString();
+    navigate(`/auth-files/oauth-excluded${search ? `?${search}` : ''}`, {
+      state: { fromAuthFiles: true },
     });
-    setExcludedModalOpen(true);
-  };
-
-  const saveExcludedModels = async () => {
-    const provider = normalizeProviderKey(excludedForm.provider);
-    if (!provider) {
-      showNotification(t('oauth_excluded.provider_required'), 'error');
-      return;
-    }
-    const models = excludedForm.modelsText
-      .split(/[\n,]+/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    setSavingExcluded(true);
-    try {
-      if (models.length) {
-        await authFilesApi.saveOauthExcludedModels(provider, models);
-      } else {
-        await authFilesApi.deleteOauthExcludedEntry(provider);
-      }
-      await loadExcluded();
-      showNotification(t('oauth_excluded.save_success'), 'success');
-      setExcludedModalOpen(false);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      showNotification(`${t('oauth_excluded.save_failed')}: ${errorMessage}`, 'error');
-    } finally {
-      setSavingExcluded(false);
-    }
   };
 
   const deleteExcluded = async (provider: string) => {
@@ -1029,137 +882,32 @@ export function AuthFilesPage() {
     });
   };
 
-  // OAuth 模型映射相关方法
-  const normalizeMappingEntries = (
-    entries?: OAuthModelMappingEntry[]
-  ): OAuthModelMappingFormEntry[] => {
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return [buildEmptyMappingEntry()];
+  const openModelAliasEditor = (provider?: string) => {
+    const providerValue = (provider || (filter !== 'all' ? String(filter) : '')).trim();
+    const params = new URLSearchParams();
+    if (providerValue) {
+      params.set('provider', providerValue);
     }
-    return entries.map((entry) => ({
-      id: generateId(),
-      name: entry.name ?? '',
-      alias: entry.alias ?? '',
-      fork: Boolean(entry.fork),
-    }));
-  };
-
-  const openMappingsModal = (provider?: string) => {
-    const normalizedProvider = (provider || '').trim();
-    const fallbackProvider = normalizedProvider || (filter !== 'all' ? String(filter) : '');
-    const lookupKey = fallbackProvider
-      ? mappingProviderLookup.get(fallbackProvider.toLowerCase())
-      : undefined;
-    const mappings = lookupKey ? modelMappings[lookupKey] : [];
-    const providerValue = lookupKey || fallbackProvider;
-
-    const normalizedProviderKey = normalizeProviderKey(providerValue);
-    const defaultModelsFileName = files
-      .filter((file) => {
-        const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
-        const isAistudio = (file.type || '').toLowerCase() === 'aistudio';
-        const canShowModels = !isRuntimeOnly || isAistudio;
-        if (!canShowModels) return false;
-        if (!normalizedProviderKey) return false;
-        const typeKey = normalizeProviderKey(String(file.type || ''));
-        const providerKey = normalizeProviderKey(String(file.provider || ''));
-        return typeKey === normalizedProviderKey || providerKey === normalizedProviderKey;
-      })
-      .map((file) => file.name)
-      .sort((a, b) => a.localeCompare(b))[0];
-
-    setMappingForm({
-      provider: providerValue,
-      mappings: normalizeMappingEntries(mappings),
-    });
-    setMappingModelsFileName(defaultModelsFileName || '');
-    setMappingModelsList([]);
-    setMappingModelsError(null);
-    setMappingModalOpen(true);
-  };
-
-  const updateMappingEntry = (
-    index: number,
-    field: keyof OAuthModelMappingEntry,
-    value: string | boolean
-  ) => {
-    setMappingForm((prev) => ({
-      ...prev,
-      mappings: prev.mappings.map((entry, idx) =>
-        idx === index ? { ...entry, [field]: value } : entry
-      ),
-    }));
-  };
-
-  const addMappingEntry = () => {
-    setMappingForm((prev) => ({
-      ...prev,
-      mappings: [...prev.mappings, buildEmptyMappingEntry()],
-    }));
-  };
-
-  const removeMappingEntry = (index: number) => {
-    setMappingForm((prev) => {
-      const next = prev.mappings.filter((_, idx) => idx !== index);
-      return {
-        ...prev,
-        mappings: next.length ? next : [buildEmptyMappingEntry()],
-      };
+    const search = params.toString();
+    navigate(`/auth-files/oauth-model-alias${search ? `?${search}` : ''}`, {
+      state: { fromAuthFiles: true },
     });
   };
 
-  const saveModelMappings = async () => {
-    const provider = mappingForm.provider.trim();
-    if (!provider) {
-      showNotification(t('oauth_model_mappings.provider_required'), 'error');
-      return;
-    }
-
-    const seen = new Set<string>();
-    const mappings = mappingForm.mappings
-      .map((entry) => {
-        const name = String(entry.name ?? '').trim();
-        const alias = String(entry.alias ?? '').trim();
-        if (!name || !alias) return null;
-        const key = `${name.toLowerCase()}::${alias.toLowerCase()}::${entry.fork ? '1' : '0'}`;
-        if (seen.has(key)) return null;
-        seen.add(key);
-        return entry.fork ? { name, alias, fork: true } : { name, alias };
-      })
-      .filter(Boolean) as OAuthModelMappingEntry[];
-
-    setSavingMappings(true);
-    try {
-      if (mappings.length) {
-        await authFilesApi.saveOauthModelMappings(provider, mappings);
-      } else {
-        await authFilesApi.deleteOauthModelMappings(provider);
-      }
-      await loadModelMappings();
-      showNotification(t('oauth_model_mappings.save_success'), 'success');
-      setMappingModalOpen(false);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      showNotification(`${t('oauth_model_mappings.save_failed')}: ${errorMessage}`, 'error');
-    } finally {
-      setSavingMappings(false);
-    }
-  };
-
-  const deleteModelMappings = async (provider: string) => {
+  const deleteModelAlias = async (provider: string) => {
     showConfirmation({
-      title: t('oauth_model_mappings.delete_title', { defaultValue: 'Delete Mappings' }),
-      message: t('oauth_model_mappings.delete_confirm', { provider }),
+      title: t('oauth_model_alias.delete_title', { defaultValue: 'Delete Mappings' }),
+      message: t('oauth_model_alias.delete_confirm', { provider }),
       variant: 'danger',
       confirmText: t('common.confirm'),
       onConfirm: async () => {
         try {
-          await authFilesApi.deleteOauthModelMappings(provider);
-          await loadModelMappings();
-          showNotification(t('oauth_model_mappings.delete_success'), 'success');
+          await authFilesApi.deleteOauthModelAlias(provider);
+          await loadModelAlias();
+          showNotification(t('oauth_model_alias.delete_success'), 'success');
         } catch (err: unknown) {
           const errorMessage = err instanceof Error ? err.message : '';
-          showNotification(`${t('oauth_model_mappings.delete_failed')}: ${errorMessage}`, 'error');
+          showNotification(`${t('oauth_model_alias.delete_failed')}: ${errorMessage}`, 'error');
         }
       },
     });
@@ -1182,9 +930,7 @@ export function AuthFilesPage() {
     setStatusUpdating((prev) => ({ ...prev, [item.name]: true }));
     try {
       await authFilesApi.setStatus(item.name, disabled);
-      setFiles((prev) =>
-        prev.map((f) => (f.name === item.name ? { ...f, disabled } : f))
-      );
+      setFiles((prev) => prev.map((f) => (f.name === item.name ? { ...f, disabled } : f)));
       showNotification(t('auth_files.status_update_success'), 'success');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : '';
@@ -1223,14 +969,15 @@ export function AuthFilesPage() {
               setPage(1);
             }}
           >
-            {getTypeLabel(type)}
+            <span className={styles.filterTagLabel}>{getTypeLabel(type)}</span>
+            <span className={styles.filterTagCount}>{typeCounts[type] ?? 0}</span>
           </button>
         );
       })}
     </div>
   );
 
-  // 预计算所有认证文件的状态栏数据（避免每次渲染重复计算）
+  // 预计算所有认证文件的状态栏数据
   const statusBarCache = useMemo(() => {
     const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
 
@@ -1239,7 +986,6 @@ export function AuthFilesPage() {
       const authIndexKey = normalizeAuthIndexValue(rawAuthIndex);
 
       if (authIndexKey) {
-        // 过滤出属于该认证文件的 usage 明细
         const filteredDetails = usageDetails.filter((detail) => {
           const detailAuthIndex = normalizeAuthIndexValue(detail.auth_index);
           return detailAuthIndex !== null && detailAuthIndex === authIndexKey;
@@ -1253,7 +999,6 @@ export function AuthFilesPage() {
 
   // 渲染状态监测栏
   const renderStatusBar = (item: AuthFileItem) => {
-    // 认证文件使用 authIndex 来匹配 usage 数据
     const rawAuthIndex = item['auth_index'] ?? item.authIndex;
     const authIndexKey = normalizeAuthIndexValue(rawAuthIndex);
 
@@ -1291,23 +1036,24 @@ export function AuthFilesPage() {
   };
 
   // 渲染单个认证文件卡片
-	  const renderFileCard = (item: AuthFileItem) => {
-	    const fileStats = resolveAuthFileStats(item, keyStats);
-	    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
-	    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
-	    const showModelsButton = !isRuntimeOnly || isAistudio;
-	    const typeColor = getTypeColor(item.type || 'unknown');
-      const showEditButton = !isRuntimeOnly;
+  const renderFileCard = (item: AuthFileItem) => {
+    const fileStats = resolveAuthFileStats(item, keyStats);
+    const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
+    const isAistudio = (item.type || '').toLowerCase() === 'aistudio';
+    const showModelsButton = !isRuntimeOnly || isAistudio;
+    const typeColor = getTypeColor(item.type || 'unknown');
+    const showEditButton = !isRuntimeOnly;
+    const fileRecord = item as Record<string, unknown>;
 
-	    return (
-	      <div
-	        key={item.name}
-	        className={`${styles.fileCard} ${item.disabled ? styles.fileCardDisabled : ''}`}
-	      >
-	        <div className={styles.cardHeader}>
-	          <span
-	            className={styles.typeBadge}
-	            style={{
+    return (
+      <div
+        key={item.name}
+        className={`${styles.fileCard} ${item.disabled ? styles.fileCardDisabled : ''}`}
+      >
+        <div className={styles.cardHeader}>
+          <span
+            className={styles.typeBadge}
+            style={{
               backgroundColor: typeColor.bg,
               color: typeColor.text,
               ...(typeColor.border ? { border: typeColor.border } : {}),
@@ -1321,17 +1067,26 @@ export function AuthFilesPage() {
         </div>
 
         <div className={styles.cardMeta}>
-          {/* <span>{t('auth_files.file_size')}: {item.size ? formatFileSize(item.size) : '-'}</span>
-          <span>{t('auth_files.file_modified')}: {formatModified(item)}</span> */}
-          {((item as any).user_agent || (item as any).userAgent) && (
-             <span className={styles.userAgent} title={isMasked ? undefined : ((item as any).user_agent || (item as any).userAgent)}>
-               User-Agent: {isMasked ? maskString((item as any).user_agent || (item as any).userAgent) : ((item as any).user_agent || (item as any).userAgent)}
-             </span>
-          )}
+          {(() => {
+            const userAgent = fileRecord.user_agent || fileRecord.userAgent;
+            if (!userAgent) return null;
+            const uaStr = String(userAgent);
+            return (
+              <span
+                className={styles.userAgent}
+                title={isMasked ? undefined : uaStr}
+              >
+                User-Agent: {isMasked ? maskString(uaStr) : uaStr}
+              </span>
+            );
+          })()}
           {fileProxies[item.name] && (
-             <span className={styles.proxyInfo} title={isMasked ? undefined : fileProxies[item.name]}>
-               Proxy: {isMasked ? maskString(fileProxies[item.name]) : fileProxies[item.name]}
-             </span>
+            <span
+              className={styles.proxyInfo}
+              title={isMasked ? undefined : fileProxies[item.name]}
+            >
+              Proxy: {isMasked ? maskString(fileProxies[item.name]) : fileProxies[item.name]}
+            </span>
           )}
         </div>
 
@@ -1344,7 +1099,6 @@ export function AuthFilesPage() {
           </span>
         </div>
 
-        {/* 状态监测栏 */}
         {renderStatusBar(item)}
 
         <div className={styles.cardActions}>
@@ -1381,11 +1135,11 @@ export function AuthFilesPage() {
               title={t('auth_files.quick_set_ua')}
               disabled={disableControls || quickSetting === item.name}
             >
-               {quickSetting === item.name ? (
-                  <LoadingSpinner size={14} />
-               ) : (
-                  <IconZap className={styles.actionIcon} size={16} />
-               )}
+              {quickSetting === item.name ? (
+                <LoadingSpinner size={14} />
+              ) : (
+                <IconZap className={styles.actionIcon} size={16} />
+              )}
             </Button>
           )}
           {!isRuntimeOnly && (
@@ -1496,7 +1250,12 @@ export function AuthFilesPage() {
               variant="secondary"
               size="sm"
               onClick={handleExportAll}
-              disabled={disableControls || loading || exporting || filtered.filter((f) => !isRuntimeOnlyAuthFile(f)).length === 0}
+              disabled={
+                disableControls ||
+                loading ||
+                exporting ||
+                filtered.filter((f) => !isRuntimeOnlyAuthFile(f)).length === 0
+              }
               loading={exporting}
             >
               {filter === 'all'
@@ -1582,7 +1341,11 @@ export function AuthFilesPage() {
                   className={styles.iconButton}
                   title={isMasked ? t('auth_files.show_content') : t('auth_files.hide_content')}
                 >
-                  {isMasked ? <IconEyeOff className={styles.actionIcon} size={16} /> : <IconEye className={styles.actionIcon} size={16} />}
+                  {isMasked ? (
+                    <IconEyeOff className={styles.actionIcon} size={16} />
+                  ) : (
+                    <IconEye className={styles.actionIcon} size={16} />
+                  )}
                 </Button>
               </div>
             </div>
@@ -1637,7 +1400,7 @@ export function AuthFilesPage() {
         extra={
           <Button
             size="sm"
-            onClick={() => openExcludedModal()}
+            onClick={() => openExcludedEditor()}
             disabled={disableControls || excludedError === 'unsupported'}
           >
             {t('oauth_excluded.add')}
@@ -1664,7 +1427,7 @@ export function AuthFilesPage() {
                   </div>
                 </div>
                 <div className={styles.excludedActions}>
-                  <Button variant="secondary" size="sm" onClick={() => openExcludedModal(provider)}>
+                  <Button variant="secondary" size="sm" onClick={() => openExcludedEditor(provider)}>
                     {t('common.edit')}
                   </Button>
                   <Button variant="danger" size="sm" onClick={() => deleteExcluded(provider)}>
@@ -1679,42 +1442,46 @@ export function AuthFilesPage() {
 
       {/* OAuth 模型映射卡片 */}
       <Card
-        title={t('oauth_model_mappings.title')}
+        title={t('oauth_model_alias.title')}
         extra={
           <Button
             size="sm"
-            onClick={() => openMappingsModal()}
-            disabled={disableControls || modelMappingsError === 'unsupported'}
+            onClick={() => openModelAliasEditor()}
+            disabled={disableControls || modelAliasError === 'unsupported'}
           >
-            {t('oauth_model_mappings.add')}
+            {t('oauth_model_alias.add')}
           </Button>
         }
       >
-        {modelMappingsError === 'unsupported' ? (
+        {modelAliasError === 'unsupported' ? (
           <EmptyState
-            title={t('oauth_model_mappings.upgrade_required_title')}
-            description={t('oauth_model_mappings.upgrade_required_desc')}
+            title={t('oauth_model_alias.upgrade_required_title')}
+            description={t('oauth_model_alias.upgrade_required_desc')}
           />
-        ) : Object.keys(modelMappings).length === 0 ? (
-          <EmptyState title={t('oauth_model_mappings.list_empty_all')} />
+        ) : Object.keys(modelAlias).length === 0 ? (
+          <EmptyState title={t('oauth_model_alias.list_empty_all')} />
         ) : (
           <div className={styles.excludedList}>
-            {Object.entries(modelMappings).map(([provider, mappings]) => (
+            {Object.entries(modelAlias).map(([provider, mappings]) => (
               <div key={provider} className={styles.excludedItem}>
                 <div className={styles.excludedInfo}>
                   <div className={styles.excludedProvider}>{provider}</div>
                   <div className={styles.excludedModels}>
                     {mappings?.length
-                      ? t('oauth_model_mappings.model_count', { count: mappings.length })
-                      : t('oauth_model_mappings.no_models')}
+                      ? t('oauth_model_alias.model_count', { count: mappings.length })
+                      : t('oauth_model_alias.no_models')}
                   </div>
                 </div>
                 <div className={styles.excludedActions}>
-                  <Button variant="secondary" size="sm" onClick={() => openMappingsModal(provider)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openModelAliasEditor(provider)}
+                  >
                     {t('common.edit')}
                   </Button>
-                  <Button variant="danger" size="sm" onClick={() => deleteModelMappings(provider)}>
-                    {t('oauth_model_mappings.delete')}
+                  <Button variant="danger" size="sm" onClick={() => deleteModelAlias(provider)}>
+                    {t('oauth_model_alias.delete')}
                   </Button>
                 </div>
               </div>
@@ -1824,203 +1591,6 @@ export function AuthFilesPage() {
             })}
           </div>
         )}
-      </Modal>
-
-      {/* OAuth 排除弹窗 */}
-      <Modal
-        open={excludedModalOpen}
-        onClose={() => setExcludedModalOpen(false)}
-        title={t('oauth_excluded.add_title')}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setExcludedModalOpen(false)}
-              disabled={savingExcluded}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={saveExcludedModels} loading={savingExcluded}>
-              {t('oauth_excluded.save')}
-            </Button>
-          </>
-        }
-      >
-        <div className={styles.providerField}>
-          <AutocompleteInput
-            id="oauth-excluded-provider"
-            label={t('oauth_excluded.provider_label')}
-            hint={t('oauth_excluded.provider_hint')}
-            placeholder={t('oauth_excluded.provider_placeholder')}
-            value={excludedForm.provider}
-            onChange={(val) => setExcludedForm((prev) => ({ ...prev, provider: val }))}
-            options={providerOptions}
-          />
-          {providerOptions.length > 0 && (
-            <div className={styles.providerTagList}>
-              {providerOptions.map((provider) => {
-                const isActive =
-                  excludedForm.provider.trim().toLowerCase() === provider.toLowerCase();
-                return (
-                  <button
-                    key={provider}
-                    type="button"
-                    className={`${styles.providerTag} ${isActive ? styles.providerTagActive : ''}`}
-                    onClick={() => setExcludedForm((prev) => ({ ...prev, provider }))}
-                    disabled={savingExcluded}
-                  >
-                    {getTypeLabel(provider)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className={styles.formGroup}>
-          <label>{t('oauth_excluded.models_label')}</label>
-          <textarea
-            className={styles.textarea}
-            rows={4}
-            placeholder={t('oauth_excluded.models_placeholder')}
-            value={excludedForm.modelsText}
-            onChange={(e) => setExcludedForm((prev) => ({ ...prev, modelsText: e.target.value }))}
-          />
-          <div className={styles.hint}>{t('oauth_excluded.models_hint')}</div>
-        </div>
-      </Modal>
-
-      {/* OAuth 模型映射弹窗 */}
-      <Modal
-        open={mappingModalOpen}
-        onClose={() => setMappingModalOpen(false)}
-        title={t('oauth_model_mappings.add_title')}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setMappingModalOpen(false)}
-              disabled={savingMappings}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={saveModelMappings} loading={savingMappings}>
-              {t('oauth_model_mappings.save')}
-            </Button>
-          </>
-        }
-      >
-        <div className={styles.providerField}>
-          <AutocompleteInput
-            id="oauth-model-alias-provider"
-            label={t('oauth_model_mappings.provider_label')}
-            hint={t('oauth_model_mappings.provider_hint')}
-            placeholder={t('oauth_model_mappings.provider_placeholder')}
-            value={mappingForm.provider}
-            onChange={(val) => setMappingForm((prev) => ({ ...prev, provider: val }))}
-            options={providerOptions}
-          />
-          {providerOptions.length > 0 && (
-            <div className={styles.providerTagList}>
-              {providerOptions.map((provider) => {
-                const isActive =
-                  mappingForm.provider.trim().toLowerCase() === provider.toLowerCase();
-                return (
-                  <button
-                    key={provider}
-                    type="button"
-                    className={`${styles.providerTag} ${isActive ? styles.providerTagActive : ''}`}
-                    onClick={() => setMappingForm((prev) => ({ ...prev, provider }))}
-                    disabled={savingMappings}
-                  >
-                    {getTypeLabel(provider)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className={styles.providerField}>
-          <AutocompleteInput
-            id="oauth-model-mapping-model-source"
-            label={t('oauth_model_mappings.model_source_label')}
-            hint={
-              mappingModelsLoading
-                ? t('oauth_model_mappings.model_source_loading')
-                : mappingModelsError === 'unsupported'
-                  ? t('oauth_model_mappings.model_source_unsupported')
-                  : !mappingModelsFileName.trim()
-                    ? t('oauth_model_mappings.model_source_hint')
-                    : t('oauth_model_mappings.model_source_loaded', {
-                        count: mappingModelsList.length,
-                      })
-            }
-            placeholder={t('oauth_model_mappings.model_source_placeholder')}
-            value={mappingModelsFileName}
-            onChange={(val) => setMappingModelsFileName(val)}
-            disabled={savingMappings}
-            options={modelSourceFileOptions}
-          />
-        </div>
-        <div className={styles.formGroup}>
-          <label>{t('oauth_model_mappings.mappings_label')}</label>
-          <div className="header-input-list">
-            {(mappingForm.mappings.length ? mappingForm.mappings : [buildEmptyMappingEntry()]).map(
-              (entry, index) => (
-                <div key={entry.id} className={styles.mappingRow}>
-                  <AutocompleteInput
-                    wrapperStyle={{ flex: 1, marginBottom: 0 }}
-                    placeholder={t('oauth_model_mappings.mapping_name_placeholder')}
-                    value={entry.name}
-                    onChange={(val) => updateMappingEntry(index, 'name', val)}
-                    disabled={savingMappings}
-                    options={mappingModelsList.map((m) => ({
-                      value: m.id,
-                      label: m.display_name && m.display_name !== m.id ? m.display_name : undefined,
-                    }))}
-                  />
-                  <span className={styles.mappingSeparator}>→</span>
-                  <input
-                    className="input"
-                    placeholder={t('oauth_model_mappings.mapping_alias_placeholder')}
-                    value={entry.alias}
-                    onChange={(e) => updateMappingEntry(index, 'alias', e.target.value)}
-                    disabled={savingMappings}
-                    style={{ flex: 1 }}
-                  />
-                  <div className={styles.mappingFork}>
-                    <ToggleSwitch
-                      label={t('oauth_model_mappings.mapping_fork_label')}
-                      labelPosition="left"
-                      checked={Boolean(entry.fork)}
-                      onChange={(value) => updateMappingEntry(index, 'fork', value)}
-                      disabled={savingMappings}
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeMappingEntry(index)}
-                    disabled={savingMappings || mappingForm.mappings.length <= 1}
-                    title={t('common.delete')}
-                    aria-label={t('common.delete')}
-                  >
-                    <IconX size={14} />
-                  </Button>
-                </div>
-              )
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={addMappingEntry}
-              disabled={savingMappings}
-              className="align-start"
-            >
-              {t('oauth_model_mappings.add_mapping')}
-            </Button>
-          </div>
-          <div className={styles.hint}>{t('oauth_model_mappings.mappings_hint')}</div>
-        </div>
       </Modal>
 
       {/* Antigravity 导入弹窗 */}

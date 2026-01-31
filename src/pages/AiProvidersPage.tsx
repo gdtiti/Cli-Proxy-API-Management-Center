@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { entriesToModels } from '@/components/ui/ModelInputList';
+import { useNavigate } from 'react-router-dom';
 import {
   AmpcodeSection,
   ClaudeSection,
@@ -8,15 +8,10 @@ import {
   GeminiSection,
   OpenAISection,
   VertexSection,
+  ProviderNav,
   useProviderStats,
-  type GeminiFormState,
-  type OpenAIFormState,
-  type ProviderFormState,
-  type ProviderModal,
-  type VertexFormState,
 } from '@/components/providers';
 import {
-  parseExcludedModels,
   withDisableAllModelsRule,
   withoutDisableAllModelsRule,
 } from '@/components/providers/utils';
@@ -24,11 +19,11 @@ import { Input } from '@/components/ui/Input';
 import { ampcodeApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
 import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
-import { buildHeaderObject } from '@/utils/headers';
 import styles from './AiProvidersPage.module.scss';
 
 export function AiProvidersPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { showNotification, showConfirmation } = useNotificationStore();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
@@ -37,20 +32,29 @@ export function AiProvidersPage() {
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
   const updateConfigValue = useConfigStore((state) => state.updateConfigValue);
   const clearCache = useConfigStore((state) => state.clearCache);
+  const isCacheValid = useConfigStore((state) => state.isCacheValid);
 
-  const [loading, setLoading] = useState(true);
+  const hasMounted = useRef(false);
+  const [loading, setLoading] = useState(() => !isCacheValid());
   const [error, setError] = useState('');
 
-  const [geminiKeys, setGeminiKeys] = useState<GeminiKeyConfig[]>([]);
-  const [codexConfigs, setCodexConfigs] = useState<ProviderKeyConfig[]>([]);
-  const [claudeConfigs, setClaudeConfigs] = useState<ProviderKeyConfig[]>([]);
-  const [vertexConfigs, setVertexConfigs] = useState<ProviderKeyConfig[]>([]);
-  const [openaiProviders, setOpenaiProviders] = useState<OpenAIProviderConfig[]>([]);
+  const [geminiKeys, setGeminiKeys] = useState<GeminiKeyConfig[]>(
+    () => config?.geminiApiKeys || []
+  );
+  const [codexConfigs, setCodexConfigs] = useState<ProviderKeyConfig[]>(
+    () => config?.codexApiKeys || []
+  );
+  const [claudeConfigs, setClaudeConfigs] = useState<ProviderKeyConfig[]>(
+    () => config?.claudeApiKeys || []
+  );
+  const [vertexConfigs, setVertexConfigs] = useState<ProviderKeyConfig[]>(
+    () => config?.vertexApiKeys || []
+  );
+  const [openaiProviders, setOpenaiProviders] = useState<OpenAIProviderConfig[]>(
+    () => config?.openaiCompatibility || []
+  );
 
-  const [saving, setSaving] = useState(false);
   const [configSwitchingKey, setConfigSwitchingKey] = useState<string | null>(null);
-  const [modal, setModal] = useState<ProviderModal | null>(null);
-  const [ampcodeBusy, setAmpcodeBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const disableControls = connectionStatus !== 'connected';
@@ -186,7 +190,10 @@ export function AiProvidersPage() {
   };
 
   const loadConfigs = useCallback(async () => {
-    setLoading(true);
+    const hasValidCache = isCacheValid();
+    if (!hasValidCache) {
+      setLoading(true);
+    }
     setError('');
     try {
       const [configResult, vertexResult, ampcodeResult] = await Promise.allSettled([
@@ -222,9 +229,11 @@ export function AiProvidersPage() {
     } finally {
       setLoading(false);
     }
-  }, [clearCache, fetchConfig, t, updateConfigValue]);
+  }, [clearCache, fetchConfig, isCacheValid, t, updateConfigValue]);
 
   useEffect(() => {
+    if (hasMounted.current) return;
+    hasMounted.current = true;
     loadConfigs();
     loadKeyStats();
   }, [loadConfigs, loadKeyStats]);
@@ -243,62 +252,12 @@ export function AiProvidersPage() {
     config?.openaiCompatibility,
   ]);
 
-  const closeModal = () => {
-    setModal(null);
-  };
-
-  const openGeminiModal = (index: number | null) => {
-    setModal({ type: 'gemini', index });
-  };
-
-  const openProviderModal = (type: 'codex' | 'claude', index: number | null) => {
-    setModal({ type, index });
-  };
-
-  const openVertexModal = (index: number | null) => {
-    setModal({ type: 'vertex', index });
-  };
-
-  const openAmpcodeModal = () => {
-    setModal({ type: 'ampcode', index: null });
-  };
-
-  const openOpenaiModal = (index: number | null) => {
-    setModal({ type: 'openai', index });
-  };
-
-  const saveGemini = async (form: GeminiFormState, editIndex: number | null) => {
-    setSaving(true);
-    try {
-      const payload: GeminiKeyConfig = {
-        apiKey: form.apiKey.trim(),
-        prefix: form.prefix?.trim() || undefined,
-        baseUrl: form.baseUrl?.trim() || undefined,
-        headers: buildHeaderObject(form.headers),
-        excludedModels: parseExcludedModels(form.excludedText),
-      };
-      const nextList =
-        editIndex !== null
-          ? geminiKeys.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...geminiKeys, payload];
-
-      await providersApi.saveGeminiKeys(nextList);
-      setGeminiKeys(nextList);
-      updateConfigValue('gemini-api-key', nextList);
-      clearCache('gemini-api-key');
-      const message =
-        editIndex !== null
-          ? t('notification.gemini_key_updated')
-          : t('notification.gemini_key_added');
-      showNotification(message, 'success');
-      closeModal();
-    } catch (err: unknown) {
-      const message = getErrorMessage(err);
-      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const openEditor = useCallback(
+    (path: string) => {
+      navigate(path, { state: { fromAiProviders: true } });
+    },
+    [navigate]
+  );
 
   const deleteGemini = async (index: number) => {
     const entry = geminiKeys[index];
@@ -416,68 +375,6 @@ export function AiProvidersPage() {
     }
   };
 
-  const saveProvider = async (
-    type: 'codex' | 'claude',
-    form: ProviderFormState,
-    editIndex: number | null
-  ) => {
-    const trimmedBaseUrl = (form.baseUrl ?? '').trim();
-    const baseUrl = trimmedBaseUrl || undefined;
-    if (type === 'codex' && !baseUrl) {
-      showNotification(t('notification.codex_base_url_required'), 'error');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const source = type === 'codex' ? codexConfigs : claudeConfigs;
-
-      const payload: ProviderKeyConfig = {
-        apiKey: form.apiKey.trim(),
-        prefix: form.prefix?.trim() || undefined,
-        baseUrl,
-        proxyUrl: form.proxyUrl?.trim() || undefined,
-        headers: buildHeaderObject(form.headers),
-        models: entriesToModels(form.modelEntries),
-        excludedModels: parseExcludedModels(form.excludedText),
-      };
-
-      const nextList =
-        editIndex !== null
-          ? source.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...source, payload];
-
-      if (type === 'codex') {
-        await providersApi.saveCodexConfigs(nextList);
-        setCodexConfigs(nextList);
-        updateConfigValue('codex-api-key', nextList);
-        clearCache('codex-api-key');
-        const message =
-          editIndex !== null
-            ? t('notification.codex_config_updated')
-            : t('notification.codex_config_added');
-        showNotification(message, 'success');
-      } else {
-        await providersApi.saveClaudeConfigs(nextList);
-        setClaudeConfigs(nextList);
-        updateConfigValue('claude-api-key', nextList);
-        clearCache('claude-api-key');
-        const message =
-          editIndex !== null
-            ? t('notification.claude_config_updated')
-            : t('notification.claude_config_added');
-        showNotification(message, 'success');
-      }
-
-      closeModal();
-    } catch (err: unknown) {
-      const message = getErrorMessage(err);
-      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const deleteProviderEntry = async (type: 'codex' | 'claude', index: number) => {
     const source = type === 'codex' ? codexConfigs : claudeConfigs;
     const entry = source[index];
@@ -512,55 +409,6 @@ export function AiProvidersPage() {
     });
   };
 
-  const saveVertex = async (form: VertexFormState, editIndex: number | null) => {
-    const trimmedBaseUrl = (form.baseUrl ?? '').trim();
-    const baseUrl = trimmedBaseUrl || undefined;
-    if (!baseUrl) {
-      showNotification(t('notification.vertex_base_url_required'), 'error');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const payload: ProviderKeyConfig = {
-        apiKey: form.apiKey.trim(),
-        prefix: form.prefix?.trim() || undefined,
-        baseUrl,
-        proxyUrl: form.proxyUrl?.trim() || undefined,
-        headers: buildHeaderObject(form.headers),
-        models: form.modelEntries
-          .map((entry) => {
-            const name = entry.name.trim();
-            const alias = entry.alias.trim();
-            if (!name || !alias) return null;
-            return { name, alias };
-          })
-          .filter(Boolean) as ProviderKeyConfig['models'],
-      };
-
-      const nextList =
-        editIndex !== null
-          ? vertexConfigs.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...vertexConfigs, payload];
-
-      await providersApi.saveVertexConfigs(nextList);
-      setVertexConfigs(nextList);
-      updateConfigValue('vertex-api-key', nextList);
-      clearCache('vertex-api-key');
-      const message =
-        editIndex !== null
-          ? t('notification.vertex_config_updated')
-          : t('notification.vertex_config_added');
-      showNotification(message, 'success');
-      closeModal();
-    } catch (err: unknown) {
-      const message = getErrorMessage(err);
-      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const deleteVertex = async (index: number) => {
     const entry = vertexConfigs[index];
     if (!entry) return;
@@ -583,47 +431,6 @@ export function AiProvidersPage() {
         }
       },
     });
-  };
-
-  const saveOpenai = async (form: OpenAIFormState, editIndex: number | null) => {
-    setSaving(true);
-    try {
-      const payload: OpenAIProviderConfig = {
-        name: form.name.trim(),
-        prefix: form.prefix?.trim() || undefined,
-        baseUrl: form.baseUrl.trim(),
-        headers: buildHeaderObject(form.headers),
-        apiKeyEntries: form.apiKeyEntries.map((entry) => ({
-          apiKey: entry.apiKey.trim(),
-          proxyUrl: entry.proxyUrl?.trim() || undefined,
-          headers: entry.headers,
-        })),
-      };
-      if (form.testModel) payload.testModel = form.testModel.trim();
-      const models = entriesToModels(form.modelEntries);
-      if (models.length) payload.models = models;
-
-      const nextList =
-        editIndex !== null
-          ? openaiProviders.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...openaiProviders, payload];
-
-      await providersApi.saveOpenAIProviders(nextList);
-      setOpenaiProviders(nextList);
-      updateConfigValue('openai-compatibility', nextList);
-      clearCache('openai-compatibility');
-      const message =
-        editIndex !== null
-          ? t('notification.openai_provider_updated')
-          : t('notification.openai_provider_added');
-      showNotification(message, 'success');
-      closeModal();
-    } catch (err: unknown) {
-      const message = getErrorMessage(err);
-      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const deleteOpenai = async (index: number) => {
@@ -650,12 +457,6 @@ export function AiProvidersPage() {
     });
   };
 
-  const geminiModalIndex = modal?.type === 'gemini' ? modal.index : null;
-  const codexModalIndex = modal?.type === 'codex' ? modal.index : null;
-  const claudeModalIndex = modal?.type === 'claude' ? modal.index : null;
-  const vertexModalIndex = modal?.type === 'vertex' ? modal.index : null;
-  const openaiModalIndex = modal?.type === 'openai' ? modal.index : null;
-
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
@@ -680,150 +481,114 @@ export function AiProvidersPage() {
         )}
 
         {filteredGeminiKeys.length > 0 && (
-          <GeminiSection
-            configs={filteredGeminiKeys.map(({ item }) => item)}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
-            loading={loading}
-            disableControls={disableControls}
-            isSaving={saving}
-            isSwitching={isSwitching}
-            isModalOpen={modal?.type === 'gemini'}
-            modalIndex={
-              geminiModalIndex !== null
-                ? filteredGeminiKeys.findIndex(({ originalIndex }) => originalIndex === geminiModalIndex)
-                : null
-            }
-            onAdd={() => openGeminiModal(null)}
-            onEdit={(index) => openGeminiModal(filteredGeminiKeys[index]?.originalIndex ?? index)}
-            onDelete={(index) => deleteGemini(filteredGeminiKeys[index]?.originalIndex ?? index)}
-            onToggle={(index, enabled) =>
-              void setConfigEnabled('gemini', filteredGeminiKeys[index]?.originalIndex ?? index, enabled)
-            }
-            onCloseModal={closeModal}
-            onSave={saveGemini}
-          />
+          <div id="provider-gemini">
+            <GeminiSection
+              configs={filteredGeminiKeys.map(({ item }) => item)}
+              keyStats={keyStats}
+              usageDetails={usageDetails}
+              loading={loading}
+              disableControls={disableControls}
+              isSwitching={isSwitching}
+              onAdd={() => openEditor('/ai-providers/gemini/new')}
+              onEdit={(index) => openEditor(`/ai-providers/gemini/${filteredGeminiKeys[index]?.originalIndex ?? index}`)}
+              onDelete={(index) => deleteGemini(filteredGeminiKeys[index]?.originalIndex ?? index)}
+              onToggle={(index, enabled) =>
+                void setConfigEnabled('gemini', filteredGeminiKeys[index]?.originalIndex ?? index, enabled)
+              }
+            />
+          </div>
         )}
 
         {filteredCodexConfigs.length > 0 && (
-          <CodexSection
-            configs={filteredCodexConfigs.map(({ item }) => item)}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
-            loading={loading}
-            disableControls={disableControls}
-            isSaving={saving}
-            isSwitching={isSwitching}
-            resolvedTheme={resolvedTheme}
-            isModalOpen={modal?.type === 'codex'}
-            modalIndex={
-              codexModalIndex !== null
-                ? filteredCodexConfigs.findIndex(({ originalIndex }) => originalIndex === codexModalIndex)
-                : null
-            }
-            onAdd={() => openProviderModal('codex', null)}
-            onEdit={(index) => openProviderModal('codex', filteredCodexConfigs[index]?.originalIndex ?? index)}
-            onDelete={(index) =>
-              void deleteProviderEntry('codex', filteredCodexConfigs[index]?.originalIndex ?? index)
-            }
-            onToggle={(index, enabled) =>
-              void setConfigEnabled('codex', filteredCodexConfigs[index]?.originalIndex ?? index, enabled)
-            }
-            onCloseModal={closeModal}
-            onSave={(form, editIndex) => saveProvider('codex', form, editIndex)}
-          />
+          <div id="provider-codex">
+            <CodexSection
+              configs={filteredCodexConfigs.map(({ item }) => item)}
+              keyStats={keyStats}
+              usageDetails={usageDetails}
+              loading={loading}
+              disableControls={disableControls}
+              isSwitching={isSwitching}
+              resolvedTheme={resolvedTheme}
+              onAdd={() => openEditor('/ai-providers/codex/new')}
+              onEdit={(index) => openEditor(`/ai-providers/codex/${filteredCodexConfigs[index]?.originalIndex ?? index}`)}
+              onDelete={(index) =>
+                void deleteProviderEntry('codex', filteredCodexConfigs[index]?.originalIndex ?? index)
+              }
+              onToggle={(index, enabled) =>
+                void setConfigEnabled('codex', filteredCodexConfigs[index]?.originalIndex ?? index, enabled)
+              }
+            />
+          </div>
         )}
 
         {filteredClaudeConfigs.length > 0 && (
-          <ClaudeSection
-            configs={filteredClaudeConfigs.map(({ item }) => item)}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
-            loading={loading}
-            disableControls={disableControls}
-            isSaving={saving}
-            isSwitching={isSwitching}
-            isModalOpen={modal?.type === 'claude'}
-            modalIndex={
-              claudeModalIndex !== null
-                ? filteredClaudeConfigs.findIndex(({ originalIndex }) => originalIndex === claudeModalIndex)
-                : null
-            }
-            onAdd={() => openProviderModal('claude', null)}
-            onEdit={(index) => openProviderModal('claude', filteredClaudeConfigs[index]?.originalIndex ?? index)}
-            onDelete={(index) =>
-              void deleteProviderEntry('claude', filteredClaudeConfigs[index]?.originalIndex ?? index)
-            }
-            onToggle={(index, enabled) =>
-              void setConfigEnabled('claude', filteredClaudeConfigs[index]?.originalIndex ?? index, enabled)
-            }
-            onCloseModal={closeModal}
-            onSave={(form, editIndex) => saveProvider('claude', form, editIndex)}
-          />
+          <div id="provider-claude">
+            <ClaudeSection
+              configs={filteredClaudeConfigs.map(({ item }) => item)}
+              keyStats={keyStats}
+              usageDetails={usageDetails}
+              loading={loading}
+              disableControls={disableControls}
+              isSwitching={isSwitching}
+              onAdd={() => openEditor('/ai-providers/claude/new')}
+              onEdit={(index) => openEditor(`/ai-providers/claude/${filteredClaudeConfigs[index]?.originalIndex ?? index}`)}
+              onDelete={(index) =>
+                void deleteProviderEntry('claude', filteredClaudeConfigs[index]?.originalIndex ?? index)
+              }
+              onToggle={(index, enabled) =>
+                void setConfigEnabled('claude', filteredClaudeConfigs[index]?.originalIndex ?? index, enabled)
+              }
+            />
+          </div>
         )}
 
         {filteredVertexConfigs.length > 0 && (
-          <VertexSection
-            configs={filteredVertexConfigs.map(({ item }) => item)}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
-            loading={loading}
-            disableControls={disableControls}
-            isSaving={saving}
-            isSwitching={isSwitching}
-            isModalOpen={modal?.type === 'vertex'}
-            modalIndex={
-              vertexModalIndex !== null
-                ? filteredVertexConfigs.findIndex(({ originalIndex }) => originalIndex === vertexModalIndex)
-                : null
-            }
-            onAdd={() => openVertexModal(null)}
-            onEdit={(index) => openVertexModal(filteredVertexConfigs[index]?.originalIndex ?? index)}
-            onDelete={(index) => deleteVertex(filteredVertexConfigs[index]?.originalIndex ?? index)}
-            onCloseModal={closeModal}
-            onSave={saveVertex}
-          />
+          <div id="provider-vertex">
+            <VertexSection
+              configs={filteredVertexConfigs.map(({ item }) => item)}
+              keyStats={keyStats}
+              usageDetails={usageDetails}
+              loading={loading}
+              disableControls={disableControls}
+              isSwitching={isSwitching}
+              onAdd={() => openEditor('/ai-providers/vertex/new')}
+              onEdit={(index) => openEditor(`/ai-providers/vertex/${filteredVertexConfigs[index]?.originalIndex ?? index}`)}
+              onDelete={(index) => deleteVertex(filteredVertexConfigs[index]?.originalIndex ?? index)}
+            />
+          </div>
         )}
 
         {showAmpcode && (
-          <AmpcodeSection
-            config={config?.ampcode}
-            loading={loading}
-            disableControls={disableControls}
-            isSaving={saving}
-            isSwitching={isSwitching}
-            isBusy={ampcodeBusy}
-            isModalOpen={modal?.type === 'ampcode'}
-            onOpen={openAmpcodeModal}
-            onCloseModal={closeModal}
-            onBusyChange={setAmpcodeBusy}
-          />
+          <div id="provider-ampcode">
+            <AmpcodeSection
+              config={config?.ampcode}
+              loading={loading}
+              disableControls={disableControls}
+              isSwitching={isSwitching}
+              onEdit={() => openEditor('/ai-providers/ampcode')}
+            />
+          </div>
         )}
 
         {filteredOpenaiProviders.length > 0 && (
-          <OpenAISection
-            configs={filteredOpenaiProviders.map(({ item }) => item)}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
-            loading={loading}
-            disableControls={disableControls}
-            isSaving={saving}
-            isSwitching={isSwitching}
-            resolvedTheme={resolvedTheme}
-            isModalOpen={modal?.type === 'openai'}
-            modalIndex={
-              openaiModalIndex !== null
-                ? filteredOpenaiProviders.findIndex(({ originalIndex }) => originalIndex === openaiModalIndex)
-                : null
-            }
-            onAdd={() => openOpenaiModal(null)}
-            onEdit={(index) => openOpenaiModal(filteredOpenaiProviders[index]?.originalIndex ?? index)}
-            onDelete={(index) => deleteOpenai(filteredOpenaiProviders[index]?.originalIndex ?? index)}
-            onCloseModal={closeModal}
-            onSave={saveOpenai}
-          />
+          <div id="provider-openai">
+            <OpenAISection
+              configs={filteredOpenaiProviders.map(({ item }) => item)}
+              keyStats={keyStats}
+              usageDetails={usageDetails}
+              loading={loading}
+              disableControls={disableControls}
+              isSwitching={isSwitching}
+              resolvedTheme={resolvedTheme}
+              onAdd={() => openEditor('/ai-providers/openai/new')}
+              onEdit={(index) => openEditor(`/ai-providers/openai/${filteredOpenaiProviders[index]?.originalIndex ?? index}`)}
+              onDelete={(index) => deleteOpenai(filteredOpenaiProviders[index]?.originalIndex ?? index)}
+            />
+          </div>
         )}
       </div>
+
+      <ProviderNav />
     </div>
   );
 }
