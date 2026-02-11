@@ -1,6 +1,13 @@
-import { ReactNode, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import {
+  ReactNode,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useLocation, type Location } from 'react-router-dom';
 import gsap from 'gsap';
+import { PageTransitionLayerContext, type LayerStatus } from './PageTransitionLayer';
 import './PageTransition.scss';
 
 interface PageTransitionProps {
@@ -18,8 +25,6 @@ const IOS_EXIT_TO_X_PERCENT_FORWARD = -30;
 const IOS_EXIT_TO_X_PERCENT_BACKWARD = 100;
 const IOS_ENTER_FROM_X_PERCENT_BACKWARD = -30;
 const IOS_EXIT_DIM_OPACITY = 0.72;
-
-type LayerStatus = 'current' | 'exiting' | 'stacked';
 
 type Layer = {
   key: string;
@@ -83,20 +88,28 @@ export function PageTransition({
     };
     const fromIndex = resolveOrderIndex(currentLayerPathname);
     const toIndex = resolveOrderIndex(location.pathname);
-    const nextDirection: TransitionDirection =
+    const nextVariant: TransitionVariant = getTransitionVariant
+      ? getTransitionVariant(currentLayerPathname ?? '', location.pathname)
+      : 'vertical';
+
+    let nextDirection: TransitionDirection =
       fromIndex === null || toIndex === null || fromIndex === toIndex
         ? 'forward'
         : toIndex > fromIndex
           ? 'forward'
           : 'backward';
 
+    // When using iOS-style stacking, history POP within the same "section" can have equal route order.
+    // In that case, prefer treating navigation to an existing layer as a backward (pop) transition.
+    if (nextVariant === 'ios' && layers.some((layer) => layer.key === location.key)) {
+      nextDirection = 'backward';
+    }
+
     transitionDirectionRef.current = nextDirection;
-    transitionVariantRef.current = getTransitionVariant
-      ? getTransitionVariant(currentLayerPathname ?? '', location.pathname)
-      : 'vertical';
+    transitionVariantRef.current = nextVariant;
 
     const shouldSkipExitLayer = (() => {
-      if (transitionVariantRef.current !== 'ios' || nextDirection !== 'backward') return false;
+      if (nextVariant !== 'ios' || nextDirection !== 'backward') return false;
       const normalizeSegments = (pathname: string) =>
         pathname
           .split('/')
@@ -178,6 +191,7 @@ export function PageTransition({
     getRouteOrder,
     getTransitionVariant,
     resolveScrollContainer,
+    layers,
   ]);
 
   // Run GSAP animation when animating starts
@@ -322,16 +336,30 @@ export function PageTransition({
 
   return (
     <div className={`page-transition${isAnimating ? ' page-transition--animating' : ''}`}>
-      {layers.map((layer) => (
+      {(() => {
+        const currentIndex = layers.findIndex((layer) => layer.status === 'current');
+        const resolvedCurrentIndex = currentIndex === -1 ? layers.length - 1 : currentIndex;
+        const keepStackedIndex = layers
+          .slice(0, resolvedCurrentIndex)
+          .map((layer, index) => ({ layer, index }))
+          .reverse()
+          .find(({ layer }) => layer.status === 'stacked')?.index;
+
+        return layers.map((layer, index) => {
+          const shouldKeepStacked = layer.status === 'stacked' && index === keepStackedIndex;
+          return (
         <div
           key={layer.key}
           className={[
             'page-transition__layer',
             layer.status === 'exiting' ? 'page-transition__layer--exit' : '',
             layer.status === 'stacked' ? 'page-transition__layer--stacked' : '',
+            shouldKeepStacked ? 'page-transition__layer--stacked-keep' : '',
           ]
             .filter(Boolean)
             .join(' ')}
+          aria-hidden={layer.status !== 'current'}
+          inert={layer.status !== 'current'}
           ref={
             layer.status === 'exiting'
               ? exitingLayerRef
@@ -340,9 +368,13 @@ export function PageTransition({
                 : undefined
           }
         >
-          {render(layer.location)}
+          <PageTransitionLayerContext.Provider value={{ status: layer.status }}>
+            {render(layer.location)}
+          </PageTransitionLayerContext.Provider>
         </div>
-      ))}
+          );
+        });
+      })()}
     </div>
   );
 }
