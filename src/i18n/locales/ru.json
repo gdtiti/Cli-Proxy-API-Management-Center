@@ -365,6 +365,7 @@
     "pagination_prev": "Предыдущая",
     "pagination_next": "Следующая",
     "pagination_info": "Страница {{current}} / {{total}} · {{count}} файлов",
+    "pagination_jump": "Перейти на страницу",
     "search_label": "Поиск конфигов",
     "search_placeholder": "Фильтр по имени, типу или провайдеру",
     "page_size_label": "На странице",
@@ -990,7 +991,18 @@
     "title": "Управление квотами",
     "description": "Следите за статусом квот OAuth для учётных данных Antigravity, Codex и Gemini CLI.",
     "refresh_files": "Обновить файлы авторизации",
-    "refresh_files_and_quota": "Обновить файлы и квоты"
+    "refresh_files_and_quota": "Обновить файлы и квоты",
+    "delete_confirm": "Вы уверены, что хотите удалить учётные данные {{name}}?",
+    "delete_success": "Учётные данные удалены",
+    "delete_failed": "Ошибка удаления: {{message}}",
+    "delete_button": "Удалить учётные данные",
+    "refresh_single": "Обновить квоту этих учётных данных",
+    "click_to_refresh": "Нажмите для обновления квоты",
+    "status_filter_label": "Фильтр по статусу",
+    "filter_all": "Все",
+    "filter_idle": "Не получено",
+    "filter_success": "Получено",
+    "filter_error": "Ошибка"
   },
   "system_info": {
     "title": "Информация о центре управления",

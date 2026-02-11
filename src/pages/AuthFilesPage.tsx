@@ -36,6 +36,8 @@ import {
   type UsageDetail,
 } from '@/utils/usage';
 import { formatFileSize } from '@/utils/format';
+import { AntigravityImportModal } from '@/components/antigravity/AntigravityImportModal';
+import { KiroImportModal } from '@/components/kiro/KiroImportModal';
 import styles from './AuthFilesPage.module.scss';
 
 type ThemeColors = { bg: string; text: string; border?: string };
@@ -297,6 +299,9 @@ export function AuthFilesPage() {
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
 
   const [prefixProxyEditor, setPrefixProxyEditor] = useState<PrefixProxyEditorState | null>(null);
+
+  const [antigravityModalOpen, setAntigravityModalOpen] = useState(false);
+  const [kiroModalOpen, setKiroModalOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loadingKeyStatsRef = useRef(false);
@@ -1764,6 +1769,12 @@ export function AuthFilesPage() {
             <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
               {t('common.refresh')}
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => setAntigravityModalOpen(true)} disabled={disableControls}>
+              {t('auth_files.import_antigravity')}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setKiroModalOpen(true)} disabled={disableControls}>
+              {t('auth_files.import_kiro')}
+            </Button>
             <Button
               size="sm"
               onClick={handleUploadClick}
@@ -2217,6 +2228,17 @@ export function AuthFilesPage() {
           </div>
         )}
       </Modal>
+
+      <AntigravityImportModal
+        open={antigravityModalOpen}
+        onClose={() => setAntigravityModalOpen(false)}
+        onImportComplete={() => { loadFiles(); loadKeyStats(); }}
+      />
+      <KiroImportModal
+        open={kiroModalOpen}
+        onClose={() => setKiroModalOpen(false)}
+        onImportComplete={() => { loadFiles(); loadKeyStats(); }}
+      />
     </div>
   );
 }

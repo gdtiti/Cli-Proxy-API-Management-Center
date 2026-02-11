@@ -376,6 +376,7 @@
     "pagination_prev": "Previous",
     "pagination_next": "Next",
     "pagination_info": "Page {{current}} / {{total}} · {{count}} files",
+    "pagination_jump": "Go to page",
     "search_label": "Search configs",
     "search_placeholder": "Filter by name, type, or provider",
     "page_size_label": "Per page",
@@ -1114,7 +1115,14 @@
     "delete_confirm": "Are you sure you want to delete credential {{name}}?",
     "delete_success": "Credential deleted successfully",
     "delete_failed": "Delete failed: {{message}}",
-    "delete_button": "Delete credential"
+    "delete_button": "Delete credential",
+    "refresh_single": "Refresh this credential",
+    "click_to_refresh": "Click to refresh quota",
+    "status_filter_label": "Filter by status",
+    "filter_all": "All",
+    "filter_idle": "Not fetched",
+    "filter_success": "Fetched",
+    "filter_error": "Failed"
   },
   "system_info": {
     "title": "Management Center Info",

@@ -7,7 +7,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS } from '@/utils/quota';
-import { IconTrash2 } from '@/components/ui/icons';
+import { IconTrash2, IconRefreshCw } from '@/components/ui/icons';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/Button';
 import styles from '@/pages/QuotaPage.module.scss';
@@ -71,6 +71,9 @@ interface QuotaCardProps<TState extends QuotaStatusState> {
   onDelete?: (name: string) => void;
   isDeleting?: boolean;
   canDelete?: boolean;
+  // Single card refresh
+  onRefresh?: (name: string) => void;
+  isRefreshing?: boolean;
 }
 
 export function QuotaCard<TState extends QuotaStatusState>({
@@ -83,7 +86,9 @@ export function QuotaCard<TState extends QuotaStatusState>({
   renderQuotaItems,
   onDelete,
   isDeleting,
-  canDelete
+  canDelete,
+  onRefresh,
+  isRefreshing
 }: QuotaCardProps<TState>) {
   const { t } = useTranslation();
 
@@ -121,6 +126,22 @@ export function QuotaCard<TState extends QuotaStatusState>({
           {getTypeLabel(displayType)}
         </span>
         <span className={styles.fileName}>{item.name}</span>
+        {onRefresh && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onRefresh(item.name)}
+            className={styles.refreshCardButton}
+            title={t('quota_management.refresh_single')}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <LoadingSpinner size={14} />
+            ) : (
+              <IconRefreshCw size={14} />
+            )}
+          </Button>
+        )}
         {canDelete && onDelete && (
           <Button
             variant="danger"
@@ -143,7 +164,19 @@ export function QuotaCard<TState extends QuotaStatusState>({
         {quotaStatus === 'loading' ? (
           <div className={styles.quotaMessage}>{t(`${i18nPrefix}.loading`)}</div>
         ) : quotaStatus === 'idle' ? (
-          <div className={styles.quotaMessage}>{t(`${i18nPrefix}.idle`)}</div>
+          onRefresh ? (
+            <div
+              className={styles.quotaClickToRefresh}
+              role="button"
+              tabIndex={0}
+              onClick={() => onRefresh(item.name)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onRefresh(item.name); }}
+            >
+              {t('quota_management.click_to_refresh')}
+            </div>
+          ) : (
+            <div className={styles.quotaMessage}>{t(`${i18nPrefix}.idle`)}</div>
+          )
         ) : quotaStatus === 'error' ? (
           <div className={styles.quotaError}>
             {t(`${i18nPrefix}.load_failed`, {
