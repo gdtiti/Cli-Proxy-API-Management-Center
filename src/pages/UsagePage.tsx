@@ -61,8 +61,15 @@ export function UsagePage() {
     handleImportChange,
     importInputRef,
     exporting,
-    importing
+    importing,
+    clearing,
+    handleClearUsage,
+    timeRange,
+    setTimeRange
   } = useUsageData();
+
+  // 清除统计确认
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useHeaderRefresh(loadUsage);
 
@@ -111,6 +118,17 @@ export function UsagePage() {
       <div className={styles.header}>
         <h1 className={styles.pageTitle}>{t('usage_stats.title')}</h1>
         <div className={styles.headerActions}>
+          <select
+            className={styles.timeRangeSelect}
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            aria-label={t('monitor.time_range')}
+          >
+            <option value="24h">{t('monitor.today')}</option>
+            <option value="7d">{t('monitor.last_n_days', { n: 7 })}</option>
+            <option value="14d">{t('monitor.last_n_days', { n: 14 })}</option>
+            <option value="30d">{t('monitor.last_n_days', { n: 30 })}</option>
+          </select>
           <Button
             variant="secondary"
             size="sm"
@@ -128,6 +146,15 @@ export function UsagePage() {
             disabled={loading || exporting}
           >
             {t('usage_stats.import')}
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setShowClearConfirm(true)}
+            loading={clearing}
+            disabled={loading || exporting || importing}
+          >
+            {t('usage_stats.clear')}
           </Button>
           <Button
             variant="secondary"
@@ -148,6 +175,26 @@ export function UsagePage() {
       </div>
 
       {error && <div className={styles.errorBox}>{error}</div>}
+
+      {/* 清除统计确认对话框 */}
+      {showClearConfirm && (
+        <div className={styles.confirmOverlay}>
+          <div className={styles.confirmBox}>
+            <p>{t('usage_stats.clear_confirm')}</p>
+            <div className={styles.confirmActions}>
+              <Button variant="danger" size="sm" onClick={async () => {
+                setShowClearConfirm(false);
+                await handleClearUsage();
+              }} loading={clearing}>
+                {t('common.confirm')}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowClearConfirm(false)}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Overview Cards */}
       <StatCards

@@ -894,7 +894,11 @@
     "cost_axis_label": "花费 ($)",
     "cost_need_price": "请先设置模型价格",
     "cost_need_usage": "暂无使用数据，无法计算花费",
-    "cost_no_data": "没有可计算的花费数据"
+    "cost_no_data": "没有可计算的花费数据",
+    "clear": "清除统计",
+    "clear_confirm": "确定要清除所有使用统计数据吗？此操作不可恢复！",
+    "clear_success": "使用统计已清除",
+    "clear_failed": "清除统计失败"
   },
   "stats": {
     "success": "成功",

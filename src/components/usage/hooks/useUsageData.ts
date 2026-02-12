@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotificationStore } from '@/stores';
-import { usageApi } from '@/services/api/usage';
+import { usageApi, type UsageQueryParams } from '@/services/api/usage';
 import { loadModelPrices, saveModelPrices, type ModelPrice } from '@/utils/usage';
 
 export interface UsagePayload {
@@ -26,6 +26,10 @@ export interface UseUsageDataReturn {
   importInputRef: React.RefObject<HTMLInputElement | null>;
   exporting: boolean;
   importing: boolean;
+  clearing: boolean;
+  handleClearUsage: () => Promise<void>;
+  timeRange: string;
+  setTimeRange: (range: string) => void;
 }
 
 export function useUsageData(): UseUsageDataReturn {
@@ -38,13 +42,17 @@ export function useUsageData(): UseUsageDataReturn {
   const [modelPrices, setModelPrices] = useState<Record<string, ModelPrice>>({});
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [timeRange, setTimeRange] = useState('24h');
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadUsage = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await usageApi.getUsage();
+      const params: UsageQueryParams = {};
+      if (timeRange) params.range = timeRange;
+      const data = await usageApi.getUsage(params);
       const payload = (data?.usage ?? data) as unknown;
       setUsage(payload && typeof payload === 'object' ? (payload as UsagePayload) : null);
     } catch (err: unknown) {
@@ -53,7 +61,7 @@ export function useUsageData(): UseUsageDataReturn {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, timeRange]);
 
   useEffect(() => {
     loadUsage();
@@ -131,6 +139,23 @@ export function useUsageData(): UseUsageDataReturn {
     }
   };
 
+  const handleClearUsage = useCallback(async () => {
+    setClearing(true);
+    try {
+      await usageApi.deleteUsage();
+      showNotification(t('usage_stats.clear_success'), 'success');
+      await loadUsage();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      showNotification(
+        `${t('usage_stats.clear_failed')}${message ? `: ${message}` : ''}`,
+        'error'
+      );
+    } finally {
+      setClearing(false);
+    }
+  }, [t, showNotification, loadUsage]);
+
   const handleSetModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
     setModelPrices(prices);
     saveModelPrices(prices);
@@ -148,6 +173,10 @@ export function useUsageData(): UseUsageDataReturn {
     handleImportChange,
     importInputRef,
     exporting,
-    importing
+    importing,
+    clearing,
+    handleClearUsage,
+    timeRange,
+    setTimeRange
   };
 }

@@ -22,11 +22,27 @@ export interface UsageImportResponse {
   [key: string]: unknown;
 }
 
+export interface UsageQueryParams {
+  range?: string;       // e.g. '24h', '7d', '30d'
+  from?: string;        // ISO date string
+  to?: string;          // ISO date string
+  instance?: string;    // instance id or 'all'
+}
+
 export const usageApi = {
   /**
-   * 获取使用统计原始数据
+   * 获取使用统计原始数据，支持 range/from/to/instance 查询参数
    */
-  getUsage: () => apiClient.get<Record<string, unknown>>('/usage', { timeout: USAGE_TIMEOUT_MS }),
+  getUsage: (params?: UsageQueryParams) => {
+    const searchParams = new URLSearchParams();
+    if (params?.range) searchParams.set('range', params.range);
+    if (params?.from) searchParams.set('from', params.from);
+    if (params?.to) searchParams.set('to', params.to);
+    if (params?.instance) searchParams.set('instance', params.instance);
+    const qs = searchParams.toString();
+    const url = qs ? `/usage?${qs}` : '/usage';
+    return apiClient.get<Record<string, unknown>>(url, { timeout: USAGE_TIMEOUT_MS });
+  },
 
   /**
    * 导出使用统计快照
@@ -38,6 +54,18 @@ export const usageApi = {
    */
   importUsage: (payload: unknown) =>
     apiClient.post<UsageImportResponse>('/usage/import', payload, { timeout: USAGE_TIMEOUT_MS }),
+
+  /**
+   * 清除使用统计数据
+   */
+  deleteUsage: (params?: { before?: string; instance?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.before) searchParams.set('before', params.before);
+    if (params?.instance) searchParams.set('instance', params.instance);
+    const qs = searchParams.toString();
+    const url = qs ? `/usage?${qs}` : '/usage';
+    return apiClient.delete<{ deleted?: number }>(url, { timeout: USAGE_TIMEOUT_MS });
+  },
 
   /**
    * 计算密钥成功/失败统计，必要时会先获取 usage 数据

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useThemeStore } from '@/stores';
+import { useNotificationStore } from '@/stores';
 import { usageApi, providersApi } from '@/services/api';
 import { KpiCards } from '@/components/monitor/KpiCards';
 import { ModelDistributionChart } from '@/components/monitor/ModelDistributionChart';
@@ -75,6 +76,7 @@ export function MonitorPage() {
   const { t } = useTranslation();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const isDark = resolvedTheme === 'dark';
+  const { showNotification } = useNotificationStore();
 
   // 状态
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,8 @@ export function MonitorPage() {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>(7);
   const [apiFilter, setApiFilter] = useState('');
+  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [providerMap, setProviderMap] = useState<Record<string, string>>({});
   const [providerModels, setProviderModels] = useState<Record<string, Set<string>>>({});
   const [providerTypeMap, setProviderTypeMap] = useState<Record<string, string>>({});
@@ -204,9 +208,11 @@ export function MonitorPage() {
     setLoading(true);
     setError(null);
     try {
+      // 将天数转换为 range 参数格式
+      const rangeStr = `${timeRange}d`;
       // 并行加载使用数据和渠道映射
       const [response] = await Promise.all([
-        usageApi.getUsage(),
+        usageApi.getUsage({ range: rangeStr }),
         loadProviderMap()
       ]);
       // API 返回的数据可能在 response.usage 或直接在 response 中
@@ -219,7 +225,7 @@ export function MonitorPage() {
     } finally {
       setLoading(false);
     }
-  }, [t, loadProviderMap]);
+  }, [t, loadProviderMap, timeRange]);
 
   // 初始加载
   useEffect(() => {
@@ -287,6 +293,24 @@ export function MonitorPage() {
     loadData();
   };
 
+  // 清除统计数据
+  const handleClearUsage = useCallback(async () => {
+    setClearing(true);
+    try {
+      await usageApi.deleteUsage();
+      showNotification(t('usage_stats.clear_success'), 'success');
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      showNotification(
+        `${t('usage_stats.clear_failed')}${msg ? `: ${msg}` : ''}`,
+        'error'
+      );
+    } finally {
+      setClearing(false);
+    }
+  }, [t, showNotification, loadData]);
+
   return (
     <div className={styles.container}>
       {loading && !usageData && (
@@ -303,6 +327,15 @@ export function MonitorPage() {
         <h1 className={styles.pageTitle}>{t('monitor.title')}</h1>
         <div className={styles.headerActions}>
           <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setShowClearConfirm(true)}
+            loading={clearing}
+            disabled={loading}
+          >
+            {t('usage_stats.clear')}
+          </Button>
+          <Button
             variant="secondary"
             size="sm"
             onClick={loadData}
@@ -312,6 +345,26 @@ export function MonitorPage() {
           </Button>
         </div>
       </div>
+
+      {/* 清除确认对话框 */}
+      {showClearConfirm && (
+        <div className={styles.confirmOverlay}>
+          <div className={styles.confirmBox}>
+            <p>{t('usage_stats.clear_confirm')}</p>
+            <div className={styles.confirmActions}>
+              <Button variant="danger" size="sm" onClick={async () => {
+                setShowClearConfirm(false);
+                await handleClearUsage();
+              }} loading={clearing}>
+                {t('common.confirm')}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowClearConfirm(false)}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 错误提示 */}
       {error && <div className={styles.errorBox}>{error}</div>}
