@@ -129,11 +129,12 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
     setLogLoading(true);
     try {
       const response = await usageApi.getUsage();
-      const usageData = response?.usage ?? response;
+      const usagePayload = response?.usage ?? response;
+      const usageData = (usagePayload && typeof usagePayload === 'object' ? usagePayload : null) as UsageData | null;
 
       // 应用时间范围过滤
       if (usageData?.apis) {
-        const apis = usageData.apis as UsageData['apis'];
+        const apis = usageData.apis;
         const now = new Date();
         let cutoffStart: Date;
         let cutoffEnd: Date = new Date(now.getTime());
