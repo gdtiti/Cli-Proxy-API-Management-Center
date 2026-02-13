@@ -6,17 +6,18 @@
 
 ---
 
-
 ### 与官方版本的区别
 
 本版本与官方版本其他功能保持一致，主要差异在于
-+ **新增监控中心**：同步自：https://github.com/kongkongyo/Cli-Proxy-API-Management-Center
-+ 增强凭证文件的管理：独立控制proxy_url， 设置antigravity凭证的 User Agent，凭证文件在线编辑
+
+- **新增监控中心**：同步自：https://github.com/kongkongyo/Cli-Proxy-API-Management-Center
+- 增强凭证文件的管理：独立控制proxy_url， 设置antigravity凭证的 User Agent，凭证文件在线编辑
+- 增强配额管理：按凭证类型支持一键顺序巡检、实时进度显示，以及“模型额度汇总 / 凭证卡片列表”双视图切换
+
 ### 界面预览
 
 管理界面展示
 <img width="1920" height="954" alt="image" src="https://github.com/user-attachments/assets/a10d982e-e325-4299-9bfd-b8110724c620" />
-
 
 为认证文件 单独/批量代理配置：
 <img width="1035" height="507" alt="image" src="https://github.com/user-attachments/assets/c5fa3a02-d326-41e7-8014-672a2ce2a02c" />
@@ -44,7 +45,7 @@
 
 ```yaml
 remote-management:
-  panel-github-repository: "https://github.com/kongkongyo/Cli-Proxy-API-Management-Center"
+  panel-github-repository: 'https://github.com/kongkongyo/Cli-Proxy-API-Management-Center'
 ```
 
 配置完成后，重启 CLI Proxy API 服务，访问 `http://<host>:<api_port>/management.html` 即可查看管理界面

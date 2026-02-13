@@ -166,36 +166,103 @@
   align-items: center;
 }
 
+.sectionTabs {
+  display: inline-flex;
+  gap: $spacing-xs;
+  align-items: center;
+}
+
+.summaryPanel {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.summaryStatsGrid {
+  display: grid;
+  gap: $spacing-sm;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.summaryStatCard {
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  padding: $spacing-sm;
+  background-color: var(--bg-secondary);
+}
+
+.summaryStatLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.summaryStatValue {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.summaryRows {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.summaryRow {
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  padding: $spacing-sm;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+}
+
+.summaryRowHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  align-items: baseline;
+}
+
+.summaryRowTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.summaryRowMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.summaryRowFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .claudeCard {
-  background-image: linear-gradient(180deg,
-      rgba(252, 228, 236, 0.18),
-      rgba(252, 228, 236, 0));
+  background-image: linear-gradient(180deg, rgba(252, 228, 236, 0.18), rgba(252, 228, 236, 0));
 }
 
 .antigravityCard {
-  background-image: linear-gradient(180deg,
-      rgba(224, 247, 250, 0.12),
-      rgba(224, 247, 250, 0));
+  background-image: linear-gradient(180deg, rgba(224, 247, 250, 0.12), rgba(224, 247, 250, 0));
 }
 
 .codexCard {
-  background-image: linear-gradient(180deg,
-      rgba(255, 243, 224, 0.18),
-      rgba(255, 243, 224, 0));
+  background-image: linear-gradient(180deg, rgba(255, 243, 224, 0.18), rgba(255, 243, 224, 0));
 }
 
 .geminiCliCard {
-  background-image: linear-gradient(180deg,
-      rgba(231, 239, 255, 0.2),
-      rgba(231, 239, 255, 0));
+  background-image: linear-gradient(180deg, rgba(231, 239, 255, 0.2), rgba(231, 239, 255, 0));
 }
 
 .kiroCard {
-  background-image: linear-gradient(
-    180deg,
-    rgba(255, 248, 225, 0.2),
-    rgba(255, 248, 225, 0)
-  );
+  background-image: linear-gradient(180deg, rgba(255, 248, 225, 0.2), rgba(255, 248, 225, 0));
 }
 
 .quotaSection {
@@ -329,6 +396,44 @@
   padding: $spacing-xs $spacing-sm;
 }
 
+.batchProgress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: $spacing-md;
+  padding: $spacing-sm;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background-color: var(--bg-secondary);
+}
+
+.batchProgressRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.batchProgressValue {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.batchProgressBar {
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.batchProgressBarFill {
+  height: 100%;
+  background-color: var(--primary-color);
+  transition: width 0.2s ease;
+}
+
 .codexPlan {
   display: flex;
   align-items: center;
@@ -355,7 +460,10 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
-  transition: transform $transition-fast, box-shadow $transition-fast, border-color $transition-fast;
+  transition:
+    transform $transition-fast,
+    box-shadow $transition-fast,
+    border-color $transition-fast;
 
   &:hover {
     transform: translateY(-2px);

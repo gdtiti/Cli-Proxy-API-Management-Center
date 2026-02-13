@@ -13,15 +13,16 @@ This project is a log monitoring and data visualization management interface dev
 ### Differences from Official Version
 
 This version is consistent with the official version in other functions, with the main differences being:
-+ **New Monitoring Center**: Synced from: https://github.com/kongkongyo/Cli-Proxy-API-Management-Center
-+ Enhanced credential file management: Independent proxy_url control, User Agent configuration for antigravity credentials, online credential file editing
+
+- **New Monitoring Center**: Synced from: https://github.com/kongkongyo/Cli-Proxy-API-Management-Center
+- Enhanced credential file management: Independent proxy_url control, User Agent configuration for antigravity credentials, online credential file editing
+- Enhanced quota management: one-click sequential checks per credential type, real-time progress display, and dual views for "Model Quota Summary" and "Credential Card List"
 
 ### Interface Preview
 
 Management interface display
 
 ![Dashboard Preview](dashboard-preview.png)
-
 
 Individual/Batch proxy configuration for authentication files:
 <img width="1035" height="507" alt="image" src="https://github.com/user-attachments/assets/c5fa3a02-d326-41e7-8014-672a2ce2a02c" />
@@ -49,7 +50,7 @@ Modify the following configuration in your `config.yaml`:
 
 ```yaml
 remote-management:
-  panel-github-repository: "https://github.com/escapeWu/CLIProxyAPI-Web-Dashboard"
+  panel-github-repository: 'https://github.com/escapeWu/CLIProxyAPI-Web-Dashboard'
 ```
 
 After configuration, restart the CLI Proxy API service and visit `http://<host>:<api_port>/management.html` to view the management interface

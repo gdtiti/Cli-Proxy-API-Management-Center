@@ -23,6 +23,13 @@ interface LoadQuotaResult<TData> {
   errorStatus?: number;
 }
 
+interface SequentialQuotaProgress {
+  total: number;
+  completed: number;
+  success: number;
+  error: number;
+}
+
 export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>) {
   const { t } = useTranslation();
   const quota = useQuotaStore(config.storeSelector);
@@ -94,5 +101,73 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
     [config, setQuota, t]
   );
 
-  return { quota, loadQuota };
+  const loadQuotaSequential = useCallback(
+    async (
+      targets: AuthFileItem[],
+      scope: QuotaScope,
+      setLoading: (loading: boolean, scope?: QuotaScope | null) => void,
+      onProgress?: (progress: SequentialQuotaProgress) => void
+    ) => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      const requestId = ++requestIdRef.current;
+      setLoading(true, scope);
+
+      try {
+        if (targets.length === 0) {
+          onProgress?.({ total: 0, completed: 0, success: 0, error: 0 });
+          return;
+        }
+
+        setQuota((prev) => {
+          const nextState = { ...prev };
+          targets.forEach((file) => {
+            nextState[file.name] = config.buildLoadingState();
+          });
+          return nextState;
+        });
+
+        const total = targets.length;
+        let completed = 0;
+        let success = 0;
+        let error = 0;
+
+        for (const file of targets) {
+          if (requestId !== requestIdRef.current) return;
+
+          try {
+            const data = await config.fetchQuota(file, t);
+            if (requestId !== requestIdRef.current) return;
+
+            setQuota((prev) => ({
+              ...prev,
+              [file.name]: config.buildSuccessState(data),
+            }));
+            success += 1;
+          } catch (err: unknown) {
+            if (requestId !== requestIdRef.current) return;
+
+            const message = err instanceof Error ? err.message : t('common.unknown_error');
+            const errorStatus = getStatusFromError(err);
+            setQuota((prev) => ({
+              ...prev,
+              [file.name]: config.buildErrorState(message, errorStatus),
+            }));
+            error += 1;
+          }
+
+          completed += 1;
+          onProgress?.({ total, completed, success, error });
+        }
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          loadingRef.current = false;
+        }
+      }
+    },
+    [config, setQuota, t]
+  );
+
+  return { quota, loadQuota, loadQuotaSequential };
 }
