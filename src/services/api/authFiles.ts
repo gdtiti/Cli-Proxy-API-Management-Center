@@ -122,11 +122,15 @@ export const authFilesApi = {
   removeProject: (name: string, projectId: string) =>
     apiClient.patch('/auth-files/remove-project', { name, project_id: projectId }),
 
-  downloadText: async (name: string): Promise<string> => {
+  downloadBlob: async (name: string): Promise<Blob> => {
     const response = await apiClient.getRaw(`/auth-files/download?name=${encodeURIComponent(name)}`, {
       responseType: 'blob'
     });
-    const blob = response.data as Blob;
+    return new Blob([response.data]);
+  },
+
+  downloadText: async (name: string): Promise<string> => {
+    const blob = await authFilesApi.downloadBlob(name);
     return blob.text();
   },
 

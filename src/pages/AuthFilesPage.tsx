@@ -24,9 +24,9 @@ import type { TFunction } from 'i18next';
 import { ANTIGRAVITY_CONFIG, CODEX_CONFIG, GEMINI_CLI_CONFIG } from '@/components/quota';
 import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import { authFilesApi, usageApi } from '@/services/api';
-import { apiClient } from '@/services/api/client';
 import type { AuthFileItem, OAuthModelAliasEntry } from '@/types';
 import { getStatusFromError, resolveAuthProvider } from '@/utils/quota';
+import { createZipBlob, type ZipEntry } from '@/utils/zip';
 import {
   calculateStatusBarData,
   collectUsageDetails,
@@ -172,6 +172,53 @@ const writeAuthFilesUiState = (state: AuthFilesUiState) => {
   }
 };
 
+const triggerBrowserDownload = (blob: Blob, fileName: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  window.URL.revokeObjectURL(url);
+};
+
+const sanitizeZipEntryName = (name: string): string => {
+  const trimmed = name.trim();
+  const baseName = trimmed.replace(/\\/g, '/').split('/').pop() || 'credential.json';
+  const sanitized = baseName.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_');
+  return sanitized || 'credential.json';
+};
+
+const ensureUniqueZipEntryName = (name: string, used: Set<string>): string => {
+  if (!used.has(name)) {
+    used.add(name);
+    return name;
+  }
+
+  const dotIndex = name.lastIndexOf('.');
+  const base = dotIndex > 0 ? name.slice(0, dotIndex) : name;
+  const ext = dotIndex > 0 ? name.slice(dotIndex) : '';
+  let index = 2;
+  let candidate = `${base} (${index})${ext}`;
+  while (used.has(candidate)) {
+    index += 1;
+    candidate = `${base} (${index})${ext}`;
+  }
+  used.add(candidate);
+  return candidate;
+};
+
+const formatArchiveTimestamp = (value: Date): string =>
+  `${value.getFullYear()}${String(value.getMonth() + 1).padStart(2, '0')}${String(value.getDate()).padStart(2, '0')}-${String(value.getHours()).padStart(2, '0')}${String(value.getMinutes()).padStart(2, '0')}${String(value.getSeconds()).padStart(2, '0')}`;
+
+const sanitizeArchiveSegment = (value: string): string => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || 'unknown';
+};
+
 interface PrefixProxyEditorState {
   fileName: string;
   loading: boolean;
@@ -269,6 +316,7 @@ export function AuthFilesPage() {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [exportingArchive, setExportingArchive] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
   const [keyStats, setKeyStats] = useState<KeyStats>({ bySource: {}, byAuthIndex: {} });
   const [usageDetails, setUsageDetails] = useState<UsageDetail[]>([]);
@@ -618,6 +666,16 @@ export function AuthFilesPage() {
     });
   }, [files, filter, search]);
 
+  const getExportCandidates = useCallback(
+    (scope: 'all' | 'filtered'): AuthFileItem[] =>
+      files.filter((item) => {
+        if (isRuntimeOnlyAuthFile(item)) return false;
+        if (scope === 'all') return true;
+        return filter === 'all' || item.type === filter;
+      }),
+    [files, filter]
+  );
+
   // 分页计算
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -794,22 +852,72 @@ export function AuthFilesPage() {
     });
   };
 
+  const handleExportArchive = async (scope: 'all' | 'filtered') => {
+    if (disableControls) return;
+
+    const candidates = getExportCandidates(scope);
+    if (candidates.length === 0) {
+      showNotification(t('auth_files.export_empty'), 'info');
+      return;
+    }
+
+    setExportingArchive(true);
+    try {
+      let success = 0;
+      let failed = 0;
+      let firstError = '';
+      const usedNames = new Set<string>();
+      const zipEntries: ZipEntry[] = [];
+
+      for (const file of candidates) {
+        try {
+          const fileBlob = await authFilesApi.downloadBlob(file.name);
+          const fileBytes = new Uint8Array(await fileBlob.arrayBuffer());
+          const baseName = sanitizeZipEntryName(file.name);
+          const uniqueName = ensureUniqueZipEntryName(baseName, usedNames);
+          zipEntries.push({
+            name: uniqueName,
+            data: fileBytes
+          });
+          success += 1;
+        } catch (err: unknown) {
+          failed += 1;
+          if (!firstError) {
+            firstError = err instanceof Error ? err.message : '';
+          }
+        }
+      }
+
+      if (zipEntries.length === 0) {
+        showNotification(
+          `${t('notification.download_failed')}${firstError ? `: ${firstError}` : ''}`,
+          'error'
+        );
+        return;
+      }
+
+      const archiveTimestamp = formatArchiveTimestamp(new Date());
+      const archiveScope =
+        scope === 'all' ? 'all' : sanitizeArchiveSegment(filter === 'all' ? 'all' : String(filter));
+      const archiveName = `auth-files-${archiveScope}-${archiveTimestamp}.zip`;
+      const archiveBlob = createZipBlob(zipEntries);
+      triggerBrowserDownload(archiveBlob, archiveName);
+
+      if (failed === 0) {
+        showNotification(t('auth_files.export_success', { count: success }), 'success');
+      } else {
+        showNotification(t('auth_files.export_partial', { success, failed }), 'warning');
+      }
+    } finally {
+      setExportingArchive(false);
+    }
+  };
+
   // 下载文件
   const handleDownload = async (name: string) => {
     try {
-      const response = await apiClient.getRaw(
-        `/auth-files/download?name=${encodeURIComponent(name)}`,
-        {
-          responseType: 'blob',
-        }
-      );
-      const blob = new Blob([response.data]);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      const blob = await authFilesApi.downloadBlob(name);
+      triggerBrowserDownload(blob, name);
       showNotification(t('auth_files.download_success'), 'success');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : '';
@@ -1782,6 +1890,24 @@ export function AuthFilesPage() {
               loading={uploading}
             >
               {t('auth_files.upload_button')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleExportArchive('all')}
+              disabled={disableControls || loading || exportingArchive}
+              loading={exportingArchive}
+            >
+              {t('auth_files.export_all_button')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleExportArchive('filtered')}
+              disabled={disableControls || loading || exportingArchive || filter === 'all'}
+              loading={exportingArchive}
+            >
+              {t('auth_files.export_filtered_button', { type: getTypeLabel(String(filter)) })}
             </Button>
             <Button
               variant="danger"
