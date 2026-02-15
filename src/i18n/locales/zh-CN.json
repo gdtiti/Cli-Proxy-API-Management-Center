@@ -924,10 +924,32 @@
     "cost_need_price": "请先设置模型价格",
     "cost_need_usage": "暂无使用数据，无法计算花费",
     "cost_no_data": "没有可计算的花费数据",
+    "token_breakdown": "Token 类型分布",
+    "credential_stats": "凭证统计",
+    "credential_name": "凭证",
+    "input_tokens": "输入 Tokens",
+    "output_tokens": "输出 Tokens",
+    "range_filter": "时间范围",
+    "range_7h": "最近7小时",
+    "range_24h": "最近24小时",
+    "range_7d": "最近7天",
+    "range_all": "全部时间",
+    "last_updated": "更新于",
     "clear": "清除统计",
     "clear_confirm": "确定要清除所有使用统计数据吗？此操作不可恢复！",
     "clear_success": "使用统计已清除",
     "clear_failed": "清除统计失败"
+  },
+  "service_health": {
+    "title": "服务健康监测",
+    "window": "最近 7 天",
+    "newest": "最新",
+    "oldest": "最早"
+  },
+  "status_bar": {
+    "success_short": "✓",
+    "failure_short": "✗",
+    "no_requests": "无请求"
   },
   "stats": {
     "success": "成功",

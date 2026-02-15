@@ -28,6 +28,7 @@ export interface UseUsageDataReturn {
   importing: boolean;
   clearing: boolean;
   handleClearUsage: () => Promise<void>;
+  lastRefreshedAt: Date | null;
   timeRange: string;
   setTimeRange: (range: string) => void;
 }
@@ -43,6 +44,7 @@ export function useUsageData(): UseUsageDataReturn {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [timeRange, setTimeRange] = useState('24h');
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -55,6 +57,7 @@ export function useUsageData(): UseUsageDataReturn {
       const data = await usageApi.getUsage(params);
       const payload = (data?.usage ?? data) as unknown;
       setUsage(payload && typeof payload === 'object' ? (payload as UsagePayload) : null);
+      setLastRefreshedAt(new Date());
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('usage_stats.loading_error');
       setError(message);
@@ -123,7 +126,7 @@ export function useUsageData(): UseUsageDataReturn {
           added: result?.added ?? 0,
           skipped: result?.skipped ?? 0,
           total: result?.total_requests ?? 0,
-          failed: result?.failed_requests ?? 0
+          failed: result?.failed_requests ?? 0,
         }),
         'success'
       );
@@ -147,10 +150,7 @@ export function useUsageData(): UseUsageDataReturn {
       await loadUsage();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      showNotification(
-        `${t('usage_stats.clear_failed')}${message ? `: ${message}` : ''}`,
-        'error'
-      );
+      showNotification(`${t('usage_stats.clear_failed')}${message ? `: ${message}` : ''}`, 'error');
     } finally {
       setClearing(false);
     }
@@ -176,7 +176,8 @@ export function useUsageData(): UseUsageDataReturn {
     importing,
     clearing,
     handleClearUsage,
+    lastRefreshedAt,
     timeRange,
-    setTimeRange
+    setTimeRange,
   };
 }

@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconChevronDown } from '@/components/ui/icons';
 import { ConfigSection } from '@/components/config/ConfigSection';
 import { useNotificationStore } from '@/stores';
 import styles from './VisualConfigEditor.module.scss';
+import { copyToClipboard } from '@/utils/clipboard';
 import type {
   PayloadFilterRule,
   PayloadModelEntry,
@@ -78,118 +79,6 @@ function SectionGrid({ children }: { children: ReactNode }) {
 
 function Divider() {
   return <div style={{ height: 1, background: 'var(--border-color)', margin: '16px 0' }} />;
-}
-
-type ToastSelectOption = { value: string; label: string };
-
-function ToastSelect({
-  value,
-  options,
-  disabled,
-  ariaLabel,
-  onChange,
-}: {
-  value: string;
-  options: ReadonlyArray<ToastSelectOption>;
-  disabled?: boolean;
-  ariaLabel: string;
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  const selectedOption = options.find((opt) => opt.value === value) ?? options[0];
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
-
-  return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        className="input"
-        disabled={disabled}
-        onClick={() => setOpen((prev) => !prev)}
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          textAlign: 'left',
-          width: '100%',
-          appearance: 'none',
-        }}
-      >
-        <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-          {selectedOption?.label ?? ''}
-        </span>
-        <IconChevronDown size={16} style={{ opacity: 0.6, flex: '0 0 auto' }} />
-      </button>
-
-      {open && !disabled && (
-        <div
-          role="listbox"
-          aria-label={ariaLabel}
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            background: 'var(--bg-primary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 12,
-            padding: 6,
-            boxShadow: 'var(--shadow)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
-            maxHeight: 260,
-            overflowY: 'auto',
-          }}
-        >
-          {options.map((opt) => {
-            const active = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
-                }}
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  border: active ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid var(--border-color)',
-                  background: active ? 'rgba(59, 130, 246, 0.10)' : 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontWeight: 600,
-                }}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function ApiKeysCardEditor({
@@ -266,31 +155,11 @@ function ApiKeysCardEditor({
   };
 
   const handleCopy = async (apiKey: string) => {
-    const copyByExecCommand = () => {
-      const textarea = document.createElement('textarea');
-      textarea.value = apiKey;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      textarea.style.pointerEvents = 'none';
-      document.body.appendChild(textarea);
-      textarea.select();
-      textarea.setSelectionRange(0, textarea.value.length);
-      const copied = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      if (!copied) throw new Error('copy_failed');
-    };
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(apiKey);
-      } else {
-        copyByExecCommand();
-      }
-      showNotification(t('notification.link_copied'), 'success');
-    } catch {
-      showNotification(t('notification.copy_failed'), 'error');
-    }
+    const copied = await copyToClipboard(apiKey);
+    showNotification(
+      t(copied ? 'notification.link_copied' : 'notification.copy_failed'),
+      copied ? 'success' : 'error'
+    );
   };
 
   return (
@@ -428,6 +297,22 @@ function PayloadRulesEditor({
 }) {
   const { t } = useTranslation();
   const rules = value.length ? value : [];
+  const protocolOptions = useMemo(
+    () =>
+      VISUAL_CONFIG_PROTOCOL_OPTIONS.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
+      })),
+    [t]
+  );
+  const payloadValueTypeOptions = useMemo(
+    () =>
+      VISUAL_CONFIG_PAYLOAD_VALUE_TYPE_OPTIONS.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
+      })),
+    [t]
+  );
 
   const addRule = () => onChange([...rules, { id: makeClientId(), models: [], params: [] }]);
   const removeRule = (ruleIndex: number) => onChange(rules.filter((_, i) => i !== ruleIndex));
@@ -531,9 +416,9 @@ function PayloadRulesEditor({
               >
                 {protocolFirst ? (
                   <>
-                    <ToastSelect
+                    <Select
                       value={model.protocol ?? ''}
-                      options={VISUAL_CONFIG_PROTOCOL_OPTIONS}
+                      options={protocolOptions}
                       disabled={disabled}
                       ariaLabel={t('config_management.visual.payload_rules.provider_type')}
                       onChange={(nextValue) =>
@@ -559,9 +444,9 @@ function PayloadRulesEditor({
                       onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
                       disabled={disabled}
                     />
-                    <ToastSelect
+                    <Select
                       value={model.protocol ?? ''}
-                      options={VISUAL_CONFIG_PROTOCOL_OPTIONS}
+                      options={protocolOptions}
                       disabled={disabled}
                       ariaLabel={t('config_management.visual.payload_rules.provider_type')}
                       onChange={(nextValue) =>
@@ -601,9 +486,9 @@ function PayloadRulesEditor({
                   onChange={(e) => updateParam(ruleIndex, paramIndex, { path: e.target.value })}
                   disabled={disabled}
                 />
-                <ToastSelect
+                <Select
                   value={param.valueType}
-                  options={VISUAL_CONFIG_PAYLOAD_VALUE_TYPE_OPTIONS}
+                  options={payloadValueTypeOptions}
                   disabled={disabled}
                   ariaLabel={t('config_management.visual.payload_rules.param_type')}
                   onChange={(nextValue) =>
@@ -671,6 +556,14 @@ function PayloadFilterRulesEditor({
 }) {
   const { t } = useTranslation();
   const rules = value.length ? value : [];
+  const protocolOptions = useMemo(
+    () =>
+      VISUAL_CONFIG_PROTOCOL_OPTIONS.map((option) => ({
+        value: option.value,
+        label: t(option.labelKey, { defaultValue: option.defaultLabel }),
+      })),
+    [t]
+  );
 
   const addRule = () => onChange([...rules, { id: makeClientId(), models: [], params: [] }]);
   const removeRule = (ruleIndex: number) => onChange(rules.filter((_, i) => i !== ruleIndex));
@@ -736,9 +629,9 @@ function PayloadFilterRulesEditor({
                   onChange={(e) => updateModel(ruleIndex, modelIndex, { name: e.target.value })}
                   disabled={disabled}
                 />
-                <ToastSelect
+                <Select
                   value={model.protocol ?? ''}
-                  options={VISUAL_CONFIG_PROTOCOL_OPTIONS}
+                  options={protocolOptions}
                   disabled={disabled}
                   ariaLabel={t('config_management.visual.payload_rules.provider_type')}
                   onChange={(nextValue) =>
@@ -989,7 +882,7 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
             />
             <div className="form-group">
               <label>{t('config_management.visual.sections.network.routing_strategy')}</label>
-              <ToastSelect
+              <Select
                 value={values.routingStrategy}
                 options={[
                   { value: 'round-robin', label: t('config_management.visual.sections.network.strategy_round_robin') },

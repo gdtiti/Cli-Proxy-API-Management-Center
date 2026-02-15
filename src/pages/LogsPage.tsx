@@ -20,6 +20,7 @@ import {
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import { logsApi } from '@/services/api/logs';
+import { copyToClipboard } from '@/utils/clipboard';
 import { MANAGEMENT_API_PREFIX } from '@/utils/constants';
 import { formatUnixTimestamp } from '@/utils/format';
 import styles from './LogsPage.module.scss';
@@ -344,30 +345,6 @@ const getErrorMessage = (err: unknown): string => {
   return typeof message === 'string' ? message : '';
 };
 
-const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      textarea.style.left = '-9999px';
-      textarea.style.top = '0';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-};
-
 type TabType = 'logs' | 'errors';
 
 export function LogsPage() {
@@ -400,6 +377,8 @@ export function LogsPage() {
     startY: number;
     fired: boolean;
   } | null>(null);
+  const logRequestInFlightRef = useRef(false);
+  const pendingFullReloadRef = useRef(false);
 
   // 保存最新时间戳用于增量获取
   const latestTimestampRef = useRef<number>(0);
@@ -423,6 +402,15 @@ export function LogsPage() {
       setLoading(false);
       return;
     }
+
+    if (logRequestInFlightRef.current) {
+      if (!incremental) {
+        pendingFullReloadRef.current = true;
+      }
+      return;
+    }
+
+    logRequestInFlightRef.current = true;
 
     if (!incremental) {
       setLoading(true);
@@ -473,6 +461,11 @@ export function LogsPage() {
     } finally {
       if (!incremental) {
         setLoading(false);
+      }
+      logRequestInFlightRef.current = false;
+      if (pendingFullReloadRef.current) {
+        pendingFullReloadRef.current = false;
+        void loadLogs(false);
       }
     }
   };

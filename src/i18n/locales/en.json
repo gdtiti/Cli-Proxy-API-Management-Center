@@ -924,10 +924,32 @@
     "cost_need_price": "Set a model price to view cost stats",
     "cost_need_usage": "No usage data available to calculate cost",
     "cost_no_data": "No cost data yet",
+    "token_breakdown": "Token Type Breakdown",
+    "credential_stats": "Credential Statistics",
+    "credential_name": "Credential",
+    "input_tokens": "Input Tokens",
+    "output_tokens": "Output Tokens",
+    "range_filter": "Time Range",
+    "range_7h": "Last 7 Hours",
+    "range_24h": "Last 24 Hours",
+    "range_7d": "Last 7 Days",
+    "range_all": "All Time",
+    "last_updated": "Updated",
     "clear": "Clear Stats",
     "clear_confirm": "Are you sure you want to clear all usage statistics? This action cannot be undone!",
     "clear_success": "Usage statistics cleared",
     "clear_failed": "Failed to clear statistics"
+  },
+  "service_health": {
+    "title": "Service Health",
+    "window": "Last 7 days",
+    "newest": "Latest",
+    "oldest": "Oldest"
+  },
+  "status_bar": {
+    "success_short": "✓",
+    "failure_short": "✗",
+    "no_requests": "No requests"
   },
   "stats": {
     "success": "Success",
