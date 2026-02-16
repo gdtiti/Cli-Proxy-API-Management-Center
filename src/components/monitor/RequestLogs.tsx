@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Card } from '@/components/ui/Card';
-import { usageApi } from '@/services/api';
+import { usageApi, authFilesApi } from '@/services/api';
 import { useDisableModel } from '@/hooks';
 import { TimeRangeSelector, formatTimeRangeCaption, type TimeRange } from './TimeRangeSelector';
 import { DisableModelModal } from './DisableModelModal';
@@ -41,6 +41,7 @@ interface LogEntry {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  authIndex: string;
 }
 
 interface ChannelModelRequest {
@@ -58,7 +59,13 @@ interface PrecomputedStats {
 // 虚拟滚动行高
 const ROW_HEIGHT = 40;
 
-export function RequestLogs({ data, loading: parentLoading, providerMap, providerTypeMap, apiFilter }: RequestLogsProps) {
+export function RequestLogs({
+  data,
+  loading: parentLoading,
+  providerMap,
+  providerTypeMap,
+  apiFilter,
+}: RequestLogsProps) {
   const { t } = useTranslation();
   const [filterApi, setFilterApi] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -92,6 +99,9 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
   const [logLoading, setLogLoading] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
+  // 认证文件索引到名称的映射
+  const [authIndexMap, setAuthIndexMap] = useState<Record<string, string>>({});
+
   // 使用禁用模型 Hook
   const {
     disableState,
@@ -115,7 +125,8 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
   // 使用日志独立数据或父组件数据
   const effectiveData = logData || data;
   // 只在首次加载且没有数据时显示 loading 状态
-  const showLoading = (parentLoading && isFirstLoad && !effectiveData) || (logLoading && !effectiveData);
+  const showLoading =
+    (parentLoading && isFirstLoad && !effectiveData) || (logLoading && !effectiveData);
 
   // 当父组件数据加载完成时，标记首次加载完成
   useEffect(() => {
@@ -124,13 +135,42 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
     }
   }, [parentLoading, data]);
 
+  // 加载认证文件映射（authIndex -> 文件名）
+  const loadAuthIndexMap = useCallback(async () => {
+    try {
+      const response = await authFilesApi.list();
+      const files = response?.files || [];
+      const map: Record<string, string> = {};
+      files.forEach((file) => {
+        // 兼容 auth_index 和 authIndex 两种字段名（API 返回的是 auth_index）
+        const rawAuthIndex = (file as Record<string, unknown>)['auth_index'] ?? file.authIndex;
+        if (rawAuthIndex !== undefined && rawAuthIndex !== null) {
+          const authIndexKey = String(rawAuthIndex).trim();
+          if (authIndexKey) {
+            map[authIndexKey] = file.name;
+          }
+        }
+      });
+      setAuthIndexMap(map);
+    } catch (err) {
+      console.warn('Failed to load auth files for index mapping:', err);
+    }
+  }, []);
+
+  // 初始加载认证文件映射
+  useEffect(() => {
+    loadAuthIndexMap();
+  }, [loadAuthIndexMap]);
+
   // 独立获取日志数据
   const fetchLogData = useCallback(async () => {
     setLogLoading(true);
     try {
       const response = await usageApi.getUsage();
       const usagePayload = response?.usage ?? response;
-      const usageData = (usagePayload && typeof usagePayload === 'object' ? usagePayload : null) as UsageData | null;
+      const usageData = (
+        usagePayload && typeof usagePayload === 'object' ? usagePayload : null
+      ) as UsageData | null;
 
       // 应用时间范围过滤
       if (usageData?.apis) {
@@ -161,7 +201,10 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
 
           if (!apiData?.models) return;
 
-          const filteredModels: Record<string, { details: UsageData['apis'][string]['models'][string]['details'] }> = {};
+          const filteredModels: Record<
+            string,
+            { details: UsageData['apis'][string]['models'][string]['details'] }
+          > = {};
 
           Object.entries(apiData.models).forEach(([modelName, modelData]) => {
             if (!modelData?.details || !Array.isArray(modelData.details)) return;
@@ -284,6 +327,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
             inputTokens: detail.tokens.input_tokens || 0,
             outputTokens: detail.tokens.output_tokens || 0,
             totalTokens: detail.tokens.total_tokens || 0,
+            authIndex: detail.auth_index || '',
           });
         });
       });
@@ -398,11 +442,13 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
 
   // 获取预计算的统计数据
   const getStats = (entry: LogEntry): PrecomputedStats => {
-    return precomputedStats.get(entry.id) || {
-      recentRequests: [],
-      successRate: '0.0',
-      totalCount: 0,
-    };
+    return (
+      precomputedStats.get(entry.id) || {
+        recentRequests: [],
+        successRate: '0.0',
+        totalCount: 0,
+      }
+    );
   };
 
   // 渲染单行
@@ -410,16 +456,17 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
     const stats = getStats(entry);
     const rateValue = parseFloat(stats.successRate);
     const disabled = isModelDisabled(entry.source, entry.model);
+    // 将 authIndex 映射为文件名
+    const authDisplayName = entry.authIndex
+      ? authIndexMap[entry.authIndex] || entry.authIndex
+      : '-';
 
     return (
       <>
-        <td title={entry.apiKey}>
-          {maskSecret(entry.apiKey)}
-        </td>
+        <td title={authDisplayName}>{authDisplayName}</td>
+        <td title={entry.apiKey}>{maskSecret(entry.apiKey)}</td>
         <td>{entry.providerType}</td>
-        <td title={entry.model}>
-          {entry.model}
-        </td>
+        <td title={entry.model}>{entry.model}</td>
         <td title={entry.source}>
           {entry.providerName ? (
             <>
@@ -445,9 +492,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
             ))}
           </div>
         </td>
-        <td className={getRateClassName(rateValue, styles)}>
-          {stats.successRate}%
-        </td>
+        <td className={getRateClassName(rateValue, styles)}>{stats.successRate}%</td>
         <td>{formatNumber(stats.totalCount)}</td>
         <td>{formatNumber(entry.inputTokens)}</td>
         <td>{formatNumber(entry.outputTokens)}</td>
@@ -456,9 +501,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
         <td>
           {entry.source && entry.source !== '-' && entry.source !== 'unknown' ? (
             disabled ? (
-              <span className={styles.disabledLabel}>
-                {t('monitor.logs.disabled')}
-              </span>
+              <span className={styles.disabledLabel}>{t('monitor.logs.disabled')}</span>
             ) : (
               <button
                 className={styles.disableBtn}
@@ -482,8 +525,12 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
         title={t('monitor.logs.title')}
         subtitle={
           <span>
-            {formatTimeRangeCaption(timeRange, customRange, t)} · {t('monitor.logs.total_count', { count: logEntries.length })}
-            <span style={{ color: 'var(--text-tertiary)' }}> · {t('monitor.logs.scroll_hint')}</span>
+            {formatTimeRangeCaption(timeRange, customRange, t)} ·{' '}
+            {t('monitor.logs.total_count', { count: logEntries.length })}
+            <span style={{ color: 'var(--text-tertiary)' }}>
+              {' '}
+              · {t('monitor.logs.scroll_hint')}
+            </span>
           </span>
         }
         extra={
@@ -515,7 +562,9 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
           >
             <option value="">{t('monitor.logs.all_provider_types')}</option>
             {providerTypes.map((type) => (
-              <option key={type} value={type}>{type}</option>
+              <option key={type} value={type}>
+                {type}
+              </option>
             ))}
           </select>
           <select
@@ -525,7 +574,9 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
           >
             <option value="">{t('monitor.logs.all_models')}</option>
             {models.map((model) => (
-              <option key={model} value={model}>{model}</option>
+              <option key={model} value={model}>
+                {model}
+              </option>
             ))}
           </select>
           <select
@@ -550,9 +601,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
             <option value="failed">{t('monitor.logs.failed')}</option>
           </select>
 
-          <span className={styles.logLastUpdate}>
-            {getCountdownText()}
-          </span>
+          <span className={styles.logLastUpdate}>{getCountdownText()}</span>
 
           <select
             className={styles.logSelect}
@@ -581,6 +630,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
                 <table className={`${styles.table} ${styles.virtualTable}`}>
                   <thead>
                     <tr>
+                      <th>{t('monitor.logs.header_auth')}</th>
                       <th>{t('monitor.logs.header_api')}</th>
                       <th>{t('monitor.logs.header_request_type')}</th>
                       <th>{t('monitor.logs.header_model')}</th>
@@ -649,7 +699,14 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
 
         {/* 统计信息 */}
         {filteredEntries.length > 0 && (
-          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              marginTop: 8,
+            }}
+          >
             {t('monitor.logs.total_count', { count: filteredEntries.length })}
           </div>
         )}
@@ -664,10 +721,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
       />
 
       {/* 不支持自动禁用提示弹窗 */}
-      <UnsupportedDisableModal
-        state={unsupportedState}
-        onClose={handleCloseUnsupported}
-      />
+      <UnsupportedDisableModal state={unsupportedState} onClose={handleCloseUnsupported} />
     </>
   );
 }

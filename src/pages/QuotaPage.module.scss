@@ -265,6 +265,12 @@
   background-image: linear-gradient(180deg, rgba(255, 248, 225, 0.2), rgba(255, 248, 225, 0));
 }
 
+.kiroCard {
+  background-image: linear-gradient(180deg,
+      rgba(255, 248, 225, 0.18),
+      rgba(255, 248, 225, 0));
+}
+
 .quotaSection {
   display: flex;
   flex-direction: column;

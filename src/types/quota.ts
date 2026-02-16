@@ -215,20 +215,79 @@ export interface KiroQuotaDetail {
   expiresAt?: string;
 }
 
+// Kiro (AWS CodeWhisperer) API payload types
+export interface KiroSubscriptionInfo {
+  subscriptionTitle: string;
+  type?: string;
+  overageCapability?: string;
+  upgradeCapability?: string;
+}
+
+export interface KiroFreeTrialInfo {
+  freeTrialStatus: string;
+  usageLimitWithPrecision: number;
+  currentUsageWithPrecision: number;
+  freeTrialExpiry: number;
+}
+
+export interface KiroUsageBreakdown {
+  resourceType: string;
+  usageLimitWithPrecision: number;
+  currentUsageWithPrecision: number;
+  nextDateReset?: number;
+  freeTrialInfo?: KiroFreeTrialInfo;
+  overageRate?: number;
+  currency?: string;
+}
+
+export interface KiroQuotaPayload {
+  daysUntilReset?: number;
+  nextDateReset: number;
+  subscriptionInfo: KiroSubscriptionInfo;
+  usageBreakdownList: KiroUsageBreakdown[];
+  userInfo?: { userId: string };
+}
+
+export interface KiroQuotaErrorPayload {
+  __type?: string;
+  message?: string;
+  reason?: string;
+}
+
+export interface KiroBaseQuota {
+  used: number;
+  limit: number;
+  resetTime: number;
+}
+
+export interface KiroFreeTrialQuota {
+  used: number;
+  limit: number;
+  expiry: number;
+  status: string;
+}
+
 export interface KiroQuotaState {
   status: 'idle' | 'loading' | 'success' | 'error';
-  totalCurrent: number;
-  totalLimit: number;
-  totalPercentUsed: number;
+  // Aggregated fields used by KiroQuotaSection (legacy detailed view)
+  totalCurrent?: number;
+  totalLimit?: number;
+  totalPercentUsed?: number;
   baseLimit?: number;
   baseCurrent?: number;
   freeTrialLimit?: number;
   freeTrialCurrent?: number;
   freeTrialExpiry?: string;
   bonuses?: KiroBonusUsage[];
-  details: KiroQuotaDetail[];
+  details?: KiroQuotaDetail[];
   lastUpdated?: number;
   nextResetDate?: string;
+
+  // Fields used by generic quota card pipeline
+  subscriptionTitle?: string | null;
+  baseQuota?: KiroBaseQuota | null;
+  freeTrialQuota?: KiroFreeTrialQuota | null;
+
   error?: string;
   errorStatus?: number;
 }

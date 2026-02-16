@@ -42,6 +42,34 @@
 
 冲突高频锚点：`src/pages/UsagePage.tsx:1`、`src/components/usage/hooks/useUsageData.ts:1`、`src/i18n/locales/en.json:1`
 
+### 逐块合并冲突（推荐）
+
+适用场景：同一文件同时存在功能演进与结构重构，直接选 ours/theirs 会丢功能或引入回退。
+
+分级顺序（先低风险，后高风险）：
+
+1. 低风险：`.gitignore` / `README` / 纯格式调整
+2. 中风险：`i18n` 文案、类型守卫（type guard）
+3. 高风险：页面功能重构、类型模型变更
+
+执行步骤与验收命令：
+
+1. 每完成一批文件后先确认是否还有未解冲突：`git diff --name-only --diff-filter=U`
+2. 全部冲突清理后做类型验收：`pnpm type-check`
+3. 最终做构建验收：`pnpm build`
+
+冲突不要“二选一”（本次 Kiro quota 类型冲突示例）：
+
+- 目标不是只保留 payload 或只保留 view，而是两套模型并存
+- API payload 模型负责承接接口字段，view 模型负责页面展示/交互
+- 在 parser 层做显式转换，避免页面直接耦合后端字段细节
+
+本次实战结果（可复用基线）：
+
+- 已无未解决冲突（`git diff --name-only --diff-filter=U` 为空）
+- 验证通过：`pnpm type-check`、`pnpm build` 均成功
+- 构建日志出现两行 `The system cannot find the path specified.`，但不影响最终构建成功
+
 ## 提交前检查建议
 
 - 页面路由是否可访问

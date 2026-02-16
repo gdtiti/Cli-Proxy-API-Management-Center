@@ -8,7 +8,7 @@ import type {
   ClaudeQuotaState,
   CodexQuotaState,
   GeminiCliQuotaState,
-  KiroQuotaState
+  KiroQuotaState,
 } from '@/types';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
@@ -27,7 +27,7 @@ interface QuotaStoreState {
   clearQuotaCache: () => void;
 }
 
-const resolveUpdater = <T,>(updater: QuotaUpdater<T>, prev: T): T => {
+const resolveUpdater = <T>(updater: QuotaUpdater<T>, prev: T): T => {
   if (typeof updater === 'function') {
     return (updater as (value: T) => T)(prev);
   }
@@ -42,23 +42,23 @@ export const useQuotaStore = create<QuotaStoreState>((set) => ({
   kiroQuota: {},
   setAntigravityQuota: (updater) =>
     set((state) => ({
-      antigravityQuota: resolveUpdater(updater, state.antigravityQuota)
+      antigravityQuota: resolveUpdater(updater, state.antigravityQuota),
     })),
   setClaudeQuota: (updater) =>
     set((state) => ({
-      claudeQuota: resolveUpdater(updater, state.claudeQuota)
+      claudeQuota: resolveUpdater(updater, state.claudeQuota),
     })),
   setCodexQuota: (updater) =>
     set((state) => ({
-      codexQuota: resolveUpdater(updater, state.codexQuota)
+      codexQuota: resolveUpdater(updater, state.codexQuota),
     })),
   setGeminiCliQuota: (updater) =>
     set((state) => ({
-      geminiCliQuota: resolveUpdater(updater, state.geminiCliQuota)
+      geminiCliQuota: resolveUpdater(updater, state.geminiCliQuota),
     })),
   setKiroQuota: (updater) =>
     set((state) => ({
-      kiroQuota: resolveUpdater(updater, state.kiroQuota)
+      kiroQuota: resolveUpdater(updater, state.kiroQuota),
     })),
   clearQuotaCache: () =>
     set({
@@ -66,6 +66,6 @@ export const useQuotaStore = create<QuotaStoreState>((set) => ({
       claudeQuota: {},
       codexQuota: {},
       geminiCliQuota: {},
-      kiroQuota: {}
-    })
+      kiroQuota: {},
+    }),
 }));
