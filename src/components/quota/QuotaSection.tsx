@@ -7,25 +7,27 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { useQuotaStore, useThemeStore, useNotificationStore } from '@/stores';
-import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { QuotaCard } from './QuotaCard';
-import type { QuotaStatusState } from './QuotaCard';
-import { useQuotaLoader } from './useQuotaLoader';
-import type { QuotaConfig } from './quotaConfigs';
-import { useGridColumns } from './useGridColumns';
-import { isRuntimeOnlyAuthFile } from '@/utils/quota/validators';
-import { authFilesApi } from '@/services/api';
-import { IconRefreshCw } from '@/components/ui/icons';
-import styles from '@/pages/QuotaPage.module.scss';
+import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type {
   AntigravityQuotaState,
+  AuthFileItem,
   ClaudeQuotaState,
   CodexQuotaState,
   GeminiCliQuotaState,
+  ResolvedTheme,
 } from '@/types';
-import { QuotaProgressBar } from './QuotaCard';
+import { authFilesApi } from '@/services/api';
+import { IconRefreshCw } from '@/components/ui/icons';
+import { isRuntimeOnlyAuthFile } from '@/utils/quota/validators';
+import { QuotaCard, QuotaProgressBar, type QuotaStatusState } from './QuotaCard';
+import type { QuotaConfig } from './quotaConfigs';
+import { useGridColumns } from './useGridColumns';
+import { useQuotaLoader, type QuotaLoadProgress } from './useQuotaLoader';
+import styles from '@/pages/QuotaPage.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
@@ -33,9 +35,18 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 
 type ViewMode = 'paged' | 'all';
 type QuotaPanelTab = 'summary' | 'credentials';
+type RefreshScope = 'page' | 'all';
 
-const MAX_ITEMS_PER_PAGE = 25;
-const MAX_SHOW_ALL_THRESHOLD = 30;
+interface PendingQuotaRefreshRequest {
+  scope: RefreshScope;
+  concurrency: number;
+}
+
+const MAX_SHOW_ALL_THRESHOLD = 500;
+const PAGE_SIZE_OPTIONS = [10, 50, 100, 200, 500, 1000] as const;
+const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_REFRESH_CONCURRENCY = 10;
+const MAX_REFRESH_CONCURRENCY = 1000;
 
 interface QuotaPaginationState<T> {
   pageSize: number;
@@ -141,11 +152,11 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   onFileDeleted,
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const setQuota = useQuotaStore((state) => state[config.storeSetter]) as QuotaSetter<
     Record<string, TState>
   >;
-  const showNotification = useNotificationStore((state) => state.showNotification);
 
   // Delete state management
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
@@ -159,22 +170,32 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     error: number;
   } | null>(null);
 
-  /* Removed useRef */
-  const [columns, gridRef] = useGridColumns(380); // Min card width 380px matches SCSS
+  const [, gridRef] = useGridColumns(220); // Keep in sync with QuotaPage.module.scss grid min width
   const storageKey = `quota_view_mode_${config.type}`;
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'paged';
     const saved = localStorage.getItem(storageKey);
     return saved === 'all' ? 'all' : 'paged';
   });
   const setViewMode = useCallback(
     (mode: ViewMode) => {
       setViewModeState(mode);
-      localStorage.setItem(storageKey, mode);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(storageKey, mode);
+      }
     },
     [storageKey]
   );
+
+  const [pageSizeOption, setPageSizeOption] = useState<number>(DEFAULT_PAGE_SIZE);
   const [showTooManyWarning, setShowTooManyWarning] = useState(false);
   const [activeTab, setActiveTab] = useState<QuotaPanelTab>('summary');
+  const [refreshModalOpen, setRefreshModalOpen] = useState(false);
+  const [refreshConcurrencyInput, setRefreshConcurrencyInput] = useState(
+    String(DEFAULT_REFRESH_CONCURRENCY)
+  );
+  const [refreshConcurrencyError, setRefreshConcurrencyError] = useState('');
+  const [refreshProgress, setRefreshProgress] = useState<QuotaLoadProgress | null>(null);
 
   const filteredFiles = useMemo(
     () => files.filter((file) => config.filterFn(file)),
@@ -189,10 +210,11 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const displayFiles = useMemo(() => {
     if (statusFilter === 'all') return filteredFiles;
     return filteredFiles.filter((file) => {
-      const s = quota[file.name]?.status ?? 'idle';
-      return s === statusFilter;
+      const state = quota[file.name]?.status ?? 'idle';
+      return state === statusFilter;
     });
-  }, [filteredFiles, statusFilter, quota]);
+  }, [filteredFiles, quota, statusFilter]);
+
   const showAllAllowed = displayFiles.length <= MAX_SHOW_ALL_THRESHOLD;
   const effectiveViewMode: ViewMode = viewMode === 'all' && !showAllAllowed ? 'paged' : viewMode;
 
@@ -207,7 +229,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     goToPage,
     loading: sectionLoading,
     setLoading,
-  } = useQuotaPagination(displayFiles);
+  } = useQuotaPagination(displayFiles, DEFAULT_PAGE_SIZE);
 
   useEffect(() => {
     if (showAllAllowed) return;
@@ -225,23 +247,53 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     };
   }, [showAllAllowed, viewMode, setViewMode]);
 
-  // Update page size based on view mode and columns
+  // Update page size based on view mode and user selection
   useEffect(() => {
     if (effectiveViewMode === 'all') {
       setPageSize(Math.max(1, displayFiles.length), false);
     } else {
-      setPageSize(Math.min(columns * 3, MAX_ITEMS_PER_PAGE), false);
+      setPageSize(pageSizeOption);
     }
-  }, [effectiveViewMode, columns, displayFiles.length, setPageSize]);
+  }, [effectiveViewMode, displayFiles.length, pageSizeOption, setPageSize]);
 
-  const pendingQuotaRefreshRef = useRef(false);
+  const pendingQuotaRefreshRef = useRef<PendingQuotaRefreshRequest | null>(null);
+  const stopRefreshRef = useRef(false);
   const prevFilesLoadingRef = useRef(loading);
 
-  const handleRefresh = useCallback(() => {
-    setBatchProgress(null);
-    pendingQuotaRefreshRef.current = true;
-    void triggerHeaderRefresh();
+  const parseRefreshConcurrency = useCallback((): number | null => {
+    const parsed = Number.parseInt(refreshConcurrencyInput.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setRefreshConcurrencyError(t('quota_management.refresh_concurrency_invalid'));
+      return null;
+    }
+
+    setRefreshConcurrencyError('');
+    return Math.min(parsed, MAX_REFRESH_CONCURRENCY);
+  }, [refreshConcurrencyInput, t]);
+
+  const handleOpenRefreshModal = useCallback(() => {
+    setRefreshConcurrencyError('');
+    setRefreshModalOpen(true);
   }, []);
+
+  const handleStopRefresh = useCallback(() => {
+    stopRefreshRef.current = true;
+  }, []);
+
+  const handleStartRefresh = useCallback(
+    (scope: RefreshScope) => {
+      const concurrency = parseRefreshConcurrency();
+      if (!concurrency) return;
+
+      setBatchProgress(null);
+      pendingQuotaRefreshRef.current = { scope, concurrency };
+      stopRefreshRef.current = false;
+      setRefreshProgress(null);
+      setRefreshModalOpen(false);
+      void triggerHeaderRefresh();
+    },
+    [parseRefreshConcurrency]
+  );
 
   // Delete handler
   const handleDelete = useCallback(
@@ -267,42 +319,61 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         setDeletingFile(null);
       }
     },
-    [t, setQuota, onFileDeleted, showNotification]
+    [onFileDeleted, setQuota, showNotification, t]
   );
 
   // Single card refresh handler
   const handleRefreshSingle = useCallback(
     (name: string) => {
-      const file = filteredFiles.find((f) => f.name === name);
+      const file = filteredFiles.find((item) => item.name === name);
       if (!file) return;
+
       setBatchProgress(null);
       setRefreshingFile(name);
       setQuota((prev) => ({
         ...prev,
         [name]: config.buildLoadingState(),
       }));
-      void loadQuota([file], 'page', (_isLoading) => {
-        if (!_isLoading) setRefreshingFile(null);
+
+      void loadQuota([file], 'page', setLoading, {
+        onProgress: (progress) => {
+          if (progress.completed >= progress.total || progress.stopped) {
+            setRefreshingFile(null);
+          }
+        },
       });
     },
-    [filteredFiles, setQuota, config, loadQuota]
+    [config, filteredFiles, loadQuota, setLoading, setQuota]
   );
 
   useEffect(() => {
     const wasLoading = prevFilesLoadingRef.current;
     prevFilesLoadingRef.current = loading;
 
-    if (!pendingQuotaRefreshRef.current) return;
+    const pendingRefresh = pendingQuotaRefreshRef.current;
+    if (!pendingRefresh) return;
     if (loading) return;
     if (!wasLoading) return;
 
-    pendingQuotaRefreshRef.current = false;
-    setBatchProgress(null);
-    const scope = effectiveViewMode === 'all' ? 'all' : 'page';
-    const targets = effectiveViewMode === 'all' ? displayFiles : pageItems;
+    pendingQuotaRefreshRef.current = null;
+
+    const scope = pendingRefresh.scope;
+    const targets = scope === 'all' ? filteredFiles : pageItems;
     if (targets.length === 0) return;
-    void loadQuota(targets, scope, setLoading);
-  }, [loading, effectiveViewMode, displayFiles, pageItems, loadQuota, setLoading]);
+
+    void (async () => {
+      await loadQuota(targets, scope, setLoading, {
+        concurrency: pendingRefresh.concurrency,
+        shouldStop: () => stopRefreshRef.current,
+        onProgress: (progress) => setRefreshProgress(progress),
+      });
+
+      if (stopRefreshRef.current) {
+        showNotification(t('quota_management.refresh_stopped'), 'warning');
+      }
+      stopRefreshRef.current = false;
+    })();
+  }, [loading, filteredFiles, pageItems, loadQuota, setLoading, showNotification, t]);
 
   useEffect(() => {
     if (loading) return;
@@ -310,6 +381,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       setQuota({});
       return;
     }
+
     setQuota((prev) => {
       const nextState: Record<string, TState> = {};
       filteredFiles.forEach((file) => {
@@ -336,7 +408,6 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   );
 
   const isBusy = sectionLoading || loading;
-  const cardActionsEnabled = !(disabled || isBusy);
 
   const summaryRows = useMemo(() => {
     const rowMap = new Map<
@@ -388,6 +459,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
             holder.credentialSet.add(file.name);
             holder.row.credentialCount += 1;
           }
+
           holder.row.remainingValues.push(
             Math.max(0, Math.min(100, group.remainingFraction * 100))
           );
@@ -468,15 +540,17 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         } as QuotaSummaryItem;
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [filteredFiles, quota, config.type]);
+  }, [config.type, filteredFiles, quota]);
 
   const summaryStats = useMemo(() => {
     const credentialsWithQuota = filteredFiles.filter(
       (file) => quota[file.name]?.status === 'success'
     ).length;
+
     const averageValues = summaryRows
       .map((row) => row.averageRemaining)
       .filter((value): value is number => typeof value === 'number');
+
     const averageRemaining =
       averageValues.length > 0
         ? Number(
@@ -497,9 +571,10 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   }, [filteredFiles, quota, summaryRows]);
 
   const handleCheckAll = useCallback(() => {
-    if (!cardActionsEnabled) return;
+    if (disabled || isBusy) return;
     if (filteredFiles.length === 0) return;
 
+    setRefreshProgress(null);
     const targets = filteredFiles;
     setBatchProgress({
       total: targets.length,
@@ -508,7 +583,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       error: 0,
     });
     void loadQuotaSequential(targets, 'all', setLoading, setBatchProgress);
-  }, [cardActionsEnabled, filteredFiles, loadQuotaSequential, setLoading]);
+  }, [disabled, filteredFiles, isBusy, loadQuotaSequential, setLoading]);
 
   const batchPercent = useMemo(() => {
     if (!batchProgress) return 0;
@@ -536,288 +611,435 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     });
   }, [batchProgress, t]);
 
-  return (
-    <Card
-      title={titleNode}
-      extra={
-        <div className={styles.headerActions}>
-          <div
-            className={styles.sectionTabs}
-            role="tablist"
-            aria-label={t('quota_management.view_tabs')}
-          >
-            <Button
-              variant={activeTab === 'summary' ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setActiveTab('summary')}
-              role="tab"
-              aria-selected={activeTab === 'summary'}
-            >
-              {t('quota_management.tab_summary')}
-            </Button>
-            <Button
-              variant={activeTab === 'credentials' ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => setActiveTab('credentials')}
-              role="tab"
-              aria-selected={activeTab === 'credentials'}
-            >
-              {t('quota_management.tab_credentials')}
-            </Button>
-          </div>
-          {activeTab === 'credentials' && (
-            <>
-              <select
-                className={styles.statusFilter}
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as 'all' | 'idle' | 'success' | 'error')
-                }
-                aria-label={t('quota_management.status_filter_label')}
-              >
-                <option value="all">{t('quota_management.filter_all')}</option>
-                <option value="idle">{t('quota_management.filter_idle')}</option>
-                <option value="success">{t('quota_management.filter_success')}</option>
-                <option value="error">{t('quota_management.filter_error')}</option>
-              </select>
-              <div className={styles.viewModeToggle}>
-                <Button
-                  variant={effectiveViewMode === 'paged' ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => setViewMode('paged')}
-                >
-                  {t('auth_files.view_mode_paged')}
-                </Button>
-                <Button
-                  variant={effectiveViewMode === 'all' ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => {
-                    if (displayFiles.length > MAX_SHOW_ALL_THRESHOLD) {
-                      setShowTooManyWarning(true);
-                    } else {
-                      setViewMode('all');
-                    }
-                  }}
-                >
-                  {t('auth_files.view_mode_all')}
-                </Button>
-              </div>
-            </>
-          )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleCheckAll}
-            disabled={disabled || isBusy || filteredFiles.length === 0}
-            loading={
-              sectionLoading && !!batchProgress && batchProgress.completed < batchProgress.total
-            }
-            title={t('quota_management.check_all')}
-            aria-label={t('quota_management.check_all')}
-          >
-            {t('quota_management.check_all')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={disabled || isBusy}
-            loading={isBusy}
-            title={t('quota_management.refresh_files_and_quota')}
-            aria-label={t('quota_management.refresh_files_and_quota')}
-          >
-            {!isBusy && <IconRefreshCw size={16} />}
-          </Button>
-        </div>
-      }
-    >
-      {batchLabel && (
-        <div className={styles.batchProgress}>
-          <div className={styles.batchProgressRow}>
-            <span>{batchLabel}</span>
-            <span className={styles.batchProgressValue}>{batchPercent}%</span>
-          </div>
-          <div
-            className={styles.batchProgressBar}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={batchPercent}
-          >
-            <div className={styles.batchProgressBarFill} style={{ width: `${batchPercent}%` }} />
-          </div>
-        </div>
-      )}
-      {activeTab === 'summary' ? (
-        <div className={styles.summaryPanel} role="tabpanel">
-          <div className={styles.summaryStatsGrid}>
-            <div className={styles.summaryStatCard}>
-              <div className={styles.summaryStatLabel}>
-                {t('quota_management.summary_credentials')}
-              </div>
-              <div className={styles.summaryStatValue}>
-                {summaryStats.credentialsWithQuota}/{summaryStats.totalCredentials}
-              </div>
-            </div>
-            <div className={styles.summaryStatCard}>
-              <div className={styles.summaryStatLabel}>{t('quota_management.summary_models')}</div>
-              <div className={styles.summaryStatValue}>{summaryStats.modelCount}</div>
-            </div>
-            <div className={styles.summaryStatCard}>
-              <div className={styles.summaryStatLabel}>{t('quota_management.summary_windows')}</div>
-              <div className={styles.summaryStatValue}>{summaryStats.bucketCount}</div>
-            </div>
-            <div className={styles.summaryStatCard}>
-              <div className={styles.summaryStatLabel}>
-                {t('quota_management.summary_avg_remaining')}
-              </div>
-              <div className={styles.summaryStatValue}>
-                {summaryStats.averageRemaining === null
-                  ? '--'
-                  : t('quota_management.summary_percent', { value: summaryStats.averageRemaining })}
-              </div>
-            </div>
-          </div>
+  const refreshRunning = Boolean(
+    refreshProgress &&
+    refreshProgress.total > 0 &&
+    refreshProgress.completed < refreshProgress.total &&
+    !refreshProgress.stopped
+  );
 
-          {summaryRows.length === 0 ? (
-            <EmptyState
-              title={t('quota_management.summary_empty_title')}
-              description={t('quota_management.summary_empty_desc')}
-            />
-          ) : (
-            <div className={styles.summaryRows}>
-              {summaryRows.map((row) => (
-                <div key={row.id} className={styles.summaryRow}>
-                  <div className={styles.summaryRowHeader}>
-                    <div className={styles.summaryRowTitle}>{row.label}</div>
-                    <div className={styles.summaryRowMeta}>
-                      {t('quota_management.summary_covered_credentials', {
-                        count: row.credentialCount,
-                      })}
-                    </div>
-                  </div>
-                  {row.averageRemaining !== null ? (
-                    <QuotaProgressBar
-                      percent={row.averageRemaining}
-                      highThreshold={70}
-                      mediumThreshold={40}
-                    />
-                  ) : (
-                    <div className={styles.quotaWarning}>
-                      {t('quota_management.summary_no_percent')}
-                    </div>
-                  )}
-                  <div className={styles.summaryRowFooter}>
-                    <span>
-                      {row.averageRemaining === null
-                        ? t('quota_management.summary_no_percent')
-                        : t('quota_management.summary_percent', { value: row.averageRemaining })}
-                    </span>
-                    {row.modelNames.length > 0 && (
-                      <span>
-                        {t('quota_management.summary_models_list', {
-                          models: row.modelNames.join(', '),
-                        })}
-                      </span>
-                    )}
-                    {row.resetLabels.length > 0 && (
-                      <span>
-                        {t('quota_management.summary_reset_list', {
-                          reset: row.resetLabels.slice(0, 2).join(' / '),
-                        })}
-                      </span>
-                    )}
-                  </div>
+  const refreshPercent =
+    refreshProgress && refreshProgress.total > 0
+      ? Math.round((refreshProgress.completed / refreshProgress.total) * 100)
+      : 0;
+
+  const pageSizeOptions = PAGE_SIZE_OPTIONS.map((value) => ({
+    value: String(value),
+    label: String(value),
+  }));
+
+  const isRefreshing = isBusy || refreshRunning;
+  const cardActionsEnabled = !(disabled || isBusy);
+
+  return (
+    <>
+      <Card
+        title={titleNode}
+        extra={
+          <div className={styles.headerActions}>
+            <div
+              className={styles.sectionTabs}
+              role="tablist"
+              aria-label={t('quota_management.view_tabs')}
+            >
+              <Button
+                variant={activeTab === 'summary' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('summary')}
+                role="tab"
+                aria-selected={activeTab === 'summary'}
+              >
+                {t('quota_management.tab_summary')}
+              </Button>
+              <Button
+                variant={activeTab === 'credentials' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setActiveTab('credentials')}
+                role="tab"
+                aria-selected={activeTab === 'credentials'}
+              >
+                {t('quota_management.tab_credentials')}
+              </Button>
+            </div>
+
+            {activeTab === 'credentials' && (
+              <>
+                <select
+                  className={styles.statusFilter}
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as 'all' | 'idle' | 'success' | 'error')
+                  }
+                  aria-label={t('quota_management.status_filter_label')}
+                >
+                  <option value="all">{t('quota_management.filter_all')}</option>
+                  <option value="idle">{t('quota_management.filter_idle')}</option>
+                  <option value="success">{t('quota_management.filter_success')}</option>
+                  <option value="error">{t('quota_management.filter_error')}</option>
+                </select>
+
+                <div className={styles.pageSizeControl}>
+                  <span className={styles.pageSizeLabel}>
+                    {t('quota_management.page_size_label')}
+                  </span>
+                  <Select
+                    value={String(pageSizeOption)}
+                    options={pageSizeOptions}
+                    onChange={(value) => {
+                      const parsed = Number.parseInt(value, 10);
+                      if (!Number.isFinite(parsed)) return;
+                      setPageSizeOption(parsed);
+                    }}
+                    ariaLabel={t('quota_management.page_size_label')}
+                    className={styles.pageSizeSelectWrap}
+                    fullWidth={false}
+                    disabled={effectiveViewMode !== 'paged'}
+                  />
                 </div>
+
+                <div className={styles.viewModeToggle}>
+                  <Button
+                    variant={effectiveViewMode === 'paged' ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => setViewMode('paged')}
+                  >
+                    {t('auth_files.view_mode_paged')}
+                  </Button>
+                  <Button
+                    variant={effectiveViewMode === 'all' ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => {
+                      if (displayFiles.length > MAX_SHOW_ALL_THRESHOLD) {
+                        setShowTooManyWarning(true);
+                      } else {
+                        setViewMode('all');
+                      }
+                    }}
+                  >
+                    {t('auth_files.view_mode_all')}
+                  </Button>
+                </div>
+              </>
+            )}
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleCheckAll}
+              disabled={disabled || isBusy || filteredFiles.length === 0}
+              loading={
+                sectionLoading && !!batchProgress && batchProgress.completed < batchProgress.total
+              }
+              title={t('quota_management.check_all')}
+              aria-label={t('quota_management.check_all')}
+            >
+              {t('quota_management.check_all')}
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleOpenRefreshModal}
+              disabled={disabled || isRefreshing}
+              loading={isRefreshing}
+              title={t('quota_management.refresh_files_and_quota')}
+              aria-label={t('quota_management.refresh_files_and_quota')}
+            >
+              {!isRefreshing && <IconRefreshCw size={16} />}
+            </Button>
+          </div>
+        }
+      >
+        {batchLabel && (
+          <div className={styles.batchProgress}>
+            <div className={styles.batchProgressRow}>
+              <span>{batchLabel}</span>
+              <span className={styles.batchProgressValue}>{batchPercent}%</span>
+            </div>
+            <div
+              className={styles.batchProgressBar}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={batchPercent}
+            >
+              <div className={styles.batchProgressBarFill} style={{ width: `${batchPercent}%` }} />
+            </div>
+          </div>
+        )}
+
+        {refreshProgress && refreshProgress.total > 0 && (
+          <div className={styles.refreshProgressPanel}>
+            <div className={styles.refreshProgressHeader}>
+              <span className={styles.refreshProgressTitle}>
+                {refreshRunning
+                  ? t('quota_management.refreshing')
+                  : refreshProgress.stopped
+                    ? t('quota_management.refresh_stopped')
+                    : t('quota_management.refresh_completed')}
+              </span>
+              <span className={styles.refreshProgressStats}>
+                {t('quota_management.refresh_progress', {
+                  completed: refreshProgress.completed,
+                  total: refreshProgress.total,
+                })}
+              </span>
+            </div>
+
+            <div className={styles.refreshProgressBar}>
+              <div
+                className={styles.refreshProgressBarFill}
+                style={{ width: `${refreshPercent}%` }}
+              />
+            </div>
+
+            <div className={styles.refreshProgressMeta}>
+              {t('quota_management.refresh_progress_detail', {
+                success: refreshProgress.success,
+                failed: refreshProgress.failed,
+              })}
+            </div>
+
+            {refreshRunning && (
+              <div className={styles.refreshProgressActions}>
+                <Button variant="danger" size="sm" onClick={handleStopRefresh}>
+                  {t('quota_management.refresh_stop')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'summary' ? (
+          <div className={styles.summaryPanel} role="tabpanel">
+            <div className={styles.summaryStatsGrid}>
+              <div className={styles.summaryStatCard}>
+                <div className={styles.summaryStatLabel}>
+                  {t('quota_management.summary_credentials')}
+                </div>
+                <div className={styles.summaryStatValue}>
+                  {summaryStats.credentialsWithQuota}/{summaryStats.totalCredentials}
+                </div>
+              </div>
+
+              <div className={styles.summaryStatCard}>
+                <div className={styles.summaryStatLabel}>
+                  {t('quota_management.summary_models')}
+                </div>
+                <div className={styles.summaryStatValue}>{summaryStats.modelCount}</div>
+              </div>
+
+              <div className={styles.summaryStatCard}>
+                <div className={styles.summaryStatLabel}>
+                  {t('quota_management.summary_windows')}
+                </div>
+                <div className={styles.summaryStatValue}>{summaryStats.bucketCount}</div>
+              </div>
+
+              <div className={styles.summaryStatCard}>
+                <div className={styles.summaryStatLabel}>
+                  {t('quota_management.summary_avg_remaining')}
+                </div>
+                <div className={styles.summaryStatValue}>
+                  {summaryStats.averageRemaining === null
+                    ? '--'
+                    : t('quota_management.summary_percent', {
+                        value: summaryStats.averageRemaining,
+                      })}
+                </div>
+              </div>
+            </div>
+
+            {summaryRows.length === 0 ? (
+              <EmptyState
+                title={t('quota_management.summary_empty_title')}
+                description={t('quota_management.summary_empty_desc')}
+              />
+            ) : (
+              <div className={styles.summaryRows}>
+                {summaryRows.map((row) => (
+                  <div key={row.id} className={styles.summaryRow}>
+                    <div className={styles.summaryRowHeader}>
+                      <div className={styles.summaryRowTitle}>{row.label}</div>
+                      <div className={styles.summaryRowMeta}>
+                        {t('quota_management.summary_covered_credentials', {
+                          count: row.credentialCount,
+                        })}
+                      </div>
+                    </div>
+
+                    {row.averageRemaining !== null ? (
+                      <QuotaProgressBar
+                        percent={row.averageRemaining}
+                        highThreshold={70}
+                        mediumThreshold={40}
+                      />
+                    ) : (
+                      <div className={styles.quotaWarning}>
+                        {t('quota_management.summary_no_percent')}
+                      </div>
+                    )}
+
+                    <div className={styles.summaryRowFooter}>
+                      <span>
+                        {row.averageRemaining === null
+                          ? t('quota_management.summary_no_percent')
+                          : t('quota_management.summary_percent', { value: row.averageRemaining })}
+                      </span>
+
+                      {row.modelNames.length > 0 && (
+                        <span>
+                          {t('quota_management.summary_models_list', {
+                            models: row.modelNames.join(', '),
+                          })}
+                        </span>
+                      )}
+
+                      {row.resetLabels.length > 0 && (
+                        <span>
+                          {t('quota_management.summary_reset_list', {
+                            reset: row.resetLabels.slice(0, 2).join(' / '),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : displayFiles.length === 0 ? (
+          <EmptyState
+            title={t(`${config.i18nPrefix}.empty_title`)}
+            description={t(`${config.i18nPrefix}.empty_desc`)}
+          />
+        ) : (
+          <div role="tabpanel">
+            <div ref={gridRef} className={config.gridClassName}>
+              {pageItems.map((item) => (
+                <QuotaCard
+                  key={item.name}
+                  item={item}
+                  quota={quota[item.name]}
+                  resolvedTheme={resolvedTheme}
+                  i18nPrefix={config.i18nPrefix}
+                  cardClassName={config.cardClassName}
+                  defaultType={config.type}
+                  renderQuotaItems={config.renderQuotaItems}
+                  onDelete={cardActionsEnabled ? handleDelete : undefined}
+                  isDeleting={deletingFile === item.name}
+                  canDelete={!isRuntimeOnlyAuthFile(item)}
+                  onRefresh={cardActionsEnabled ? handleRefreshSingle : undefined}
+                  isRefreshing={refreshingFile === item.name}
+                />
               ))}
             </div>
-          )}
-        </div>
-      ) : displayFiles.length === 0 ? (
-        <EmptyState
-          title={t(`${config.i18nPrefix}.empty_title`)}
-          description={t(`${config.i18nPrefix}.empty_desc`)}
-        />
-      ) : (
-        <>
-          <div ref={gridRef} className={config.gridClassName}>
-            {pageItems.map((item) => (
-              <QuotaCard
-                key={item.name}
-                item={item}
-                quota={quota[item.name]}
-                resolvedTheme={resolvedTheme}
-                i18nPrefix={config.i18nPrefix}
-                cardClassName={config.cardClassName}
-                defaultType={config.type}
-                renderQuotaItems={config.renderQuotaItems}
-                onDelete={cardActionsEnabled ? handleDelete : undefined}
-                isDeleting={deletingFile === item.name}
-                canDelete={!isRuntimeOnlyAuthFile(item)}
-                onRefresh={cardActionsEnabled ? handleRefreshSingle : undefined}
-                isRefreshing={refreshingFile === item.name}
-              />
-            ))}
-          </div>
-          {displayFiles.length > pageSize && effectiveViewMode === 'paged' && (
-            <div className={styles.pagination}>
-              <Button variant="secondary" size="sm" onClick={goToPrev} disabled={currentPage <= 1}>
-                {t('auth_files.pagination_prev')}
-              </Button>
-              <div className={styles.pageInfo}>
-                {t('auth_files.pagination_info', {
-                  current: currentPage,
-                  total: totalPages,
-                  count: displayFiles.length,
-                })}
-              </div>
-              <input
-                type="number"
-                className={styles.pageJumpInput}
-                min={1}
-                max={totalPages}
-                placeholder={String(currentPage)}
-                aria-label={t('auth_files.pagination_jump')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const val = Number((e.target as HTMLInputElement).value);
-                    if (val >= 1 && val <= totalPages) {
-                      goToPage(val);
-                      (e.target as HTMLInputElement).value = '';
+
+            {displayFiles.length > pageSize && effectiveViewMode === 'paged' && (
+              <div className={styles.pagination}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={goToPrev}
+                  disabled={currentPage <= 1}
+                >
+                  {t('auth_files.pagination_prev')}
+                </Button>
+
+                <div className={styles.pageInfo}>
+                  {t('auth_files.pagination_info', {
+                    current: currentPage,
+                    total: totalPages,
+                    count: displayFiles.length,
+                  })}
+                </div>
+
+                <input
+                  type="number"
+                  className={styles.pageJumpInput}
+                  min={1}
+                  max={totalPages}
+                  placeholder={String(currentPage)}
+                  aria-label={t('auth_files.pagination_jump')}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      const value = Number((event.target as HTMLInputElement).value);
+                      if (value >= 1 && value <= totalPages) {
+                        goToPage(value);
+                        (event.target as HTMLInputElement).value = '';
+                      }
                     }
-                  }
-                }}
-                onBlur={(e) => {
-                  const val = Number(e.target.value);
-                  if (val >= 1 && val <= totalPages) {
-                    goToPage(val);
-                  }
-                  e.target.value = '';
-                }}
-                style={{ width: 52 }}
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={goToNext}
-                disabled={currentPage >= totalPages}
-              >
-                {t('auth_files.pagination_next')}
+                  }}
+                  onBlur={(event) => {
+                    const value = Number(event.target.value);
+                    if (value >= 1 && value <= totalPages) {
+                      goToPage(value);
+                    }
+                    event.target.value = '';
+                  }}
+                  style={{ width: 52 }}
+                />
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={goToNext}
+                  disabled={currentPage >= totalPages}
+                >
+                  {t('auth_files.pagination_next')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {showTooManyWarning && (
+          <div className={styles.warningOverlay} onClick={() => setShowTooManyWarning(false)}>
+            <div className={styles.warningModal} onClick={(event) => event.stopPropagation()}>
+              <p>{t('auth_files.too_many_files_warning')}</p>
+              <Button variant="primary" size="sm" onClick={() => setShowTooManyWarning(false)}>
+                {t('common.confirm')}
               </Button>
             </div>
-          )}
-        </>
-      )}
-      {showTooManyWarning && (
-        <div className={styles.warningOverlay} onClick={() => setShowTooManyWarning(false)}>
-          <div className={styles.warningModal} onClick={(e) => e.stopPropagation()}>
-            <p>{t('auth_files.too_many_files_warning')}</p>
-            <Button variant="primary" size="sm" onClick={() => setShowTooManyWarning(false)}>
-              {t('common.confirm')}
+          </div>
+        )}
+      </Card>
+
+      <Modal
+        open={refreshModalOpen}
+        onClose={() => setRefreshModalOpen(false)}
+        title={t('quota_management.refresh_scope_modal_title')}
+        footer={
+          <div className={styles.refreshScopeModalFooter}>
+            <Button variant="secondary" onClick={() => setRefreshModalOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="secondary" onClick={() => handleStartRefresh('page')}>
+              {t('quota_management.refresh_scope_current_page')}
+            </Button>
+            <Button onClick={() => handleStartRefresh('all')}>
+              {t('quota_management.refresh_scope_all')}
             </Button>
           </div>
+        }
+      >
+        <div className={styles.refreshScopeModalBody}>
+          <p className={styles.refreshScopeModalDesc}>
+            {t('quota_management.refresh_scope_modal_desc')}
+          </p>
+          <Input
+            label={t('quota_management.refresh_concurrency_label')}
+            value={refreshConcurrencyInput}
+            onChange={(event) => setRefreshConcurrencyInput(event.target.value)}
+            error={refreshConcurrencyError || undefined}
+            hint={t('quota_management.refresh_concurrency_hint', {
+              max: MAX_REFRESH_CONCURRENCY,
+            })}
+            inputMode="numeric"
+            pattern="[0-9]*"
+          />
         </div>
-      )}
-    </Card>
+      </Modal>
+    </>
   );
 }
