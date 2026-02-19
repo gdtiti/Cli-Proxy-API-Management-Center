@@ -34,7 +34,7 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 type ViewMode = 'paged' | 'all';
 type QuotaPanelTab = 'summary' | 'credentials';
 
-const MAX_ITEMS_PER_PAGE = 14;
+const MAX_ITEMS_PER_PAGE = 25;
 const MAX_SHOW_ALL_THRESHOLD = 30;
 
 interface QuotaPaginationState<T> {
