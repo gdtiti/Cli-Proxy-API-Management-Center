@@ -13,6 +13,23 @@
 
 代码锚点：`src/stores/index.ts:5`、`src/stores/index.ts:14`
 
+## API 超时配置
+
+- 可配置的超时参数支持，用于解决大量认证文件加载超时问题
+- 配置字段：
+  - `apiTimeout`: 通用 API 超时（毫秒），默认 30 秒
+  - `authFilesTimeout`: 认证文件列表专用超时（毫秒），默认 60 秒
+- 配置存储于 Config 类型，通过 VisualConfigEditor 界面可调整
+- 认证文件列表 API (`authFilesApi.list()`) 使用可配置超时
+- 超时配置通过 localStorage 持久化，支持运行时动态更新
+
+代码锚点：
+
+- `src/types/config.ts:37-40` - Config 类型超时字段定义
+- `src/types/visualConfig.ts:65-66` - VisualConfigValues 超时字段
+- `src/services/api/authFiles.ts:102-119` - 可配置超时实现
+- `src/components/config/VisualConfigEditor.tsx:261-287` - 超时配置 UI
+
 ## API 分层
 
 - API 导出入口：`src/services/api/index.ts`
