@@ -38,6 +38,7 @@ import {
   filterUsageByTimeRange,
   type UsageTimeRange,
 } from '@/utils/usage';
+import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
 import styles from './UsagePage.module.scss';
 
 class UsageErrorBoundary extends React.Component<
@@ -84,6 +85,22 @@ const TIME_RANGE_STORAGE_KEY = 'usage-time-range';
 const DEFAULT_CHART_LINES = ['all'];
 const MAX_CHART_LINES = 9;
 const DEFAULT_TIME_RANGE: UsageTimeRange = '24h';
+const EMPTY_GEMINI_API_KEYS: GeminiKeyConfig[] = [];
+const EMPTY_PROVIDER_API_KEYS: ProviderKeyConfig[] = [];
+const EMPTY_OPENAI_PROVIDERS: OpenAIProviderConfig[] = [];
+
+const selectResolvedTheme = (state: ReturnType<typeof useThemeStore.getState>) =>
+  state.resolvedTheme;
+const selectGeminiApiKeys = (state: ReturnType<typeof useConfigStore.getState>) =>
+  state.config?.geminiApiKeys ?? EMPTY_GEMINI_API_KEYS;
+const selectClaudeApiKeys = (state: ReturnType<typeof useConfigStore.getState>) =>
+  state.config?.claudeApiKeys ?? EMPTY_PROVIDER_API_KEYS;
+const selectCodexApiKeys = (state: ReturnType<typeof useConfigStore.getState>) =>
+  state.config?.codexApiKeys ?? EMPTY_PROVIDER_API_KEYS;
+const selectVertexApiKeys = (state: ReturnType<typeof useConfigStore.getState>) =>
+  state.config?.vertexApiKeys ?? EMPTY_PROVIDER_API_KEYS;
+const selectOpenaiProviders = (state: ReturnType<typeof useConfigStore.getState>) =>
+  state.config?.openaiCompatibility ?? EMPTY_OPENAI_PROVIDERS;
 
 const HOUR_WINDOW_BY_TIME_RANGE: Record<UsageTimeRange, number | undefined> = {
   '7h': 7,
@@ -190,12 +207,12 @@ ChartJS.register(
 export function UsagePage() {
   const { t } = useTranslation();
   const isMobile = useIsMobile(768);
-  const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
-  const geminiApiKeys = useConfigStore((state) => state.config?.geminiApiKeys ?? []);
-  const claudeApiKeys = useConfigStore((state) => state.config?.claudeApiKeys ?? []);
-  const codexApiKeys = useConfigStore((state) => state.config?.codexApiKeys ?? []);
-  const vertexApiKeys = useConfigStore((state) => state.config?.vertexApiKeys ?? []);
-  const openaiProviders = useConfigStore((state) => state.config?.openaiCompatibility ?? []);
+  const resolvedTheme = useThemeStore(selectResolvedTheme);
+  const geminiApiKeys = useConfigStore(selectGeminiApiKeys);
+  const claudeApiKeys = useConfigStore(selectClaudeApiKeys);
+  const codexApiKeys = useConfigStore(selectCodexApiKeys);
+  const vertexApiKeys = useConfigStore(selectVertexApiKeys);
+  const openaiProviders = useConfigStore(selectOpenaiProviders);
   const isDark = resolvedTheme === 'dark';
 
   // Data hook
