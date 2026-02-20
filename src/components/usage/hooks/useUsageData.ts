@@ -16,6 +16,7 @@ export interface UsagePayload {
 export interface UseUsageDataReturn {
   usage: UsagePayload | null;
   loading: boolean;
+  slowLoading: boolean;
   error: string;
   modelPrices: Record<string, ModelPrice>;
   setModelPrices: (prices: Record<string, ModelPrice>) => void;
@@ -39,6 +40,7 @@ export function useUsageData(): UseUsageDataReturn {
 
   const [usage, setUsage] = useState<UsagePayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [slowLoading, setSlowLoading] = useState(false);
   const [error, setError] = useState('');
   const [modelPrices, setModelPrices] = useState<Record<string, ModelPrice>>({});
   const [exporting, setExporting] = useState(false);
@@ -50,7 +52,13 @@ export function useUsageData(): UseUsageDataReturn {
 
   const loadUsage = useCallback(async () => {
     setLoading(true);
+    setSlowLoading(false);
     setError('');
+
+    const slowTimer = window.setTimeout(() => {
+      setSlowLoading(true);
+    }, 8000);
+
     try {
       const params: UsageQueryParams = {};
       if (timeRange) params.range = timeRange;
@@ -62,6 +70,7 @@ export function useUsageData(): UseUsageDataReturn {
       const message = err instanceof Error ? err.message : t('usage_stats.loading_error');
       setError(message);
     } finally {
+      window.clearTimeout(slowTimer);
       setLoading(false);
     }
   }, [t, timeRange]);
@@ -164,6 +173,7 @@ export function useUsageData(): UseUsageDataReturn {
   return {
     usage,
     loading,
+    slowLoading,
     error,
     modelPrices,
     setModelPrices: handleSetModelPrices,

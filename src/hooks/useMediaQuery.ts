@@ -6,21 +6,59 @@ import { useState, useEffect } from 'react';
 
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => {
-    return window.matchMedia(query).matches;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false;
+    }
+
+    try {
+      return window.matchMedia(query).matches;
+    } catch (error) {
+      console.warn(`[useMediaQuery] Failed to match media query "${query}":`, error);
+      return false;
+    }
   });
 
   useEffect(() => {
-    const media = window.matchMedia(query);
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
 
-    const listener = (event: MediaQueryListEvent) => {
-      setMatches(event.matches);
-    };
+    let mounted = true;
+    let mediaQueryList: MediaQueryList | null = null;
 
-    // Set initial value via listener to avoid direct setState in effect
-    listener({ matches: media.matches } as MediaQueryListEvent);
+    try {
+      mediaQueryList = window.matchMedia(query);
 
-    media.addEventListener('change', listener);
-    return () => media.removeEventListener('change', listener);
+      const listener = (event: MediaQueryListEvent) => {
+        if (mounted) {
+          setMatches(event.matches);
+        }
+      };
+
+      listener({ matches: mediaQueryList.matches } as MediaQueryListEvent);
+
+      if (mediaQueryList.addEventListener) {
+        mediaQueryList.addEventListener('change', listener);
+      } else {
+        mediaQueryList.addListener(listener);
+      }
+
+      return () => {
+        mounted = false;
+        if (!mediaQueryList) return;
+
+        if (mediaQueryList.removeEventListener) {
+          mediaQueryList.removeEventListener('change', listener);
+        } else {
+          mediaQueryList.removeListener(listener);
+        }
+      };
+    } catch (error) {
+      console.warn(`[useMediaQuery] Failed to setup media query listener for "${query}":`, error);
+      return () => {
+        mounted = false;
+      };
+    }
   }, [query]);
 
   return matches;
