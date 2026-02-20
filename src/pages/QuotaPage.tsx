@@ -13,9 +13,8 @@ import {
   CLAUDE_CONFIG,
   CODEX_CONFIG,
   GEMINI_CLI_CONFIG,
-  KIRO_CONFIG
+  KIRO_CONFIG,
 } from '@/components/quota';
-import { KiroQuotaSection } from './quota';
 import type { AuthFileItem } from '@/types';
 import styles from './QuotaPage.module.scss';
 
@@ -110,7 +109,6 @@ export function QuotaPage() {
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
       />
-      <KiroQuotaSection files={files} disableControls={disableControls} onFileDeleted={handleFileDeleted} />
     </div>
   );
 }

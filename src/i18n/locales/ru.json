@@ -541,6 +541,24 @@
     "plan_team": "Team",
     "plan_free": "Free"
   },
+  "kiro_quota": {
+    "title": "Квота Kiro",
+    "empty_title": "Нет данных квоты Kiro",
+    "empty_desc": "Нет доступных данных квоты Kiro",
+    "loading": "Загрузка квоты Kiro...",
+    "idle": "Нажмите, чтобы загрузить квоту Kiro",
+    "load_failed": "Не удалось загрузить квоту Kiro",
+    "missing_auth_index": "Отсутствует auth_index",
+    "empty": "Нет квоты",
+    "refresh_button": "Обновить",
+    "fetch_all": "Загрузить все квоты",
+    "subscription_label": "Подписка",
+    "base_quota": "Базовая квота",
+    "free_trial": "Бесплатный пробный период",
+    "trial_active": "Пробный период активен",
+    "trial_expired": "Пробный период истёк",
+    "suspended": "Приостановлено"
+  },
   "gemini_cli_quota": {
     "title": "Квота Gemini CLI",
     "empty_title": "Файлы авторизации Gemini CLI отсутствуют",
@@ -1138,7 +1156,7 @@
     "summary_empty_desc": "Запустите проверку квот, чтобы увидеть агрегированные метрики.",
     "summary_covered_credentials": "{{covered}} / {{total}} учётных данных",
     "summary_no_percent": "Н/Д",
-    "summary_percent": "{{percent}}%",
+    "summary_percent": "{{value}}%",
     "summary_models_list": "Список моделей",
     "summary_reset_list": "Время сброса",
     "click_to_refresh": "Нажмите, чтобы обновить",

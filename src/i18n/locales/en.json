@@ -538,6 +538,24 @@
     "plan_team": "Team",
     "plan_free": "Free"
   },
+  "kiro_quota": {
+    "title": "Kiro Quota",
+    "empty_title": "No Kiro Quota Data",
+    "empty_desc": "No Kiro quota data available",
+    "loading": "Loading Kiro quota...",
+    "idle": "Click to load Kiro quota",
+    "load_failed": "Failed to load Kiro quota",
+    "missing_auth_index": "Missing auth_index",
+    "empty": "No quota",
+    "refresh_button": "Refresh",
+    "fetch_all": "Load all quotas",
+    "subscription_label": "Subscription",
+    "base_quota": "Base Quota",
+    "free_trial": "Free Trial",
+    "trial_active": "Trial Active",
+    "trial_expired": "Trial Expired",
+    "suspended": "Suspended"
+  },
   "gemini_cli_quota": {
     "title": "Gemini CLI Quota",
     "empty_title": "No Gemini CLI Auth Files",
@@ -1133,7 +1151,7 @@
     "summary_empty_desc": "Run quota checks to view aggregated metrics.",
     "summary_covered_credentials": "{{covered}} / {{total}} credentials",
     "summary_no_percent": "N/A",
-    "summary_percent": "{{percent}}%",
+    "summary_percent": "{{value}}%",
     "summary_models_list": "Models",
     "summary_reset_list": "Reset times",
     "click_to_refresh": "Click to refresh",

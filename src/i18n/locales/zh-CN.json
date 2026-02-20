@@ -538,6 +538,24 @@
     "plan_team": "Team",
     "plan_free": "Free"
   },
+  "kiro_quota": {
+    "title": "Kiro 额度",
+    "empty_title": "暂无 Kiro 额度数据",
+    "empty_desc": "暂无 Kiro 配额数据",
+    "loading": "正在加载 Kiro 额度...",
+    "idle": "点击加载 Kiro 额度",
+    "load_failed": "加载 Kiro 额度失败",
+    "missing_auth_index": "缺少 auth_index",
+    "empty": "无额度",
+    "refresh_button": "刷新",
+    "fetch_all": "加载全部额度",
+    "subscription_label": "订阅",
+    "base_quota": "基础额度",
+    "free_trial": "免费试用",
+    "trial_active": "试用中",
+    "trial_expired": "试用已过期",
+    "suspended": "已暂停"
+  },
   "gemini_cli_quota": {
     "title": "Gemini CLI 额度",
     "empty_title": "暂无 Gemini CLI 认证",
@@ -1133,7 +1151,7 @@
     "summary_empty_desc": "请先执行配额检查以查看汇总指标。",
     "summary_covered_credentials": "已覆盖 {{covered}} / {{total}} 个凭证",
     "summary_no_percent": "暂无",
-    "summary_percent": "{{percent}}%",
+    "summary_percent": "{{value}}%",
     "summary_models_list": "模型列表",
     "summary_reset_list": "重置时间",
     "click_to_refresh": "点击刷新",
