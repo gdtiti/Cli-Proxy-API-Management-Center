@@ -14,7 +14,6 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useThemeStore, useConfigStore } from '@/stores';
 import {
@@ -121,6 +120,61 @@ function loadTimeRange(): UsageTimeRange {
   return raw;
 }
 
+// 使用 ResizeObserver 检测移动端，避免 useMediaQuery 在部分环境触发循环渲染
+function useIsMobile(breakpoint: number = 768): boolean {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= breakpoint;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let rafId: number | null = null;
+
+    const handleResize = () => {
+      if (rafId !== null) return;
+
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        const nextIsMobile = window.innerWidth <= breakpoint;
+        setIsMobile((prev) => (prev === nextIsMobile ? prev : nextIsMobile));
+      });
+    };
+
+    let resizeObserver: ResizeObserver | null = null;
+
+    try {
+      if (typeof ResizeObserver !== 'undefined' && document.body) {
+        resizeObserver = new ResizeObserver(() => {
+          handleResize();
+        });
+        resizeObserver.observe(document.body);
+      } else {
+        window.addEventListener('resize', handleResize);
+      }
+    } catch {
+      window.addEventListener('resize', handleResize);
+    }
+
+    handleResize();
+
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener('resize', handleResize);
+      }
+    };
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
@@ -135,7 +189,7 @@ ChartJS.register(
 
 export function UsagePage() {
   const { t } = useTranslation();
-  const isMobile = useMediaQuery('(max-width: 768px)');
+  const isMobile = useIsMobile(768);
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const geminiApiKeys = useConfigStore((state) => state.config?.geminiApiKeys ?? []);
   const claudeApiKeys = useConfigStore((state) => state.config?.claudeApiKeys ?? []);
