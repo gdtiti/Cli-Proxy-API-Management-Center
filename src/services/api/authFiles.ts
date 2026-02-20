@@ -57,10 +57,7 @@ const normalizeOauthModelAlias = (payload: unknown): Record<string, OAuthModelAl
   if (!payload || typeof payload !== 'object') return {};
 
   const record = payload as Record<string, unknown>;
-  const source =
-    record['oauth-model-alias'] ??
-    record.items ??
-    payload;
+  const source = record['oauth-model-alias'] ?? record.items ?? payload;
   if (!source || typeof source !== 'object') return {};
 
   const result: Record<string, OAuthModelAliasEntry[]> = {};
@@ -72,17 +69,17 @@ const normalizeOauthModelAlias = (payload: unknown): Record<string, OAuthModelAl
     if (!key) return;
     if (!Array.isArray(mappings)) return;
 
-	    const seen = new Set<string>();
-	    const normalized = mappings
-	      .map((item) => {
-	        if (!item || typeof item !== 'object') return null;
-	        const entry = item as Record<string, unknown>;
-	        const name = String(entry.name ?? entry.id ?? entry.model ?? '').trim();
-	        const alias = String(entry.alias ?? '').trim();
-	        if (!name || !alias) return null;
-	        const fork = entry.fork === true;
-	        return fork ? { name, alias, fork } : { name, alias };
-	      })
+    const seen = new Set<string>();
+    const normalized = mappings
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const entry = item as Record<string, unknown>;
+        const name = String(entry.name ?? entry.id ?? entry.model ?? '').trim();
+        const alias = String(entry.alias ?? '').trim();
+        if (!name || !alias) return null;
+        const fork = entry.fork === true;
+        return fork ? { name, alias, fork } : { name, alias };
+      })
       .filter(Boolean)
       .filter((entry) => {
         const aliasEntry = entry as OAuthModelAliasEntry;
@@ -102,8 +99,24 @@ const normalizeOauthModelAlias = (payload: unknown): Record<string, OAuthModelAl
 
 const OAUTH_MODEL_ALIAS_ENDPOINT = '/oauth-model-alias';
 
+export const getAuthFilesTimeout = (): number => {
+  try {
+    const storedTimeout = localStorage.getItem('authFilesTimeout');
+    if (storedTimeout) {
+      const parsed = parseInt(storedTimeout, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        return parsed * 1000;
+      }
+    }
+  } catch {
+    // ignore localStorage access errors and fall back to default timeout
+  }
+
+  return 60 * 1000;
+};
+
 export const authFilesApi = {
-  list: () => apiClient.get<AuthFilesResponse>('/auth-files'),
+  list: () => apiClient.get<AuthFilesResponse>('/auth-files', { timeout: getAuthFilesTimeout() }),
 
   setStatus: (name: string, disabled: boolean) =>
     apiClient.patch<AuthFileStatusResponse>('/auth-files/status', { name, disabled }),
@@ -123,9 +136,12 @@ export const authFilesApi = {
     apiClient.patch('/auth-files/remove-project', { name, project_id: projectId }),
 
   downloadBlob: async (name: string): Promise<Blob> => {
-    const response = await apiClient.getRaw(`/auth-files/download?name=${encodeURIComponent(name)}`, {
-      responseType: 'blob'
-    });
+    const response = await apiClient.getRaw(
+      `/auth-files/download?name=${encodeURIComponent(name)}`,
+      {
+        responseType: 'blob',
+      }
+    );
     return new Blob([response.data]);
   },
 
@@ -159,8 +175,12 @@ export const authFilesApi = {
     const normalizedChannel = String(channel ?? '')
       .trim()
       .toLowerCase();
-    const normalizedAliases = normalizeOauthModelAlias({ [normalizedChannel]: aliases })[normalizedChannel] ?? [];
-    await apiClient.patch(OAUTH_MODEL_ALIAS_ENDPOINT, { channel: normalizedChannel, aliases: normalizedAliases });
+    const normalizedAliases =
+      normalizeOauthModelAlias({ [normalizedChannel]: aliases })[normalizedChannel] ?? [];
+    await apiClient.patch(OAUTH_MODEL_ALIAS_ENDPOINT, {
+      channel: normalizedChannel,
+      aliases: normalizedAliases,
+    });
   },
 
   deleteOauthModelAlias: async (channel: string) => {
@@ -169,16 +189,23 @@ export const authFilesApi = {
       .toLowerCase();
 
     try {
-      await apiClient.patch(OAUTH_MODEL_ALIAS_ENDPOINT, { channel: normalizedChannel, aliases: [] });
+      await apiClient.patch(OAUTH_MODEL_ALIAS_ENDPOINT, {
+        channel: normalizedChannel,
+        aliases: [],
+      });
     } catch (err: unknown) {
       const status = getStatusCode(err);
       if (status !== 405) throw err;
-      await apiClient.delete(`${OAUTH_MODEL_ALIAS_ENDPOINT}?channel=${encodeURIComponent(normalizedChannel)}`);
+      await apiClient.delete(
+        `${OAUTH_MODEL_ALIAS_ENDPOINT}?channel=${encodeURIComponent(normalizedChannel)}`
+      );
     }
   },
 
   // 获取认证凭证支持的模型
-  async getModelsForAuthFile(name: string): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string }[]> {
+  async getModelsForAuthFile(
+    name: string
+  ): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string }[]> {
     const data = await apiClient.get<Record<string, unknown>>(
       `/auth-files/models?name=${encodeURIComponent(name)}`
     );
@@ -189,8 +216,12 @@ export const authFilesApi = {
   },
 
   // 获取指定 channel 的模型定义
-  async getModelDefinitions(channel: string): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string }[]> {
-    const normalizedChannel = String(channel ?? '').trim().toLowerCase();
+  async getModelDefinitions(
+    channel: string
+  ): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string }[]> {
+    const normalizedChannel = String(channel ?? '')
+      .trim()
+      .toLowerCase();
     if (!normalizedChannel) return [];
     const data = await apiClient.get<Record<string, unknown>>(
       `/model-definitions/${encodeURIComponent(normalizedChannel)}`
@@ -199,5 +230,5 @@ export const authFilesApi = {
     return Array.isArray(models)
       ? (models as { id: string; display_name?: string; type?: string; owned_by?: string }[])
       : [];
-  }
+  },
 };
