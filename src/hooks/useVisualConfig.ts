@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { isMap, parse as parseYaml, parseDocument } from 'yaml';
+import { updateAuthFilesTimeout } from '@/services/api/authFiles';
 import type {
   PayloadFilterRule,
   PayloadParamValueType,
@@ -343,6 +344,11 @@ export function useVisualConfig() {
         apiTimeout: String(((parsed['api-timeout'] as number) || 30000) / 1000), // 默认30秒
         authFilesTimeout: String(((parsed['auth-files-timeout'] as number) || 60000) / 1000), // 默认60秒
       };
+
+      const timeoutSeconds = parseInt(newValues.authFilesTimeout, 10);
+      if (!isNaN(timeoutSeconds) && timeoutSeconds > 0) {
+        updateAuthFilesTimeout(timeoutSeconds);
+      }
 
       setVisualValuesState(newValues);
       setBaselineValues(deepClone(newValues));

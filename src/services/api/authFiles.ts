@@ -99,20 +99,35 @@ const normalizeOauthModelAlias = (payload: unknown): Record<string, OAuthModelAl
 
 const OAUTH_MODEL_ALIAS_ENDPOINT = '/oauth-model-alias';
 
+let authFilesTimeoutMs = 60 * 1000;
+
 export const getAuthFilesTimeout = (): number => {
   try {
     const storedTimeout = localStorage.getItem('authFilesTimeout');
     if (storedTimeout) {
       const parsed = parseInt(storedTimeout, 10);
       if (!Number.isNaN(parsed) && parsed > 0) {
-        return parsed * 1000;
+        authFilesTimeoutMs = parsed * 1000;
+        return authFilesTimeoutMs;
       }
     }
   } catch {
     // ignore localStorage access errors and fall back to default timeout
   }
 
-  return 60 * 1000;
+  return authFilesTimeoutMs;
+};
+
+export const updateAuthFilesTimeout = (timeoutSeconds: number): void => {
+  const timeoutMs = timeoutSeconds * 1000;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return;
+
+  authFilesTimeoutMs = timeoutMs;
+  try {
+    localStorage.setItem('authFilesTimeout', String(timeoutSeconds));
+  } catch {
+    // ignore localStorage access errors
+  }
 };
 
 export const authFilesApi = {
