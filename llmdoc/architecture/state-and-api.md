@@ -30,6 +30,32 @@
 - `src/services/api/authFiles.ts:102-119` - 可配置超时实现
 - `src/components/config/VisualConfigEditor.tsx:261-287` - 超时配置 UI
 
+## 配额管理
+
+- 配额管理页面位于 `/quota`，支持多类型配额查看和设置
+- 支持额度类型：
+  - `gemini` - Gemini API 额度
+  - `claude` - Claude API 额度
+  - `codex` - Codex API 额度
+  - `kiro` - Kiro (AWS CodeWhisperer) 额度
+  - `vertex` - Vertex AI 额度
+  - `openai` - OpenAI 兼容额度
+- 配置定义位于 `src/components/quota/quotaConfigs.ts`
+- 页面组件：`src/pages/QuotaPage.tsx`
+- 配额卡片组件：`src/components/quota/QuotaSection.tsx`
+
+### Kiro 额度特殊处理
+
+- Kiro 额度曾使用独立的 `KiroQuotaSection` 组件
+- 2025-02 优化：统一使用通用 `QuotaSection` 组件渲染
+- 删除了重复的 `KiroQuotaSection` 渲染，解决双块显示问题
+
+代码锚点：
+
+- `src/components/quota/quotaConfigs.ts:1047-1079` - KIRO_CONFIG 定义
+- `src/pages/QuotaPage.tsx:80-114` - 配额页面渲染
+- `src/components/quota/QuotaSection.tsx:397-408` - 配额卡片标题渲染
+
 ## API 分层
 
 - API 导出入口：`src/services/api/index.ts`
@@ -54,3 +80,41 @@
 - 将统计结果映射为仪表卡片数据
 
 代码锚点：`src/pages/DashboardPage.tsx:10`、`src/pages/DashboardPage.tsx:11`、`src/pages/DashboardPage.tsx:131`
+
+## 菜单与导航
+
+### 侧边栏菜单
+
+- 侧边栏组件：`src/components/layout/MainLayout.tsx`
+- 菜单项配置在 `navItems` 数组中定义（约第 351-364 行）
+- 图标映射：`sidebarIcons` 对象（第 39-49 行）
+
+### 菜单项配置
+
+每个菜单项包含：
+
+- `path`: 路由路径
+- `icon`: 图标组件引用
+- `label`: i18n 翻译键
+
+### 修复历史
+
+**2025-02 菜单修复：**
+
+1. **使用统计菜单图标缺失**
+   - 问题：`sidebarIcons` 映射缺少 `usage` 键
+   - 修复：添加 `usage: <IconChartLine />` 到 `sidebarIcons`
+
+2. **Monitor 菜单激活状态异常**
+   - 问题：根路径 `/` 菜单在所有页面都显示激活
+   - 修复：为 NavLink 添加 `end` 属性，实现精确匹配
+
+3. **监控页面双入口混乱**
+   - 问题：`/` 和 `/monitor` 都指向 MonitorPage
+   - 修复：将 `/` 改为重定向到 `/monitor`
+
+代码锚点：
+
+- `src/components/layout/MainLayout.tsx:359` - 菜单项渲染
+- `src/components/layout/MainLayout.tsx:39-49` - 图标映射
+- `src/router/MainRoutes.tsx:26,79` - 路由定义
