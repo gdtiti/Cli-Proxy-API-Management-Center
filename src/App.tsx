@@ -5,6 +5,7 @@ import { NotificationContainer } from '@/components/common/NotificationContainer
 import { ConfirmationModal } from '@/components/common/ConfirmationModal';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ProtectedRoute } from '@/router/ProtectedRoute';
+import { getAuthFilesTimeout } from '@/services/api/authFiles';
 import { useLanguageStore, useThemeStore } from '@/stores';
 
 function App() {
@@ -25,6 +26,22 @@ function App() {
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    const currentTimeout = getAuthFilesTimeout();
+    console.log('[AuthFiles] Current timeout:', currentTimeout, 'ms');
+
+    try {
+      const storedTimeout = localStorage.getItem('authFilesTimeout');
+      console.log('[AuthFiles] Stored timeout:', storedTimeout, 'seconds');
+    } catch {
+      console.warn('[AuthFiles] Unable to read timeout from localStorage');
+    }
+
+    if (currentTimeout < 30_000) {
+      console.warn('[AuthFiles] Warning: Timeout is less than 30 seconds');
+    }
+  }, []);
 
   return (
     <HashRouter>
