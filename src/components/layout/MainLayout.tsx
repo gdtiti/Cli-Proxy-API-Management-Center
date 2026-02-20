@@ -14,6 +14,7 @@ import { PageTransition } from '@/components/common/PageTransition';
 import { MainRoutes } from '@/router/MainRoutes';
 import {
   IconBot,
+  IconChartLine,
   IconFileText,
   IconInfo,
   IconLayoutDashboard,
@@ -42,6 +43,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   authFiles: <IconFileText size={18} />,
   oauth: <IconShield size={18} />,
   quota: <IconTimer size={18} />,
+  usage: <IconChartLine size={18} />,
   config: <IconSettings size={18} />,
   logs: <IconScrollText size={18} />,
   system: <IconInfo size={18} />,
@@ -125,7 +127,13 @@ const headerIcons = {
         </clipPath>
       </defs>
       <circle cx="12" cy="12" r="4" />
-      <circle cx="12" cy="12" r="4" clipPath="url(#mainLayoutAutoThemeSunLeftHalf)" fill="currentColor" />
+      <circle
+        cx="12"
+        cy="12"
+        r="4"
+        clipPath="url(#mainLayoutAutoThemeSunLeftHalf)"
+        fill="currentColor"
+      />
       <path d="M12 2v2" />
       <path d="M12 20v2" />
       <path d="M4.93 4.93l1.41 1.41" />
@@ -337,8 +345,6 @@ export function MainLayout() {
       // ignore initial failure; login flow会提示
     });
   }, [fetchConfig]);
-
-
   const statusClass =
     connectionStatus === 'connected'
       ? 'success'
@@ -422,7 +428,7 @@ export function MainLayout() {
     clearCache();
     const results = await Promise.allSettled([
       fetchConfig(undefined, true),
-      triggerHeaderRefresh()
+      triggerHeaderRefresh(),
     ]);
     const rejected = results.find((result) => result.status === 'rejected');
     if (rejected && rejected.status === 'rejected') {
@@ -537,7 +543,10 @@ export function MainLayout() {
             >
               {headerIcons.update}
             </Button>
-            <div className={`language-menu ${languageMenuOpen ? 'open' : ''}`} ref={languageMenuRef}>
+            <div
+              className={`language-menu ${languageMenuOpen ? 'open' : ''}`}
+              ref={languageMenuRef}
+            >
               <Button
                 variant="ghost"
                 size="sm"
@@ -550,7 +559,11 @@ export function MainLayout() {
                 {headerIcons.language}
               </Button>
               {languageMenuOpen && (
-                <div className="notification entering language-menu-popover" role="menu" aria-label={t('language.switch')}>
+                <div
+                  className="notification entering language-menu-popover"
+                  role="menu"
+                  aria-label={t('language.switch')}
+                >
                   {LANGUAGE_ORDER.map((lang) => (
                     <button
                       key={lang}
@@ -590,6 +603,7 @@ export function MainLayout() {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === '/'}
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
                 title={sidebarCollapsed ? item.label : undefined}

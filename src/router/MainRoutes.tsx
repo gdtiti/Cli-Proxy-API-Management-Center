@@ -23,7 +23,7 @@ import { MonitorPage } from '@/pages/MonitorPage';
 import { UsagePage } from '@/pages/UsagePage';
 
 const mainRoutes = [
-  { path: '/', element: <MonitorPage /> },
+  { path: '/', element: <Navigate to="/monitor" replace /> },
   { path: '/dashboard', element: <DashboardPage /> },
   { path: '/settings', element: <Navigate to="/config" replace /> },
   { path: '/api-keys', element: <Navigate to="/config" replace /> },
