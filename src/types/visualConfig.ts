@@ -60,6 +60,10 @@ export type VisualConfigValues = {
   payloadOverrideRules: PayloadRule[];
   payloadFilterRules: PayloadFilterRule[];
   streaming: StreamingConfig;
+
+  // 新增超时配置（字符串类型用于输入框）
+  apiTimeout: string; // 通用API超时（秒）
+  authFilesTimeout: string; // 认证文件列表专用超时（秒）
 };
 
 export const makeClientId = () => {
@@ -100,4 +104,8 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
     bootstrapRetries: '',
     nonstreamKeepaliveInterval: '',
   },
+
+  // 默认值：30秒通用，60秒认证文件列表
+  apiTimeout: '30',
+  authFilesTimeout: '60',
 };

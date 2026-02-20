@@ -32,6 +32,12 @@ export interface Config {
   openaiCompatibility?: OpenAIProviderConfig[];
   oauthExcludedModels?: Record<string, string[]>;
   raw?: Record<string, unknown>;
+
+  // 新增：API超时配置（毫秒）
+  apiTimeout?: number;
+
+  // 新增：认证文件列表专用超时（毫秒）
+  authFilesTimeout?: number;
 }
 
 export type RawConfigSection =

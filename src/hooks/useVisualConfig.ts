@@ -298,7 +298,9 @@ export function useVisualConfig() {
 
         rmAllowRemote: Boolean(remoteManagement?.['allow-remote']),
         rmSecretKey:
-          typeof remoteManagement?.['secret-key'] === 'string' ? remoteManagement['secret-key'] : '',
+          typeof remoteManagement?.['secret-key'] === 'string'
+            ? remoteManagement['secret-key']
+            : '',
         rmDisableControlPanel: Boolean(remoteManagement?.['disable-control-panel']),
         rmPanelRepo:
           typeof remoteManagement?.['panel-github-repository'] === 'string'
@@ -323,12 +325,9 @@ export function useVisualConfig() {
         wsAuth: Boolean(parsed['ws-auth']),
 
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
-        quotaSwitchPreviewModel: Boolean(
-          quotaExceeded?.['switch-preview-model'] ?? true
-        ),
+        quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
 
-        routingStrategy:
-          routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
+        routingStrategy: routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadOverrideRules: parsePayloadRules(payload?.override),
@@ -339,6 +338,10 @@ export function useVisualConfig() {
           bootstrapRetries: String(streaming?.['bootstrap-retries'] ?? ''),
           nonstreamKeepaliveInterval: String(parsed['nonstream-keepalive-interval'] ?? ''),
         },
+
+        // 新增超时配置
+        apiTimeout: String(((parsed['api-timeout'] as number) || 30000) / 1000), // 默认30秒
+        authFilesTimeout: String(((parsed['auth-files-timeout'] as number) || 60000) / 1000), // 默认60秒
       };
 
       setVisualValuesState(newValues);
@@ -430,10 +433,7 @@ export function useVisualConfig() {
         ) {
           ensureMapInDoc(doc, ['quota-exceeded']);
           doc.setIn(['quota-exceeded', 'switch-project'], values.quotaSwitchProject);
-          doc.setIn(
-            ['quota-exceeded', 'switch-preview-model'],
-            values.quotaSwitchPreviewModel
-          );
+          doc.setIn(['quota-exceeded', 'switch-preview-model'], values.quotaSwitchPreviewModel);
           deleteIfMapEmpty(doc, ['quota-exceeded']);
         }
 
@@ -444,9 +444,13 @@ export function useVisualConfig() {
         }
 
         const keepaliveSeconds =
-          typeof values.streaming?.keepaliveSeconds === 'string' ? values.streaming.keepaliveSeconds : '';
+          typeof values.streaming?.keepaliveSeconds === 'string'
+            ? values.streaming.keepaliveSeconds
+            : '';
         const bootstrapRetries =
-          typeof values.streaming?.bootstrapRetries === 'string' ? values.streaming.bootstrapRetries : '';
+          typeof values.streaming?.bootstrapRetries === 'string'
+            ? values.streaming.bootstrapRetries
+            : '';
         const nonstreamKeepaliveInterval =
           typeof values.streaming?.nonstreamKeepaliveInterval === 'string'
             ? values.streaming.nonstreamKeepaliveInterval
@@ -461,11 +465,7 @@ export function useVisualConfig() {
           deleteIfMapEmpty(doc, ['streaming']);
         }
 
-        setIntFromStringInDoc(
-          doc,
-          ['nonstream-keepalive-interval'],
-          nonstreamKeepaliveInterval
-        );
+        setIntFromStringInDoc(doc, ['nonstream-keepalive-interval'], nonstreamKeepaliveInterval);
 
         if (
           docHas(doc, ['payload']) ||
@@ -499,6 +499,21 @@ export function useVisualConfig() {
             doc.deleteIn(['payload', 'filter']);
           }
           deleteIfMapEmpty(doc, ['payload']);
+        }
+
+        // 保存超时配置（将秒转换为毫秒）
+        if (values.apiTimeout) {
+          const timeoutMs = parseInt(values.apiTimeout, 10) * 1000;
+          if (!isNaN(timeoutMs) && timeoutMs > 0) {
+            doc.setIn(['api-timeout'], timeoutMs);
+          }
+        }
+
+        if (values.authFilesTimeout) {
+          const timeoutMs = parseInt(values.authFilesTimeout, 10) * 1000;
+          if (!isNaN(timeoutMs) && timeoutMs > 0) {
+            doc.setIn(['auth-files-timeout'], timeoutMs);
+          }
         }
 
         return doc.toString({ indent: 2, lineWidth: 120, minContentWidth: 0 });

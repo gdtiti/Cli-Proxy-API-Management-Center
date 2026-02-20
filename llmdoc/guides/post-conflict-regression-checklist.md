@@ -35,7 +35,7 @@
 
 ## 5) 类型模型冲突专项（建议）
 
-当冲突是“payload 模型 vs view 模型”时，不建议二选一：
+当冲突是"payload 模型 vs view 模型"时，不建议二选一：
 
 - payload 类型：用于承接后端返回结构
 - view 类型：用于页面展示和交互态
@@ -48,7 +48,51 @@
 
 代码锚点：`src/types/quota.ts:1`、`src/utils/quota/parsers.ts:1`、`src/components/quota/quotaConfigs.ts:933`、`src/pages/quota/KiroQuotaSection.tsx:1`
 
-## 6) 合并完成判定
+## 6) 配额模块专项检查（高优先级）
+
+适用场景：合并涉及 `QuotaSection` 或远端新增「批量刷新」「摘要标签」「进度面板」等功能。
+
+### 双轨刷新机制
+
+- [ ] 顺序检查模式：入口可见，调用 `refreshAllQuota` 正确
+- [ ] 并发模态框模式：点击凭证打开模态，多源并发刷新
+- [ ] 无竞态：两种模式切换时无重复请求或状态错乱
+
+代码锚点：`src/components/quota/QuotaSection/hooks/useQuotaRefresh.ts:45`、`src/components/quota/QuotaSection/index.tsx:85`
+
+### 摘要/凭证标签 + 状态过滤
+
+- [ ] 标签切换正常："摘要"与"凭证"标签可点击切换
+- [ ] 状态过滤联动：标签页内状态筛选器（有效/即将过期/已过期）工作正常
+- [ ] 过滤计数：各状态下显示匹配条数
+
+代码锚点：`src/components/quota/QuotaSection/index.tsx:143`、`src/components/quota/QuotaSection/index.tsx:175`
+
+### 分页与视图控制
+
+- [ ] 分页控制：页码切换、每页条数选择（10/20/50）有效
+- [ ] 视图模式持久化：卡片/列表视图切换后刷新保留
+- [ ] 状态保持：筛选/分页/视图组合刷新不丢失
+
+代码锚点：`src/components/quota/QuotaSection/index.tsx:230`、`src/hooks/useViewMode.ts:1`
+
+### 进度面板验证
+
+- [ ] 批量进度面板：批量刷新时显示进度与成功/失败计数
+- [ ] 刷新进度面板：模态框内单源/多源刷新进度可见
+- [ ] 完成后自动收起：进度 100% 后适当延迟消失
+
+代码锚点：`src/components/quota/QuotaSection/components/BatchProgress.tsx:1`、`src/components/quota/QuotaSection/components/RefreshProgress.tsx:1`
+
+### i18n 完整性
+
+- [ ] 新增 28 个 key 已同步到 `en/zh-CN/ru`
+- [ ] `quota_management.*` 命名空间下无重复或缺失
+- [ ] 进度/状态/过滤相关文案均有翻译
+
+代码锚点：`src/i18n/locales/en.json:720`、`src/i18n/locales/zh-CN.json:720`、`src/i18n/locales/ru.json:720`
+
+## 7) 合并完成判定
 
 满足以下条件即可进入提交阶段：
 
