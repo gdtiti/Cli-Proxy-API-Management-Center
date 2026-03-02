@@ -11,4 +11,5 @@ export { useModelsStore } from './useModelsStore';
 export { useQuotaStore } from './useQuotaStore';
 export { useDisabledModelsStore } from './useDisabledModelsStore';
 export { useOpenAIEditDraftStore } from './useOpenAIEditDraftStore';
+export { useClientCacheStore } from './useClientCacheStore';
 export { useClaudeEditDraftStore } from './useClaudeEditDraftStore';

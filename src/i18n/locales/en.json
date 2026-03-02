@@ -89,6 +89,30 @@
     "error_cors": "Cross-origin request blocked, please check server configuration",
     "error_ssl": "SSL/TLS certificate verification failed"
   },
+  "client_selector": {
+    "label": "Select client",
+    "placeholder": "Select a saved client...",
+    "manage_clients": "Manage clients"
+  },
+  "client_management": {
+    "title": "Client Management",
+    "saved_clients": "Saved clients",
+    "empty": "No saved clients yet",
+    "select": "Select",
+    "edit": "Edit",
+    "delete": "Delete",
+    "add_new": "Add new client",
+    "add_client": "Add client",
+    "edit_client": "Edit client",
+    "name_label": "Client name",
+    "name_placeholder": "e.g. Local Development",
+    "api_base_label": "Server address",
+    "api_base_placeholder": "http://localhost:8317",
+    "key_label": "Management key",
+    "key_placeholder": "Enter management key",
+    "key_placeholder_edit": "Leave empty to keep unchanged",
+    "delete_confirm": "Delete this client?"
+  },
   "header": {
     "check_connection": "Check Connection",
     "refresh_all": "Refresh All",
@@ -1149,7 +1173,7 @@
     "summary_avg_remaining": "Avg remaining",
     "summary_empty_title": "No summary data",
     "summary_empty_desc": "Run quota checks to view aggregated metrics.",
-    "summary_covered_credentials": "{{covered}} / {{total}} credentials",
+    "summary_covered_credentials": "{{count}} credentials",
     "summary_no_percent": "N/A",
     "summary_percent": "{{value}}%",
     "summary_models_list": "Models",

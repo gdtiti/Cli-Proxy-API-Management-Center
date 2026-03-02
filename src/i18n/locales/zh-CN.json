@@ -89,6 +89,30 @@
     "error_cors": "跨域请求被阻止，请检查服务器配置",
     "error_ssl": "SSL/TLS 证书验证失败"
   },
+  "client_selector": {
+    "label": "选择客户端",
+    "placeholder": "选择已保存的客户端...",
+    "manage_clients": "管理客户端"
+  },
+  "client_management": {
+    "title": "客户端管理",
+    "saved_clients": "已保存的客户端",
+    "empty": "暂无已保存的客户端",
+    "select": "选择",
+    "edit": "编辑",
+    "delete": "删除",
+    "add_new": "添加新客户端",
+    "add_client": "添加客户端",
+    "edit_client": "编辑客户端",
+    "name_label": "客户端名称",
+    "name_placeholder": "例如：本地开发",
+    "api_base_label": "服务器地址",
+    "api_base_placeholder": "http://localhost:8317",
+    "key_label": "管理密钥",
+    "key_placeholder": "输入管理密钥",
+    "key_placeholder_edit": "留空保持不变",
+    "delete_confirm": "确定要删除此客户端吗？"
+  },
   "header": {
     "check_connection": "检查连接",
     "refresh_all": "刷新全部",
@@ -1149,7 +1173,7 @@
     "summary_avg_remaining": "平均剩余",
     "summary_empty_title": "暂无汇总数据",
     "summary_empty_desc": "请先执行配额检查以查看汇总指标。",
-    "summary_covered_credentials": "已覆盖 {{covered}} / {{total}} 个凭证",
+    "summary_covered_credentials": "{{count}} 个凭证",
     "summary_no_percent": "暂无",
     "summary_percent": "{{value}}%",
     "summary_models_list": "模型列表",

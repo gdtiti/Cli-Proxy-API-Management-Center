@@ -89,6 +89,30 @@
     "error_cors": "Блокировка CORS, проверьте конфигурацию сервера",
     "error_ssl": "Ошибка проверки SSL/TLS сертификата"
   },
+  "client_selector": {
+    "label": "Выбор клиента",
+    "placeholder": "Выберите сохранённый клиент...",
+    "manage_clients": "Управление клиентами"
+  },
+  "client_management": {
+    "title": "Управление клиентами",
+    "saved_clients": "Сохранённые клиенты",
+    "empty": "Сохранённых клиентов пока нет",
+    "select": "Выбрать",
+    "edit": "Изменить",
+    "delete": "Удалить",
+    "add_new": "Добавить нового клиента",
+    "add_client": "Добавить клиента",
+    "edit_client": "Редактировать клиента",
+    "name_label": "Имя клиента",
+    "name_placeholder": "Например: Локальная разработка",
+    "api_base_label": "Адрес сервера",
+    "api_base_placeholder": "http://localhost:8317",
+    "key_label": "Ключ управления",
+    "key_placeholder": "Введите ключ управления",
+    "key_placeholder_edit": "Оставьте пустым, чтобы не менять",
+    "delete_confirm": "Удалить этого клиента?"
+  },
   "header": {
     "check_connection": "Проверить подключение",
     "refresh_all": "Обновить всё",
@@ -1154,7 +1178,7 @@
     "summary_avg_remaining": "Средний остаток",
     "summary_empty_title": "Нет данных сводки",
     "summary_empty_desc": "Запустите проверку квот, чтобы увидеть агрегированные метрики.",
-    "summary_covered_credentials": "{{covered}} / {{total}} учётных данных",
+    "summary_covered_credentials": "{{count}} учётных данных",
     "summary_no_percent": "Н/Д",
     "summary_percent": "{{value}}%",
     "summary_models_list": "Список моделей",
