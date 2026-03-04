@@ -181,6 +181,12 @@ export function AiProvidersPage() {
     filteredOpenaiProviders.length > 0 ||
     showAmpcode;
 
+  const shouldRenderGeminiSection = !normalizedQuery || filteredGeminiKeys.length > 0;
+  const shouldRenderCodexSection = !normalizedQuery || filteredCodexConfigs.length > 0;
+  const shouldRenderClaudeSection = !normalizedQuery || filteredClaudeConfigs.length > 0;
+  const shouldRenderVertexSection = !normalizedQuery || filteredVertexConfigs.length > 0;
+  const shouldRenderOpenaiSection = !normalizedQuery || filteredOpenaiProviders.length > 0;
+
   const { keyStats, usageDetails, loadKeyStats } = useProviderStats();
 
   const getErrorMessage = (err: unknown) => {
@@ -480,7 +486,7 @@ export function AiProvidersPage() {
           </div>
         )}
 
-        {filteredGeminiKeys.length > 0 && (
+        {shouldRenderGeminiSection && (
           <div id="provider-gemini">
             <GeminiSection
               configs={filteredGeminiKeys.map(({ item }) => item)}
@@ -499,7 +505,7 @@ export function AiProvidersPage() {
           </div>
         )}
 
-        {filteredCodexConfigs.length > 0 && (
+        {shouldRenderCodexSection && (
           <div id="provider-codex">
             <CodexSection
               configs={filteredCodexConfigs.map(({ item }) => item)}
@@ -521,7 +527,7 @@ export function AiProvidersPage() {
           </div>
         )}
 
-        {filteredClaudeConfigs.length > 0 && (
+        {shouldRenderClaudeSection && (
           <div id="provider-claude">
             <ClaudeSection
               configs={filteredClaudeConfigs.map(({ item }) => item)}
@@ -542,7 +548,7 @@ export function AiProvidersPage() {
           </div>
         )}
 
-        {filteredVertexConfigs.length > 0 && (
+        {shouldRenderVertexSection && (
           <div id="provider-vertex">
             <VertexSection
               configs={filteredVertexConfigs.map(({ item }) => item)}
@@ -570,7 +576,7 @@ export function AiProvidersPage() {
           </div>
         )}
 
-        {filteredOpenaiProviders.length > 0 && (
+        {shouldRenderOpenaiSection && (
           <div id="provider-openai">
             <OpenAISection
               configs={filteredOpenaiProviders.map(({ item }) => item)}
