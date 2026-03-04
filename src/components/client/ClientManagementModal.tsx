@@ -3,7 +3,7 @@
  * 用于添加、编辑、删除客户端配置
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -17,13 +17,12 @@ interface ClientManagementModalProps {
 
 export function ClientManagementModal({ isOpen, onClose }: ClientManagementModalProps) {
   const { t } = useTranslation();
-  const getClients = useClientCacheStore((state) => state.getClients);
+  const clients = useClientCacheStore((state) => state.getClients());
   const addClient = useClientCacheStore((state) => state.addClient);
   const updateClient = useClientCacheStore((state) => state.updateClient);
   const deleteClient = useClientCacheStore((state) => state.deleteClient);
   const setActiveClient = useClientCacheStore((state) => state.setActiveClient);
 
-  const [clients, setClients] = useState<ClientConfig[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -31,22 +30,6 @@ export function ClientManagementModal({ isOpen, onClose }: ClientManagementModal
   const [formApiBase, setFormApiBase] = useState('');
   const [formKey, setFormKey] = useState('');
   const [formError, setFormError] = useState('');
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setClients(getClients());
-    setEditingId(null);
-    setShowForm(false);
-    setFormName('');
-    setFormApiBase('');
-    setFormKey('');
-    setFormError('');
-  }, [isOpen, getClients]);
-
-  const reloadClients = () => {
-    setClients(getClients());
-  };
 
   const resetForm = () => {
     setFormName('');
@@ -65,7 +48,6 @@ export function ClientManagementModal({ isOpen, onClose }: ClientManagementModal
         apiBase: formApiBase,
         managementKey: formKey,
       });
-      reloadClients();
       resetForm();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : t('common.unknown_error'));
@@ -83,7 +65,6 @@ export function ClientManagementModal({ isOpen, onClose }: ClientManagementModal
       if (formKey.trim()) updates.managementKey = formKey;
 
       updateClient(editingId, updates);
-      reloadClients();
       resetForm();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : t('common.unknown_error'));
@@ -94,7 +75,6 @@ export function ClientManagementModal({ isOpen, onClose }: ClientManagementModal
     if (!window.confirm(t('client_management.delete_confirm'))) return;
 
     deleteClient(id);
-    reloadClients();
   };
 
   const handleSelect = (id: string) => {

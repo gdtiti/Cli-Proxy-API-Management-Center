@@ -1192,7 +1192,8 @@
     "refreshing": "Refreshing...",
     "refresh_completed": "Refresh Completed",
     "refresh_stop": "Stop",
-    "refresh_stopped": "Stopped scheduling remaining requests"
+    "refresh_stopped": "Stopped scheduling remaining requests",
+    "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data."
   },
   "system_info": {
     "title": "Management Center Info",

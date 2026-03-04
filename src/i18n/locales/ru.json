@@ -1197,7 +1197,8 @@
     "refreshing": "Обновление...",
     "refresh_completed": "Обновление завершено",
     "refresh_stop": "Остановить",
-    "refresh_stopped": "Постановка оставшихся запросов остановлена"
+    "refresh_stopped": "Постановка оставшихся запросов остановлена",
+    "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data."
   },
   "system_info": {
     "title": "Информация о центре управления",

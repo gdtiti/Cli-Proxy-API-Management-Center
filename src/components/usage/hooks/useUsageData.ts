@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNotificationStore } from '@/stores';
-import { usageApi, type UsageQueryParams } from '@/services/api/usage';
+import { USAGE_STATS_STALE_TIME_MS, useNotificationStore, useUsageStatsStore } from '@/stores';
+import { usageApi } from '@/services/api/usage';
+import { downloadBlob } from '@/utils/download';
 import { loadModelPrices, saveModelPrices, type ModelPrice } from '@/utils/usage';
 
 export interface UsagePayload {
@@ -16,8 +17,8 @@ export interface UsagePayload {
 export interface UseUsageDataReturn {
   usage: UsagePayload | null;
   loading: boolean;
-  slowLoading: boolean;
   error: string;
+  lastRefreshedAt: Date | null;
   modelPrices: Record<string, ModelPrice>;
   setModelPrices: (prices: Record<string, ModelPrice>) => void;
   loadUsage: () => Promise<void>;
@@ -29,56 +30,31 @@ export interface UseUsageDataReturn {
   importing: boolean;
   clearing: boolean;
   handleClearUsage: () => Promise<void>;
-  lastRefreshedAt: Date | null;
-  timeRange: string;
-  setTimeRange: (range: string) => void;
 }
 
 export function useUsageData(): UseUsageDataReturn {
   const { t } = useTranslation();
   const { showNotification } = useNotificationStore();
+  const usageSnapshot = useUsageStatsStore((state) => state.usage);
+  const loading = useUsageStatsStore((state) => state.loading);
+  const storeError = useUsageStatsStore((state) => state.error);
+  const lastRefreshedAtTs = useUsageStatsStore((state) => state.lastRefreshedAt);
+  const loadUsageStats = useUsageStatsStore((state) => state.loadUsageStats);
 
-  const [usage, setUsage] = useState<UsagePayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [slowLoading, setSlowLoading] = useState(false);
-  const [error, setError] = useState('');
   const [modelPrices, setModelPrices] = useState<Record<string, ModelPrice>>({});
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
-  const [timeRange, setTimeRange] = useState('24h');
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadUsage = useCallback(async () => {
-    setLoading(true);
-    setSlowLoading(false);
-    setError('');
-
-    const slowTimer = window.setTimeout(() => {
-      setSlowLoading(true);
-    }, 8000);
-
-    try {
-      const params: UsageQueryParams = {};
-      if (timeRange) params.range = timeRange;
-      const data = await usageApi.getUsage(params);
-      const payload = (data?.usage ?? data) as unknown;
-      setUsage(payload && typeof payload === 'object' ? (payload as UsagePayload) : null);
-      setLastRefreshedAt(new Date());
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('usage_stats.loading_error');
-      setError(message);
-    } finally {
-      window.clearTimeout(slowTimer);
-      setLoading(false);
-    }
-  }, [t, timeRange]);
+    await loadUsageStats({ force: true, staleTimeMs: USAGE_STATS_STALE_TIME_MS });
+  }, [loadUsageStats]);
 
   useEffect(() => {
-    loadUsage();
+    void loadUsageStats({ staleTimeMs: USAGE_STATS_STALE_TIME_MS }).catch(() => {});
     setModelPrices(loadModelPrices());
-  }, [loadUsage]);
+  }, [loadUsageStats]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -90,13 +66,10 @@ export function useUsageData(): UseUsageDataReturn {
         ? new Date().toISOString()
         : exportedAt.toISOString();
       const filename = `usage-export-${safeTimestamp.replace(/[:.]/g, '-')}.json`;
-      const blob = new Blob([JSON.stringify(data ?? {}, null, 2)], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-      window.URL.revokeObjectURL(url);
+      downloadBlob({
+        filename,
+        blob: new Blob([JSON.stringify(data ?? {}, null, 2)], { type: 'application/json' })
+      });
       showNotification(t('usage_stats.export_success'), 'success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
@@ -135,11 +108,19 @@ export function useUsageData(): UseUsageDataReturn {
           added: result?.added ?? 0,
           skipped: result?.skipped ?? 0,
           total: result?.total_requests ?? 0,
-          failed: result?.failed_requests ?? 0,
+          failed: result?.failed_requests ?? 0
         }),
         'success'
       );
-      await loadUsage();
+      try {
+        await loadUsageStats({ force: true, staleTimeMs: USAGE_STATS_STALE_TIME_MS });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : '';
+        showNotification(
+          `${t('notification.refresh_failed')}${message ? `: ${message}` : ''}`,
+          'error'
+        );
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       showNotification(
@@ -151,30 +132,34 @@ export function useUsageData(): UseUsageDataReturn {
     }
   };
 
+  const handleSetModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
+    setModelPrices(prices);
+    saveModelPrices(prices);
+  }, []);
+
   const handleClearUsage = useCallback(async () => {
     setClearing(true);
     try {
       await usageApi.deleteUsage();
       showNotification(t('usage_stats.clear_success'), 'success');
-      await loadUsage();
+      await loadUsageStats({ force: true, staleTimeMs: USAGE_STATS_STALE_TIME_MS });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       showNotification(`${t('usage_stats.clear_failed')}${message ? `: ${message}` : ''}`, 'error');
     } finally {
       setClearing(false);
     }
-  }, [t, showNotification, loadUsage]);
+  }, [loadUsageStats, showNotification, t]);
 
-  const handleSetModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
-    setModelPrices(prices);
-    saveModelPrices(prices);
-  }, []);
+  const usage = usageSnapshot as UsagePayload | null;
+  const error = storeError || '';
+  const lastRefreshedAt = lastRefreshedAtTs ? new Date(lastRefreshedAtTs) : null;
 
   return {
     usage,
     loading,
-    slowLoading,
     error,
+    lastRefreshedAt,
     modelPrices,
     setModelPrices: handleSetModelPrices,
     loadUsage,
@@ -186,8 +171,5 @@ export function useUsageData(): UseUsageDataReturn {
     importing,
     clearing,
     handleClearUsage,
-    lastRefreshedAt,
-    timeRange,
-    setTimeRange,
   };
 }

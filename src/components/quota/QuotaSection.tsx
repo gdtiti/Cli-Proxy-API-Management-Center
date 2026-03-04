@@ -920,12 +920,13 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                 <QuotaCard
                   key={item.name}
                   item={item}
-                  quota={quota[item.name]}
-                  resolvedTheme={resolvedTheme}
-                  i18nPrefix={config.i18nPrefix}
-                  cardClassName={config.cardClassName}
-                  defaultType={config.type}
-                  renderQuotaItems={config.renderQuotaItems}
+                quota={quota[item.name]}
+                resolvedTheme={resolvedTheme}
+                i18nPrefix={config.i18nPrefix}
+                cardIdleMessageKey={config.cardIdleMessageKey}
+                cardClassName={config.cardClassName}
+                defaultType={config.type}
+                renderQuotaItems={config.renderQuotaItems}
                   onDelete={cardActionsEnabled ? handleDelete : undefined}
                   isDeleting={deletingFile === item.name}
                   canDelete={!isRuntimeOnlyAuthFile(item)}

@@ -16,6 +16,7 @@ import {
   withoutDisableAllModelsRule,
 } from '@/components/providers/utils';
 import { Input } from '@/components/ui/Input';
+import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { ampcodeApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
 import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
@@ -187,7 +188,7 @@ export function AiProvidersPage() {
   const shouldRenderVertexSection = !normalizedQuery || filteredVertexConfigs.length > 0;
   const shouldRenderOpenaiSection = !normalizedQuery || filteredOpenaiProviders.length > 0;
 
-  const { keyStats, usageDetails, loadKeyStats } = useProviderStats();
+  const { keyStats, usageDetails, loadKeyStats, refreshKeyStats } = useProviderStats();
 
   const getErrorMessage = (err: unknown) => {
     if (err instanceof Error) return err.message;
@@ -241,8 +242,10 @@ export function AiProvidersPage() {
     if (hasMounted.current) return;
     hasMounted.current = true;
     loadConfigs();
-    loadKeyStats();
+    void loadKeyStats().catch(() => {});
   }, [loadConfigs, loadKeyStats]);
+
+  useHeaderRefresh(refreshKeyStats);
 
   useEffect(() => {
     if (config?.geminiApiKeys) setGeminiKeys(config.geminiApiKeys);

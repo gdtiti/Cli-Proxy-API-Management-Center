@@ -1192,7 +1192,8 @@
     "refreshing": "刷新中...",
     "refresh_completed": "刷新完成",
     "refresh_stop": "停止",
-    "refresh_stopped": "已停止后续请求调度"
+    "refresh_stopped": "已停止后续请求调度",
+    "card_idle_hint": "请使用顶部“刷新认证文件&额度”按钮获取最新额度。"
   },
   "system_info": {
     "title": "管理中心信息",

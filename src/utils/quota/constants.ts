@@ -34,6 +34,10 @@ export const TYPE_COLORS: Record<string, TypeColorSet> = {
     light: { bg: '#fff3e0', text: '#ef6c00' },
     dark: { bg: '#e65100', text: '#ffb74d' },
   },
+  kimi: {
+    light: { bg: '#fff4e5', text: '#ad6800' },
+    dark: { bg: '#7c4a03', text: '#ffd591' },
+  },
   antigravity: {
     light: { bg: '#e0f7fa', text: '#006064' },
     dark: { bg: '#004d40', text: '#80deea' },
@@ -73,17 +77,17 @@ export const ANTIGRAVITY_QUOTA_GROUPS: AntigravityQuotaGroupDefinition[] = [
   {
     id: 'claude-gpt',
     label: 'Claude/GPT',
-    identifiers: [
-      'claude-sonnet-4-5-thinking',
-      'claude-opus-4-5-thinking',
-      'claude-sonnet-4-5',
-      'gpt-oss-120b-medium',
-    ],
+    identifiers: ['claude-sonnet-4-6', 'claude-opus-4-6-thinking', 'gpt-oss-120b-medium'],
   },
   {
     id: 'gemini-3-pro',
     label: 'Gemini 3 Pro',
     identifiers: ['gemini-3-pro-high', 'gemini-3-pro-low'],
+  },
+  {
+    id: 'gemini-3-1-pro-series',
+    label: 'Gemini 3.1 Pro Series',
+    identifiers: ['gemini-3.1-pro-high', 'gemini-3.1-pro-low'],
   },
   {
     id: 'gemini-2-5-flash',
@@ -107,8 +111,8 @@ export const ANTIGRAVITY_QUOTA_GROUPS: AntigravityQuotaGroupDefinition[] = [
   },
   {
     id: 'gemini-image',
-    label: 'gemini-3-pro-image',
-    identifiers: ['gemini-3-pro-image'],
+    label: 'gemini-3.1-flash-image',
+    identifiers: ['gemini-3.1-flash-image'],
     labelFromModel: true,
   },
 ];
@@ -138,8 +142,8 @@ export const GEMINI_CLI_QUOTA_GROUPS: GeminiCliQuotaGroupDefinition[] = [
   {
     id: 'gemini-pro-series',
     label: 'Gemini Pro Series',
-    preferredModelId: 'gemini-3-pro-preview',
-    modelIds: ['gemini-3-pro-preview', 'gemini-2.5-pro'],
+    preferredModelId: 'gemini-3.1-pro-preview',
+    modelIds: ['gemini-3.1-pro-preview', 'gemini-3-pro-preview', 'gemini-2.5-pro'],
   },
 ];
 
@@ -196,3 +200,10 @@ export const KIRO_REQUEST_BODY = JSON.stringify({
   origin: 'AI_EDITOR',
   resourceType: 'AGENTIC_REQUEST',
 });
+
+// Kimi API configuration
+export const KIMI_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
+
+export const KIMI_REQUEST_HEADERS = {
+  Authorization: 'Bearer $TOKEN$',
+};

@@ -1,25 +1,35 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import gsap from 'gsap';
+import { animate, type AnimationPlaybackControlsWithThen } from '@/utils/animate';
 import { useInterval } from '@/hooks/useInterval';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { copyToClipboard } from '@/utils/clipboard';
 import {
+  MAX_CARD_PAGE_SIZE,
+  MIN_CARD_PAGE_SIZE,
   QUOTA_PROVIDER_TYPES,
+  clampCardPageSize,
   getTypeColor,
   getTypeLabel,
   isRuntimeOnlyAuthFile,
   normalizeProviderKey,
   type QuotaProviderType,
-  type ResolvedTheme
+  type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
 import { AuthFileDetailModal } from '@/features/authFiles/components/AuthFileDetailModal';
@@ -34,40 +44,14 @@ import { useAuthFilesPrefixProxyEditor } from '@/features/authFiles/hooks/useAut
 import { useAuthFilesStats } from '@/features/authFiles/hooks/useAuthFilesStats';
 import { useAuthFilesStatusBarCache } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { readAuthFilesUiState, writeAuthFilesUiState } from '@/features/authFiles/uiState';
-import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
+import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
-import { resolveAuthProvider } from '@/utils/quota';
 import styles from './AuthFilesPage.module.scss';
 
-const PAGE_SIZE_OPTIONS = [10, 30, 50, 100, 300, 1000] as const;
-const DEFAULT_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
-
-const isPageSizeOption = (value: number): value is (typeof PAGE_SIZE_OPTIONS)[number] =>
-  PAGE_SIZE_OPTIONS.includes(value as (typeof PAGE_SIZE_OPTIONS)[number]);
-
-const normalizePageSizeOption = (value: unknown): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return DEFAULT_PAGE_SIZE;
-  const rounded = Math.round(parsed);
-  return isPageSizeOption(rounded) ? rounded : DEFAULT_PAGE_SIZE;
-};
-
-const buildQuotaSearchText = (value: unknown): string => {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => buildQuotaSearchText(item)).filter(Boolean).join(' ');
-  }
-  if (typeof value === 'object') {
-    return Object.entries(value as Record<string, unknown>)
-      .flatMap(([key, val]) => [key, buildQuotaSearchText(val)])
-      .filter(Boolean)
-      .join(' ');
-  }
-  return '';
-};
+const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
+const easePower2In = (progress: number) => progress ** 3;
+const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
+const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 
 export function AuthFilesPage() {
   const { t } = useTranslation();
@@ -81,16 +65,18 @@ export function AuthFilesPage() {
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(9);
+  const [pageSizeInput, setPageSizeInput] = useState('9');
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
+  const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
   const previousSelectionCountRef = useRef(0);
   const selectionCountRef = useRef(0);
 
-  const { keyStats, usageDetails, loadKeyStats } = useAuthFilesStats();
+  const { keyStats, usageDetails, loadKeyStats, refreshKeyStats } = useAuthFilesStats();
   const {
     files,
     selectedFiles,
@@ -113,8 +99,8 @@ export function AuthFilesPage() {
     selectAllVisible,
     deselectAll,
     batchSetStatus,
-    batchDelete
-  } = useAuthFilesData({ refreshKeyStats: loadKeyStats });
+    batchDelete,
+  } = useAuthFilesData({ refreshKeyStats });
 
   const statusBarCache = useAuthFilesStatusBarCache(files, usageDetails);
 
@@ -132,7 +118,7 @@ export function AuthFilesPage() {
     handleDeleteLink,
     handleToggleFork,
     handleRenameAlias,
-    handleDeleteAlias
+    handleDeleteAlias,
   } = useAuthFilesOauth({ viewMode, files });
 
   const {
@@ -143,7 +129,7 @@ export function AuthFilesPage() {
     modelsFileType,
     modelsError,
     showModels,
-    closeModelsModal
+    closeModelsModal,
   } = useAuthFilesModels();
 
   const {
@@ -153,17 +139,14 @@ export function AuthFilesPage() {
     openPrefixProxyEditor,
     closePrefixProxyEditor,
     handlePrefixProxyChange,
-    handlePrefixProxySave
+    handlePrefixProxySave,
   } = useAuthFilesPrefixProxyEditor({
     disableControls: connectionStatus !== 'connected',
     loadFiles,
-    loadKeyStats
+    loadKeyStats: refreshKeyStats,
   });
 
   const disableControls = connectionStatus !== 'connected';
-  const antigravityQuota = useQuotaStore((state) => state.antigravityQuota);
-  const codexQuota = useQuotaStore((state) => state.codexQuota);
-  const geminiCliQuota = useQuotaStore((state) => state.geminiCliQuota);
   const normalizedFilter = normalizeProviderKey(String(filter));
   const quotaFilterType: QuotaProviderType | null = QUOTA_PROVIDER_TYPES.has(
     normalizedFilter as QuotaProviderType
@@ -185,7 +168,7 @@ export function AuthFilesPage() {
       setPage(Math.max(1, Math.round(persisted.page)));
     }
     if (typeof persisted.pageSize === 'number' && Number.isFinite(persisted.pageSize)) {
-      setPageSize(normalizePageSizeOption(persisted.pageSize));
+      setPageSize(clampCardPageSize(persisted.pageSize));
     }
   }, []);
 
@@ -193,21 +176,66 @@ export function AuthFilesPage() {
     writeAuthFilesUiState({ filter, search, page, pageSize });
   }, [filter, search, page, pageSize]);
 
+  useEffect(() => {
+    setPageSizeInput(String(pageSize));
+  }, [pageSize]);
+
+  const commitPageSizeInput = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) {
+      setPageSizeInput(String(pageSize));
+      return;
+    }
+
+    const value = Number(trimmed);
+    if (!Number.isFinite(value)) {
+      setPageSizeInput(String(pageSize));
+      return;
+    }
+
+    const next = clampCardPageSize(value);
+    setPageSize(next);
+    setPageSizeInput(String(next));
+    setPage(1);
+  };
+
+  const handlePageSizeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const rawValue = event.currentTarget.value;
+    setPageSizeInput(rawValue);
+
+    const trimmed = rawValue.trim();
+    if (!trimmed) return;
+
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) return;
+
+    const rounded = Math.round(parsed);
+    if (rounded < MIN_CARD_PAGE_SIZE || rounded > MAX_CARD_PAGE_SIZE) return;
+
+    setPageSize(rounded);
+    setPage(1);
+  };
+
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadFiles(), loadKeyStats(), loadExcluded(), loadModelAlias()]);
-  }, [loadFiles, loadKeyStats, loadExcluded, loadModelAlias]);
+    await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
+  }, [loadFiles, refreshKeyStats, loadExcluded, loadModelAlias]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
   useEffect(() => {
     if (!isCurrentLayer) return;
     loadFiles();
-    loadKeyStats();
+    void loadKeyStats().catch(() => {});
     loadExcluded();
     loadModelAlias();
   }, [isCurrentLayer, loadFiles, loadKeyStats, loadExcluded, loadModelAlias]);
 
-  useInterval(loadKeyStats, isCurrentLayer ? 240_000 : null);
+  useInterval(
+    () => {
+      void refreshKeyStats().catch(() => {});
+    },
+    isCurrentLayer ? 240_000 : null
+  );
 
   const existingTypes = useMemo(() => {
     const types = new Set<string>(['all']);
@@ -228,43 +256,18 @@ export function AuthFilesPage() {
     return counts;
   }, [files]);
 
-  const quotaSearchTextByFile = useMemo(() => {
-    const map = new Map<string, string>();
-
-    files.forEach((file) => {
-      const provider = resolveAuthProvider(file);
-      const quotaState =
-        provider === 'antigravity'
-          ? antigravityQuota[file.name]
-          : provider === 'codex'
-            ? codexQuota[file.name]
-            : provider === 'gemini-cli'
-              ? geminiCliQuota[file.name]
-              : undefined;
-      if (!quotaState) return;
-      const text = buildQuotaSearchText(quotaState).toLowerCase();
-      if (text) {
-        map.set(file.name, text);
-      }
-    });
-
-    return map;
-  }, [files, antigravityQuota, codexQuota, geminiCliQuota]);
-
   const filtered = useMemo(() => {
     return files.filter((item) => {
       const matchType = filter === 'all' || item.type === filter;
       const term = search.trim().toLowerCase();
-      const quotaText = quotaSearchTextByFile.get(item.name) || '';
       const matchSearch =
         !term ||
         item.name.toLowerCase().includes(term) ||
         (item.type || '').toString().toLowerCase().includes(term) ||
-        (item.provider || '').toString().toLowerCase().includes(term) ||
-        quotaText.includes(term);
+        (item.provider || '').toString().toLowerCase().includes(term);
       return matchType && matchSearch;
     });
-  }, [files, filter, search, quotaSearchTextByFile]);
+  }, [files, filter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -303,7 +306,7 @@ export function AuthFilesPage() {
       }
       const nextSearch = params.toString();
       navigate(`/auth-files/oauth-excluded${nextSearch ? `?${nextSearch}` : ''}`, {
-        state: { fromAuthFiles: true }
+        state: { fromAuthFiles: true },
       });
     },
     [filter, navigate]
@@ -318,7 +321,7 @@ export function AuthFilesPage() {
       }
       const nextSearch = params.toString();
       navigate(`/auth-files/oauth-model-alias${nextSearch ? `?${nextSearch}` : ''}`, {
-        state: { fromAuthFiles: true }
+        state: { fromAuthFiles: true },
       });
     },
     [filter, navigate]
@@ -365,30 +368,54 @@ export function AuthFilesPage() {
     const actionsEl = floatingBatchActionsRef.current;
     if (!actionsEl) return;
 
-    gsap.killTweensOf(actionsEl);
+    batchActionAnimationRef.current?.stop();
+    batchActionAnimationRef.current = null;
 
     if (currentCount > 0 && previousCount === 0) {
-      gsap.fromTo(
+      batchActionAnimationRef.current = animate(
         actionsEl,
-        { y: 56, autoAlpha: 0 },
-        { y: 0, autoAlpha: 1, duration: 0.28, ease: 'power3.out' }
+        {
+          transform: [BATCH_BAR_HIDDEN_TRANSFORM, BATCH_BAR_BASE_TRANSFORM],
+          opacity: [0, 1],
+        },
+        {
+          duration: 0.28,
+          ease: easePower3Out,
+          onComplete: () => {
+            actionsEl.style.transform = BATCH_BAR_BASE_TRANSFORM;
+            actionsEl.style.opacity = '1';
+          },
+        }
       );
     } else if (currentCount === 0 && previousCount > 0) {
-      gsap.to(actionsEl, {
-        y: 56,
-        autoAlpha: 0,
-        duration: 0.22,
-        ease: 'power2.in',
-        onComplete: () => {
-          if (selectionCountRef.current === 0) {
-            setBatchActionBarVisible(false);
-          }
+      batchActionAnimationRef.current = animate(
+        actionsEl,
+        {
+          transform: [BATCH_BAR_BASE_TRANSFORM, BATCH_BAR_HIDDEN_TRANSFORM],
+          opacity: [1, 0],
+        },
+        {
+          duration: 0.22,
+          ease: easePower2In,
+          onComplete: () => {
+            if (selectionCountRef.current === 0) {
+              setBatchActionBarVisible(false);
+            }
+          },
         }
-      });
+      );
     }
 
     previousSelectionCountRef.current = currentCount;
   }, [batchActionBarVisible, selectionCount]);
+
+  useEffect(
+    () => () => {
+      batchActionAnimationRef.current?.stop();
+      batchActionAnimationRef.current = null;
+    },
+    []
+  );
 
   const renderFilterTags = () => (
     <div className={styles.filterTags}>
@@ -406,7 +433,7 @@ export function AuthFilesPage() {
             style={{
               backgroundColor: isActive ? color.text : color.bg,
               color: isActive ? activeTextColor : color.text,
-              borderColor: color.text
+              borderColor: color.text,
             }}
             onClick={() => {
               setFilter(type);
@@ -453,7 +480,9 @@ export function AuthFilesPage() {
             <Button
               variant="danger"
               size="sm"
-              onClick={() => handleDeleteAll({ filter, onResetFilterToAll: () => setFilter('all') })}
+              onClick={() =>
+                handleDeleteAll({ filter, onResetFilterToAll: () => setFilter('all') })
+              }
               disabled={disableControls || loading || deletingAll}
               loading={deletingAll}
             >
@@ -491,20 +520,20 @@ export function AuthFilesPage() {
             </div>
             <div className={styles.filterItem}>
               <label>{t('auth_files.page_size_label')}</label>
-              <Select
-                value={String(pageSize)}
+              <input
                 className={styles.pageSizeSelect}
-                options={PAGE_SIZE_OPTIONS.map((size) => ({
-                  value: String(size),
-                  label: String(size)
-                }))}
-                onChange={(value) => {
-                  const next = normalizePageSizeOption(value);
-                  setPageSize(next);
-                  setPage(1);
+                type="number"
+                min={MIN_CARD_PAGE_SIZE}
+                max={MAX_CARD_PAGE_SIZE}
+                step={1}
+                value={pageSizeInput}
+                onChange={handlePageSizeChange}
+                onBlur={(e) => commitPageSizeInput(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
                 }}
-                ariaLabel={t('auth_files.page_size_label')}
-                fullWidth={false}
               />
             </div>
           </div>
@@ -513,9 +542,14 @@ export function AuthFilesPage() {
         {loading ? (
           <div className={styles.hint}>{t('common.loading')}</div>
         ) : pageItems.length === 0 ? (
-          <EmptyState title={t('auth_files.search_empty_title')} description={t('auth_files.search_empty_desc')} />
+          <EmptyState
+            title={t('auth_files.search_empty_title')}
+            description={t('auth_files.search_empty_desc')}
+          />
         ) : (
-          <div className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}>
+          <div
+            className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}
+          >
             {pageItems.map((file) => (
               <AuthFileCard
                 key={file.name}
@@ -554,7 +588,7 @@ export function AuthFilesPage() {
               {t('auth_files.pagination_info', {
                 current: currentPage,
                 total: totalPages,
-                count: filtered.length
+                count: filtered.length,
               })}
             </div>
             <Button

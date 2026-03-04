@@ -501,10 +501,28 @@ export function AiProvidersOpenAIEditPage() {
       onBack={handleBack}
       backLabel={t('common.back')}
       backAriaLabel={t('common.back')}
-      rightAction={
-        <Button size="sm" onClick={() => void handleSave()} loading={saving} disabled={!canSave}>
-          {t('common.save')}
-        </Button>
+      hideTopBarBackButton
+      hideTopBarRightAction
+      floatingAction={
+        <div className={layoutStyles.floatingActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            className={layoutStyles.floatingBackButton}
+          >
+            {t('common.back')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void handleSave()}
+            loading={saving}
+            disabled={!canSave}
+            className={layoutStyles.floatingSaveButton}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
       }
       isLoading={loading}
       loadingLabel={t('common.loading')}
@@ -518,6 +536,22 @@ export function AiProvidersOpenAIEditPage() {
               label={t('ai_providers.openai_add_modal_name_label')}
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              disabled={saving || disableControls || isTestingKeys}
+            />
+            <Input
+              label={t('ai_providers.priority_label')}
+              hint={t('ai_providers.priority_hint')}
+              type="number"
+              step={1}
+              value={form.priority ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const parsed = raw.trim() === '' ? undefined : Number(raw);
+                setForm((prev) => ({
+                  ...prev,
+                  priority: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined,
+                }));
+              }}
               disabled={saving || disableControls || isTestingKeys}
             />
             <Input
