@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { USAGE_STATS_STALE_TIME_MS, useNotificationStore, useUsageStatsStore } from '@/stores';
-import { usageApi } from '@/services/api/usage';
+import { isPgModeNotEnabledError, usageApi } from '@/services/api/usage';
 import { downloadBlob } from '@/utils/download';
 import { loadModelPrices, saveModelPrices, type ModelPrice } from '@/utils/usage';
 
@@ -144,6 +144,10 @@ export function useUsageData(): UseUsageDataReturn {
       showNotification(t('usage_stats.clear_success'), 'success');
       await loadUsageStats({ force: true, staleTimeMs: USAGE_STATS_STALE_TIME_MS });
     } catch (err: unknown) {
+      if (isPgModeNotEnabledError(err)) {
+        showNotification(t('usage_stats.clear_not_supported_pg'), 'warning');
+        return;
+      }
       const message = err instanceof Error ? err.message : '';
       showNotification(`${t('usage_stats.clear_failed')}${message ? `: ${message}` : ''}`, 'error');
     } finally {

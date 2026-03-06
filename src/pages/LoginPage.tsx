@@ -77,9 +77,10 @@ export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const language = useLanguageStore((state) => state.language);
   const setLanguage = useLanguageStore((state) => state.setLanguage);
+  const authHasHydrated = useAuthStore((state) => state.hasHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const login = useAuthStore((state) => state.login);
   const restoreSession = useAuthStore((state) => state.restoreSession);
@@ -97,6 +98,7 @@ export function LoginPage() {
   const [autoLoginSuccess, setAutoLoginSuccess] = useState(false);
   const [error, setError] = useState('');
   const [showClientModal, setShowClientModal] = useState(false);
+  const initAttempted = React.useRef(false);
 
   const activeClientId = useClientCacheStore((state) => state.activeClientId);
   const getClientById = useClientCacheStore((state) => state.getClientById);
@@ -117,14 +119,11 @@ export function LoginPage() {
   );
 
   // 处理客户端选择
-  const handleSelectClient = useCallback(
-    (client: ClientConfig) => {
-      setApiBase(client.apiBase);
-      setManagementKey(client.managementKey);
-      setShowCustomBase(true);
-    },
-    []
-  );
+  const handleSelectClient = useCallback((client: ClientConfig) => {
+    setApiBase(client.apiBase);
+    setManagementKey(client.managementKey);
+    setShowCustomBase(true);
+  }, []);
 
   useEffect(() => {
     if (!activeClientId) return;
@@ -138,6 +137,14 @@ export function LoginPage() {
   }, [activeClientId, getClientById]);
 
   useEffect(() => {
+    if (!authHasHydrated) {
+      return;
+    }
+    if (initAttempted.current) {
+      return;
+    }
+    initAttempted.current = true;
+
     const init = async () => {
       try {
         const autoLoggedIn = await restoreSession();
@@ -152,17 +159,24 @@ export function LoginPage() {
           setApiBase(storedBase || detectedBase);
           setManagementKey(storedKey || '');
           setRememberPassword(storedRememberPassword || Boolean(storedKey));
+          setAutoLoginSuccess(false);
         }
       } finally {
-        if (!autoLoginSuccess) {
-          setAutoLoading(false);
-        }
+        setAutoLoading(false);
       }
     };
 
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    authHasHydrated,
+    detectedBase,
+    location.state,
+    navigate,
+    restoreSession,
+    storedBase,
+    storedKey,
+    storedRememberPassword,
+  ]);
 
   const handleSubmit = useCallback(async () => {
     if (!managementKey.trim()) {

@@ -40,8 +40,12 @@ export const useThemeStore = create<ThemeState>()(
       resolvedTheme: 'light',
 
       setTheme: (theme) => {
+        const currentTheme = get().theme;
         const resolved: ResolvedTheme = theme === 'auto' ? getSystemTheme() : theme;
         applyTheme(resolved);
+        if (currentTheme === theme && get().resolvedTheme === resolved) {
+          return;
+        }
         set({ theme, resolvedTheme: resolved });
       },
 

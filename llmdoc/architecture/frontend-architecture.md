@@ -48,3 +48,15 @@
 - 主题：由 `useThemeStore` 管理，应用初始化时同步
 
 代码锚点：`src/App.tsx:8`、`src/App.tsx:11`、`src/pages/DashboardPage.tsx:31`
+
+## 应用启动时的语言 / 主题同步
+
+- `App` 启动时先调用 `useThemeStore(...initializeTheme)`，由 store 负责应用当前主题并注册系统主题监听：`src/App.tsx:38-45`、`src/stores/useThemeStore.ts:60-83`
+- `App` 只在 `i18n.language !== language` 时调用 `i18n.changeLanguage(language)`，避免把已同步的语言再次写回 store：`src/App.tsx:47-51`
+- 文档根节点语言属性仍由独立 effect 维护，仅同步 `document.documentElement.lang`：`src/App.tsx:53-55`
+
+### 2026-03 已落地修复：首屏初始化更新环
+
+- 已修复一次 React 运行时错误 `Maximum update depth exceeded`，根因是首屏初始化阶段 language store 与 i18next 的同步形成重复更新链
+- 当前实现把语言写入职责收敛到 `useLanguageStore.setLanguage`，而 `App` 侧只做“必要时同步 i18n”的幂等检查：`src/stores/useLanguageStore.ts:24-33`、`src/App.tsx:47-51`
+- 该修复仅覆盖启动同步链路，不改变路由、页面层或 i18n 资源组织方式

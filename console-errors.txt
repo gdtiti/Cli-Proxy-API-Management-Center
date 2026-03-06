@@ -1,0 +1,51 @@
+Total messages: 4 (Errors: 4, Warnings: 0)
+
+[ERROR] Error handled by React Router default ErrorBoundary: Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3526:128)
+    at enqueueConcurrentRenderForLane (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3514:16)
+    at forceStoreRerender (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6104:21)
+    at updateStoreInstance (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6086:41)
+    at Object.react_stack_bottom_frame (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:18567:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:997:72)
+    at commitHookEffectListMount (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9411:163)
+    at commitHookPassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9465:60)
+    at commitPassiveMountOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11040:29)
+    at recursivelyTraversePassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11010:13) @ http://localhost:5173/node_modules/.vite/deps/chunk-XF2T64PL.js?v=073a19b5:6187
+[ERROR] Error handled by React Router default ErrorBoundary: Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3526:128)
+    at enqueueConcurrentRenderForLane (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3514:16)
+    at forceStoreRerender (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6104:21)
+    at updateStoreInstance (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6086:41)
+    at Object.react_stack_bottom_frame (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:18567:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:997:72)
+    at commitHookEffectListMount (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9411:163)
+    at commitHookPassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9465:60)
+    at commitPassiveMountOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11040:29)
+    at recursivelyTraversePassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11010:13) @ http://localhost:5173/node_modules/.vite/deps/chunk-XF2T64PL.js?v=073a19b5:6187
+[ERROR] %o
+
+%s
+
+%s
+ Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3526:128)
+    at enqueueConcurrentRenderForLane (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3514:16)
+    at forceStoreRerender (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6104:21)
+    at updateStoreInstance (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6086:41)
+    at Object.react_stack_bottom_frame (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:18567:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:997:72)
+    at commitHookEffectListMount (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9411:163)
+    at commitHookPassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9465:60)
+    at commitPassiveMountOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11040:29)
+    at recursivelyTraversePassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11010:13) The above error occurred in the <ClientManagementModal> component. React will try to recreate this component tree from scratch using the error boundary you provided, RenderErrorBoundary. @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:7000
+[ERROR] React Router caught the following error during render Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at getRootForUpdatedFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3526:128)
+    at enqueueConcurrentRenderForLane (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:3514:16)
+    at forceStoreRerender (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6104:21)
+    at updateStoreInstance (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:6086:41)
+    at Object.react_stack_bottom_frame (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:18567:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:997:72)
+    at commitHookEffectListMount (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9411:163)
+    at commitHookPassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:9465:60)
+    at commitPassiveMountOnFiber (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11040:29)
+    at recursivelyTraversePassiveMountEffects (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=073a19b5:11010:13) @ http://localhost:5173/node_modules/.vite/deps/chunk-XF2T64PL.js?v=073a19b5:6226

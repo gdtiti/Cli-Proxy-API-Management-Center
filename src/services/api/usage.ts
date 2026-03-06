@@ -6,6 +6,7 @@ import { apiClient } from './client';
 import { computeKeyStats, KeyStats } from '@/utils/usage';
 
 const USAGE_TIMEOUT_MS = 60 * 1000;
+const PG_MODE_NOT_ENABLED_PATTERN = /\bpg mode not enabled\b/i;
 
 export interface UsageExportPayload {
   version?: number;
@@ -28,6 +29,16 @@ export interface UsageQueryParams {
   to?: string;          // ISO date string
   instance?: string;    // instance id or 'all'
 }
+
+export const isPgModeNotEnabledError = (error: unknown): boolean => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+  return PG_MODE_NOT_ENABLED_PATTERN.test(message);
+};
 
 export const usageApi = {
   /**

@@ -13,6 +13,19 @@
 
 代码锚点：`src/stores/index.ts:5`、`src/stores/index.ts:14`
 
+### 语言与主题 store 的幂等约束
+
+- `useLanguageStore.setLanguage` 会先校验目标语言是否合法，再在目标语言与当前值不同时才调用 `i18n.changeLanguage` 和 Zustand `set`：`src/stores/useLanguageStore.ts:24-33`
+- `useThemeStore.setTheme` 会先计算 `resolvedTheme` 并应用到 DOM；只有 `theme` 或 `resolvedTheme` 发生变化时才写回 store：`src/stores/useThemeStore.ts:42-50`
+- `useThemeStore.initializeTheme` 启动时复用 `setTheme(theme)`，随后注册 `matchMedia('(prefers-color-scheme: dark)')` 监听：`src/stores/useThemeStore.ts:60-83`
+
+### 2026-03 运行时修复记录
+
+- 已验证修复 `Maximum update depth exceeded`：问题出现在首屏阶段 store 初始化与外部同步重复触发更新
+- 当前边界是：store action 负责实际写入，`App` 负责必要的只读同步检查，避免出现 `store -> effect -> store` 循环：`src/App.tsx:47-51`、`src/stores/useLanguageStore.ts:24-33`
+- 额外为主题 store 增加幂等保护，降低初始化和系统主题变化时的重复更新风险：`src/stores/useThemeStore.ts:42-50`
+- 本次修复已按现有工程脚本验收通过：`pnpm type-check`、`pnpm build`；构建中的两行 `The system cannot find the path specified.` 仍属于已知环境噪音，参考 `llmdoc/guides/development-workflow.md:70-71` 与 `llmdoc/guides/post-conflict-regression-checklist.md:13-15`
+
 ## API 超时配置
 
 - 可配置的超时参数支持，用于解决大量认证文件加载超时问题

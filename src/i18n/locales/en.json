@@ -580,6 +580,22 @@
     "trial_expired": "Trial Expired",
     "suspended": "Suspended"
   },
+  "kimi_quota": {
+    "title": "Kimi Quota",
+    "empty_title": "No Kimi Quota Data",
+    "empty_desc": "No Kimi quota data available",
+    "loading": "Loading Kimi quota...",
+    "idle": "Click to load Kimi quota",
+    "load_failed": "Failed to load Kimi quota: {{message}}",
+    "missing_auth_index": "Missing auth_index",
+    "empty_data": "No quota data available",
+    "refresh_button": "Refresh",
+    "fetch_all": "Load all quotas",
+    "weekly_limit": "Weekly limit",
+    "limit_window": "{{duration}} limit",
+    "limit_index": "Limit {{index}}",
+    "reset_hint": "Reset: {{hint}}"
+  },
   "gemini_cli_quota": {
     "title": "Gemini CLI Quota",
     "empty_title": "No Gemini CLI Auth Files",
@@ -903,7 +919,13 @@
     "token_breakdown": "Token Type Breakdown",
     "input_tokens": "Input Tokens",
     "output_tokens": "Output Tokens",
-    "last_updated": "Updated"
+    "last_updated": "Updated",
+    "clear": "Clear Statistics",
+    "clear_confirm": "Are you sure you want to clear all usage statistics? This action cannot be undone!",
+    "clear_success": "Usage statistics cleared",
+    "clear_failed": "Failed to clear usage statistics",
+    "clear_not_supported_pg": "Current runtime mode does not support clearing usage statistics (requires PG mode).",
+    "clear_filters": "Clear Filters"
   },
   "stats": {
     "success": "Success",

@@ -20,6 +20,7 @@ interface ClientCacheState {
   clients: ClientConfig[];
   activeClientId: string | null;
   keyboardShortcutsEnabled: boolean;
+  hasHydrated: boolean;
 
   // CRUD 操作
   addClient: (client: Omit<ClientConfig, 'id' | 'createdAt' | 'lastConnectedAt'>) => string;
@@ -50,6 +51,7 @@ export const useClientCacheStore = create<ClientCacheState>()(
       clients: [],
       activeClientId: null,
       keyboardShortcutsEnabled: true,
+      hasHydrated: true,
 
       // 添加客户端
       addClient: (clientData) => {
@@ -201,6 +203,9 @@ export const useClientCacheStore = create<ClientCacheState>()(
         activeClientId: state.activeClientId,
         keyboardShortcutsEnabled: state.keyboardShortcutsEnabled,
       }),
+      onRehydrateStorage: () => () => {
+        useClientCacheStore.setState({ hasHydrated: true });
+      },
     }
   )
 );

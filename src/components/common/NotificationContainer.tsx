@@ -10,7 +10,8 @@ interface AnimatedNotification extends Notification {
 const ANIMATION_DURATION = 300; // ms
 
 export function NotificationContainer() {
-  const { notifications, removeNotification } = useNotificationStore();
+  const notifications = useNotificationStore((state) => state.notifications);
+  const removeNotification = useNotificationStore((state) => state.removeNotification);
   const [animatedNotifications, setAnimatedNotifications] = useState<AnimatedNotification[]>([]);
   const prevNotificationsRef = useRef<Notification[]>([]);
 
@@ -30,9 +31,7 @@ export function NotificationContainer() {
 
     setAnimatedNotifications((prev) => {
       // Mark removed notifications as exiting
-      let updated = prev.map((n) =>
-        removedIds.has(n.id) ? { ...n, isExiting: true } : n
-      );
+      let updated = prev.map((n) => (removedIds.has(n.id) ? { ...n, isExiting: true } : n));
 
       // Add new notifications
       newNotifications.forEach((n) => {
@@ -43,9 +42,7 @@ export function NotificationContainer() {
 
       // Remove notifications that are not in current and not exiting
       // (they've already completed their exit animation)
-      updated = updated.filter(
-        (n) => currentIds.has(n.id) || n.isExiting
-      );
+      updated = updated.filter((n) => currentIds.has(n.id) || n.isExiting);
 
       return updated;
     });
@@ -53,9 +50,7 @@ export function NotificationContainer() {
     // Clean up exited notifications after animation
     if (removedIds.size > 0) {
       setTimeout(() => {
-        setAnimatedNotifications((prev) =>
-          prev.filter((n) => !removedIds.has(n.id))
-        );
+        setAnimatedNotifications((prev) => prev.filter((n) => !removedIds.has(n.id)));
       }, ANIMATION_DURATION);
     }
 
@@ -84,7 +79,11 @@ export function NotificationContainer() {
           className={`notification ${notification.type} ${notification.isExiting ? 'exiting' : 'entering'}`}
         >
           <div className="message">{notification.message}</div>
-          <button className="close-btn" onClick={() => handleClose(notification.id)} aria-label="Close">
+          <button
+            className="close-btn"
+            onClick={() => handleClose(notification.id)}
+            aria-label="Close"
+          >
             <IconX size={16} />
           </button>
         </div>

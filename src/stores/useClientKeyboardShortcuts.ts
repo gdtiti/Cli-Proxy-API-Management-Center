@@ -7,7 +7,10 @@ import { useEffect, useCallback } from 'react';
 import { useClientCacheStore } from './useClientCacheStore';
 
 export function useClientKeyboardShortcuts() {
-  const { clients, getClients, setActiveClient, keyboardShortcutsEnabled } = useClientCacheStore();
+  const clients = useClientCacheStore((state) => state.clients);
+  const getClients = useClientCacheStore((state) => state.getClients);
+  const setActiveClient = useClientCacheStore((state) => state.setActiveClient);
+  const keyboardShortcutsEnabled = useClientCacheStore((state) => state.keyboardShortcutsEnabled);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {

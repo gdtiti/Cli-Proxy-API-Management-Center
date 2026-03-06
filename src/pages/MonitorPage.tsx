@@ -20,7 +20,8 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useThemeStore } from '@/stores';
 import { useNotificationStore } from '@/stores';
-import { usageApi, providersApi } from '@/services/api';
+import { providersApi } from '@/services/api';
+import { isPgModeNotEnabledError, usageApi } from '@/services/api/usage';
 import { KpiCards } from '@/components/monitor/KpiCards';
 import { ModelDistributionChart } from '@/components/monitor/ModelDistributionChart';
 import { DailyTrendChart } from '@/components/monitor/DailyTrendChart';
@@ -301,6 +302,10 @@ export function MonitorPage() {
       showNotification(t('usage_stats.clear_success'), 'success');
       await loadData();
     } catch (err: unknown) {
+      if (isPgModeNotEnabledError(err)) {
+        showNotification(t('usage_stats.clear_not_supported_pg'), 'warning');
+        return;
+      }
       const msg = err instanceof Error ? err.message : '';
       showNotification(
         `${t('usage_stats.clear_failed')}${msg ? `: ${msg}` : ''}`,

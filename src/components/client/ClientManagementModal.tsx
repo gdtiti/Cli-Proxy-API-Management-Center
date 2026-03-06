@@ -17,7 +17,7 @@ interface ClientManagementModalProps {
 
 export function ClientManagementModal({ isOpen, onClose }: ClientManagementModalProps) {
   const { t } = useTranslation();
-  const clients = useClientCacheStore((state) => state.getClients());
+  const clients = useClientCacheStore((state) => state.clients);
   const addClient = useClientCacheStore((state) => state.addClient);
   const updateClient = useClientCacheStore((state) => state.updateClient);
   const deleteClient = useClientCacheStore((state) => state.deleteClient);
