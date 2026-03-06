@@ -7,11 +7,7 @@ import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { providersApi } from '@/services/api';
 import { useDisabledModelsStore } from '@/stores';
-import {
-  resolveProvider,
-  createDisableState,
-  type DisableState,
-} from '@/utils/monitor';
+import { resolveProvider, createDisableState, type DisableState } from '@/utils/monitor';
 import type { OpenAIProviderConfig } from '@/types';
 
 // 不支持禁用的渠道类型（小写）
@@ -61,35 +57,39 @@ export function useDisableModel(options: UseDisableModelOptions): UseDisableMode
   const { t } = useTranslation();
 
   // 使用全局 store 管理禁用状态
-  const { addDisabledModel, isDisabled } = useDisabledModelsStore();
+  const addDisabledModel = useDisabledModelsStore((state) => state.addDisabledModel);
+  const isDisabled = useDisabledModelsStore((state) => state.isDisabled);
 
   const [disableState, setDisableState] = useState<DisableState | null>(null);
   const [unsupportedState, setUnsupportedState] = useState<UnsupportedDisableState | null>(null);
   const [disabling, setDisabling] = useState(false);
 
   // 开始禁用流程
-  const handleDisableClick = useCallback((source: string, model: string) => {
-    // 首先检查提供商类型是否支持禁用
-    const providerType = providerTypeMap?.[source] || '';
-    const lowerType = providerType.toLowerCase();
+  const handleDisableClick = useCallback(
+    (source: string, model: string) => {
+      // 首先检查提供商类型是否支持禁用
+      const providerType = providerTypeMap?.[source] || '';
+      const lowerType = providerType.toLowerCase();
 
-    // 如果是不支持的类型，立即显示提示
-    if (lowerType && UNSUPPORTED_PROVIDER_TYPES.includes(lowerType)) {
-      const providerName = resolveProvider(source, providerMap);
-      const displayName = providerName
-        ? `${providerName} / ${model}`
-        : `${source.slice(0, 8)}*** / ${model}`;
-      setUnsupportedState({
-        providerType,
-        model,
-        displayName,
-      });
-      return;
-    }
+      // 如果是不支持的类型，立即显示提示
+      if (lowerType && UNSUPPORTED_PROVIDER_TYPES.includes(lowerType)) {
+        const providerName = resolveProvider(source, providerMap);
+        const displayName = providerName
+          ? `${providerName} / ${model}`
+          : `${source.slice(0, 8)}*** / ${model}`;
+        setUnsupportedState({
+          providerType,
+          model,
+          displayName,
+        });
+        return;
+      }
 
-    // 支持的类型，进入正常禁用流程
-    setDisableState(createDisableState(source, model, providerMap));
-  }, [providerMap, providerTypeMap]);
+      // 支持的类型，进入正常禁用流程
+      setDisableState(createDisableState(source, model, providerMap));
+    },
+    [providerMap, providerTypeMap]
+  );
 
   // 确认禁用（需要点击3次）
   const handleConfirmDisable = useCallback(async () => {
@@ -119,7 +119,9 @@ export function useDisableModel(options: UseDisableModelOptions): UseDisableMode
       );
 
       if (!targetProvider) {
-        throw new Error(t('monitor.logs.disable_error_provider_not_found', { provider: providerName }));
+        throw new Error(
+          t('monitor.logs.disable_error_provider_not_found', { provider: providerName })
+        );
       }
 
       const originalModels = targetProvider.models || [];
@@ -159,32 +161,35 @@ export function useDisableModel(options: UseDisableModelOptions): UseDisableMode
   }, []);
 
   // 检查模型是否已禁用
-  const isModelDisabled = useCallback((source: string, model: string): boolean => {
-    // 首先检查全局状态中是否已禁用
-    if (isDisabled(source, model)) {
-      return true;
-    }
-
-    // 如果提供了 providerModels，检查配置中是否已移除
-    if (providerModels) {
-      if (!source || !model) return false;
-
-      // 首先尝试完全匹配
-      if (providerModels[source]) {
-        return !providerModels[source].has(model);
+  const isModelDisabled = useCallback(
+    (source: string, model: string): boolean => {
+      // 首先检查全局状态中是否已禁用
+      if (isDisabled(source, model)) {
+        return true;
       }
 
-      // 然后尝试前缀匹配
-      const entries = Object.entries(providerModels);
-      for (const [key, modelSet] of entries) {
-        if (source.startsWith(key) || key.startsWith(source)) {
-          return !modelSet.has(model);
+      // 如果提供了 providerModels，检查配置中是否已移除
+      if (providerModels) {
+        if (!source || !model) return false;
+
+        // 首先尝试完全匹配
+        if (providerModels[source]) {
+          return !providerModels[source].has(model);
+        }
+
+        // 然后尝试前缀匹配
+        const entries = Object.entries(providerModels);
+        for (const [key, modelSet] of entries) {
+          if (source.startsWith(key) || key.startsWith(source)) {
+            return !modelSet.has(model);
+          }
         }
       }
-    }
 
-    return false;
-  }, [isDisabled, providerModels]);
+      return false;
+    },
+    [isDisabled, providerModels]
+  );
 
   return {
     disableState,
