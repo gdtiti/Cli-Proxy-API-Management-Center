@@ -46,8 +46,9 @@ import { useAuthFilesPrefixProxyEditor } from '@/features/authFiles/hooks/useAut
 import { useAuthFilesStats } from '@/features/authFiles/hooks/useAuthFilesStats';
 import { useAuthFilesStatusBarCache } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { readAuthFilesUiState, writeAuthFilesUiState } from '@/features/authFiles/uiState';
+import { authFilesApi } from '@/services/api/authFiles';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
-import type { AuthFileItem } from '@/types';
+import type { ApiError, AuthFileItem } from '@/types';
 import styles from './AuthFilesPage.module.scss';
 
 const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
@@ -73,6 +74,7 @@ export function AuthFilesPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
+  const [reloadingFromStore, setReloadingFromStore] = useState(false);
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
@@ -227,6 +229,35 @@ export function AuthFilesPage() {
   const handleHeaderRefresh = useCallback(async () => {
     await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
   }, [loadFiles, refreshKeyStats, loadExcluded, loadModelAlias]);
+
+  const handleReloadFromStore = useCallback(async () => {
+    setReloadingFromStore(true);
+    try {
+      const result = await authFilesApi.reloadFromStore();
+      await Promise.all([loadFiles(), refreshKeyStats()]);
+      showNotification(
+        t('auth_files.reload_from_store_success', {
+          written: result.written,
+          removed: result.removed,
+        }),
+        'success'
+      );
+    } catch (err: unknown) {
+      const apiError = err as ApiError;
+      const status = apiError?.status;
+      const message = err instanceof Error ? err.message : t('notification.refresh_failed');
+      if (status === 409 || status === 501 || status === 503) {
+        showNotification(
+          t('auth_files.reload_from_store_unsupported', { message }),
+          'warning'
+        );
+        return;
+      }
+      showNotification(t('auth_files.reload_from_store_failed', { message }), 'error');
+    } finally {
+      setReloadingFromStore(false);
+    }
+  }, [loadFiles, refreshKeyStats, showNotification, t]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
@@ -511,6 +542,15 @@ export function AuthFilesPage() {
           <div className={styles.headerActions}>
             <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
               {t('common.refresh')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleReloadFromStore()}
+              disabled={disableControls || loading || uploading || reloadingFromStore}
+              loading={reloadingFromStore}
+            >
+              {t('auth_files.reload_from_store_button')}
             </Button>
             <Button
               variant="secondary"

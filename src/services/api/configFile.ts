@@ -4,6 +4,14 @@
 
 import { apiClient } from './client';
 
+export interface ReloadConfigFromStoreResponse {
+  ok: boolean;
+  source: string;
+  target: string;
+  store: string;
+  changed: boolean;
+}
+
 export const configFileApi = {
   async fetchConfigYaml(): Promise<string> {
     const response = await apiClient.getRaw('/config.yaml', {
@@ -23,5 +31,9 @@ export const configFileApi = {
         Accept: 'application/json, text/plain, */*'
       }
     });
-  }
+  },
+
+  reloadFromStore(): Promise<ReloadConfigFromStoreResponse> {
+    return apiClient.post<ReloadConfigFromStoreResponse>('/config.yaml/reload-from-store');
+  },
 };

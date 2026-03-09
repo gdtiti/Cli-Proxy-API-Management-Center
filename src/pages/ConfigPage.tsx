@@ -15,6 +15,7 @@ import { DiffModal } from '@/components/config/DiffModal';
 import { useVisualConfig } from '@/hooks/useVisualConfig';
 import { useNotificationStore, useAuthStore, useThemeStore } from '@/stores';
 import { configFileApi } from '@/services/api/configFile';
+import type { ApiError } from '@/types';
 import styles from './ConfigPage.module.scss';
 
 type ConfigEditorTab = 'visual' | 'source';
@@ -56,6 +57,7 @@ export function ConfigPage() {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reloadingFromStore, setReloadingFromStore] = useState(false);
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [diffModalOpen, setDiffModalOpen] = useState(false);
@@ -433,6 +435,50 @@ export function ConfigPage() {
     });
   }, [isDirty, loadConfig, showConfirmation, t]);
 
+  const executeReloadFromStore = useCallback(async () => {
+    setReloadingFromStore(true);
+    try {
+      await configFileApi.reloadFromStore();
+      await loadConfig();
+      showNotification(t('config_management.reload_from_store_success'), 'success');
+    } catch (err: unknown) {
+      const apiError = err as ApiError;
+      const status = apiError?.status;
+      const message = err instanceof Error ? err.message : t('notification.refresh_failed');
+      if (status === 409 || status === 501 || status === 503) {
+        showNotification(
+          t('config_management.reload_from_store_unsupported', { message }),
+          'warning'
+        );
+        return;
+      }
+      showNotification(
+        t('config_management.reload_from_store_failed', { message }),
+        'error'
+      );
+    } finally {
+      setReloadingFromStore(false);
+    }
+  }, [loadConfig, showNotification, t]);
+
+  const handleReloadFromStore = useCallback(() => {
+    if (!isDirty) {
+      void executeReloadFromStore();
+      return;
+    }
+
+    showConfirmation({
+      title: t('common.unsaved_changes_title'),
+      message: t('config_management.reload_from_store_confirm_message'),
+      confirmText: t('config_management.reload_from_store'),
+      cancelText: t('common.cancel'),
+      variant: 'danger',
+      onConfirm: async () => {
+        await executeReloadFromStore();
+      },
+    });
+  }, [executeReloadFromStore, isDirty, showConfirmation, t]);
+
   const floatingActions = (
     <div className={styles.floatingActionContainer} ref={floatingActionsRef}>
       <div className={styles.floatingActionList}>
@@ -472,8 +518,21 @@ export function ConfigPage() {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.pageTitle}>{t('config_management.title')}</h1>
-      <p className={styles.description}>{t('config_management.description')}</p>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.pageTitle}>{t('config_management.title')}</h1>
+        <p className={styles.description}>{t('config_management.description')}</p>
+        <div className={styles.headerActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleReloadFromStore}
+            disabled={disableControls || loading || saving || reloadingFromStore}
+            loading={reloadingFromStore}
+          >
+            {t('config_management.reload_from_store')}
+          </Button>
+        </div>
+      </div>
 
       <div className={styles.tabBar}>
         <button

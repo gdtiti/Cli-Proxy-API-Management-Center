@@ -8,6 +8,16 @@ import type { OAuthModelAliasEntry } from '@/types';
 
 type StatusError = { status?: number };
 type AuthFileStatusResponse = { status: string; disabled: boolean };
+export interface ReloadAuthFilesFromStoreResponse {
+  ok: boolean;
+  source: string;
+  target: string;
+  store: string;
+  total: number;
+  written: number;
+  removed: number;
+  unchanged: number;
+}
 
 export const AUTH_FILE_INVALID_JSON_OBJECT_ERROR = 'AUTH_FILE_INVALID_JSON_OBJECT';
 
@@ -172,6 +182,9 @@ export const authFilesApi = {
   deleteFile: (name: string) => apiClient.delete(`/auth-files?name=${encodeURIComponent(name)}`),
 
   deleteAll: () => apiClient.delete('/auth-files', { params: { all: true } }),
+
+  reloadFromStore: () =>
+    apiClient.post<ReloadAuthFilesFromStoreResponse>('/auth-files/reload-from-store'),
 
   // Remove a specific project from a multi-project credential
   removeProject: (name: string, projectId: string) =>

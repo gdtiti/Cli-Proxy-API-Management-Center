@@ -11,17 +11,30 @@
   );
 }
 
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-xl;
+}
+
 .pageTitle {
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 $spacing-md 0;
+  margin: 0;
 }
 
 .description {
   font-size: 14px;
   color: var(--text-secondary);
-  margin: 0 0 $spacing-xl 0;
+  margin: 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
 }
 
 .tabBar {
