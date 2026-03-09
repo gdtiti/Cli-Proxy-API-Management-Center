@@ -3,22 +3,15 @@ import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { IconEye, IconEyeOff } from '@/components/ui/icons';
-import {
-  useAuthStore,
-  useLanguageStore,
-  useNotificationStore,
-  useClientCacheStore,
-} from '@/stores';
-import { ClientSelector } from '@/components/client/ClientSelector';
-import { ClientManagementModal } from '@/components/client/ClientManagementModal';
+import { useAuthStore, useLanguageStore, useNotificationStore } from '@/stores';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
 import { isSupportedLanguage } from '@/utils/language';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import type { ApiError } from '@/types';
-import type { ClientConfig } from '@/stores/useClientCacheStore';
-import { useClientKeyboardShortcuts } from '@/stores/useClientKeyboardShortcuts';
 import styles from './LoginPage.module.scss';
 
 /**
@@ -77,10 +70,9 @@ export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const showNotification = useNotificationStore((state) => state.showNotification);
+  const { showNotification } = useNotificationStore();
   const language = useLanguageStore((state) => state.language);
   const setLanguage = useLanguageStore((state) => state.setLanguage);
-  const authHasHydrated = useAuthStore((state) => state.hasHydrated);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const login = useAuthStore((state) => state.login);
   const restoreSession = useAuthStore((state) => state.restoreSession);
@@ -97,19 +89,18 @@ export function LoginPage() {
   const [autoLoading, setAutoLoading] = useState(true);
   const [autoLoginSuccess, setAutoLoginSuccess] = useState(false);
   const [error, setError] = useState('');
-  const [showClientModal, setShowClientModal] = useState(false);
-  const initAttempted = React.useRef(false);
-
-  const activeClientId = useClientCacheStore((state) => state.activeClientId);
-  const getClientById = useClientCacheStore((state) => state.getClientById);
-  const updateLastConnected = useClientCacheStore((state) => state.updateLastConnected);
-
-  useClientKeyboardShortcuts();
 
   const detectedBase = useMemo(() => detectApiBaseFromLocation(), []);
+  const languageOptions = useMemo(
+    () =>
+      LANGUAGE_ORDER.map((lang) => ({
+        value: lang,
+        label: t(LANGUAGE_LABEL_KEYS[lang])
+      })),
+    [t]
+  );
   const handleLanguageChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const selectedLanguage = event.target.value;
+    (selectedLanguage: string) => {
       if (!isSupportedLanguage(selectedLanguage)) {
         return;
       }
@@ -118,33 +109,7 @@ export function LoginPage() {
     [setLanguage]
   );
 
-  // 处理客户端选择
-  const handleSelectClient = useCallback((client: ClientConfig) => {
-    setApiBase(client.apiBase);
-    setManagementKey(client.managementKey);
-    setShowCustomBase(true);
-  }, []);
-
   useEffect(() => {
-    if (!activeClientId) return;
-
-    const client = getClientById(activeClientId);
-    if (!client) return;
-
-    setApiBase(client.apiBase);
-    setManagementKey(client.managementKey);
-    setShowCustomBase(true);
-  }, [activeClientId, getClientById]);
-
-  useEffect(() => {
-    if (!authHasHydrated) {
-      return;
-    }
-    if (initAttempted.current) {
-      return;
-    }
-    initAttempted.current = true;
-
     const init = async () => {
       try {
         const autoLoggedIn = await restoreSession();
@@ -159,24 +124,17 @@ export function LoginPage() {
           setApiBase(storedBase || detectedBase);
           setManagementKey(storedKey || '');
           setRememberPassword(storedRememberPassword || Boolean(storedKey));
-          setAutoLoginSuccess(false);
         }
       } finally {
-        setAutoLoading(false);
+        if (!autoLoginSuccess) {
+          setAutoLoading(false);
+        }
       }
     };
 
     init();
-  }, [
-    authHasHydrated,
-    detectedBase,
-    location.state,
-    navigate,
-    restoreSession,
-    storedBase,
-    storedKey,
-    storedRememberPassword,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!managementKey.trim()) {
@@ -191,13 +149,8 @@ export function LoginPage() {
       await login({
         apiBase: baseToUse,
         managementKey: managementKey.trim(),
-        rememberPassword,
+        rememberPassword
       });
-      // 更新最后连接时间
-      const { activeClientId } = useClientCacheStore.getState();
-      if (activeClientId) {
-        updateLastConnected(activeClientId);
-      }
       showNotification(t('common.connected_status'), 'success');
       navigate('/', { replace: true });
     } catch (err: unknown) {
@@ -207,17 +160,7 @@ export function LoginPage() {
     } finally {
       setLoading(false);
     }
-  }, [
-    apiBase,
-    detectedBase,
-    login,
-    managementKey,
-    navigate,
-    rememberPassword,
-    showNotification,
-    t,
-    updateLastConnected,
-  ]);
+  }, [apiBase, detectedBase, login, managementKey, navigate, rememberPassword, showNotification, t]);
 
   const handleSubmitKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -271,19 +214,14 @@ export function LoginPage() {
               <div className={styles.loginHeader}>
                 <div className={styles.titleRow}>
                   <div className={styles.title}>{t('title.login')}</div>
-                  <select
+                  <Select
                     className={styles.languageSelect}
                     value={language}
+                    options={languageOptions}
                     onChange={handleLanguageChange}
-                    title={t('language.switch')}
-                    aria-label={t('language.switch')}
-                  >
-                    {LANGUAGE_ORDER.map((lang) => (
-                      <option key={lang} value={lang}>
-                        {t(LANGUAGE_LABEL_KEYS[lang])}
-                      </option>
-                    ))}
-                  </select>
+                    fullWidth={false}
+                    ariaLabel={t('language.switch')}
+                  />
                 </div>
                 <div className={styles.subtitle}>{t('login.subtitle')}</div>
               </div>
@@ -294,29 +232,13 @@ export function LoginPage() {
                 <div className={styles.hint}>{t('login.connection_auto_hint')}</div>
               </div>
 
-              {/* 客户端选择器 */}
-              <ClientSelector onSelectClient={handleSelectClient} />
-
-              {/* 客户端管理按钮 */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowClientModal(true)}
-                style={{ marginBottom: 8 }}
-              >
-                {t('client_selector.manage_clients', '管理客户端')}
-              </Button>
-
               <div className={styles.toggleAdvanced}>
-                <input
-                  id="custom-connection-toggle"
-                  type="checkbox"
+                <ToggleSwitch
                   checked={showCustomBase}
-                  onChange={(e) => setShowCustomBase(e.target.checked)}
+                  onChange={setShowCustomBase}
+                  ariaLabel={t('login.custom_connection_label')}
+                  label={<span className={styles.toggleLabel}>{t('login.custom_connection_label')}</span>}
                 />
-                <label htmlFor="custom-connection-toggle">
-                  {t('login.custom_connection_label')}
-                </label>
               </div>
 
               {showCustomBase && (
@@ -359,15 +281,12 @@ export function LoginPage() {
               />
 
               <div className={styles.toggleAdvanced}>
-                <input
-                  id="remember-password-toggle"
-                  type="checkbox"
+                <ToggleSwitch
                   checked={rememberPassword}
-                  onChange={(e) => setRememberPassword(e.target.checked)}
+                  onChange={setRememberPassword}
+                  ariaLabel={t('login.remember_password_label')}
+                  label={<span className={styles.toggleLabel}>{t('login.remember_password_label')}</span>}
                 />
-                <label htmlFor="remember-password-toggle">
-                  {t('login.remember_password_label')}
-                </label>
               </div>
 
               <Button fullWidth onClick={handleSubmit} loading={loading}>
@@ -376,12 +295,6 @@ export function LoginPage() {
 
               {error && <div className={styles.errorBox}>{error}</div>}
             </div>
-
-            {/* 客户端管理弹窗 */}
-            <ClientManagementModal
-              isOpen={showClientModal}
-              onClose={() => setShowClientModal(false)}
-            />
           </div>
         )}
       </div>
