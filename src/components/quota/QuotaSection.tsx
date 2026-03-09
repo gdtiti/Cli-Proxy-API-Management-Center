@@ -153,6 +153,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
+  const showConfirmation = useNotificationStore((state) => state.showConfirmation);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const setQuota = useQuotaStore((state) => state[config.storeSetter]) as QuotaSetter<
     Record<string, TState>
@@ -160,6 +161,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 
   // Delete state management
   const [deletingFile, setDeletingFile] = useState<string | null>(null);
+  const [deletingFailedFiles, setDeletingFailedFiles] = useState(false);
   // Single card refresh state
   const [refreshingFile, setRefreshingFile] = useState<string | null>(null);
 
@@ -214,6 +216,14 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       return state === statusFilter;
     });
   }, [filteredFiles, quota, statusFilter]);
+
+  const failedDisplayFiles = useMemo(
+    () =>
+      displayFiles.filter(
+        (file) => quota[file.name]?.status === 'error' && !isRuntimeOnlyAuthFile(file)
+      ),
+    [displayFiles, quota]
+  );
 
   const showAllAllowed = displayFiles.length <= MAX_SHOW_ALL_THRESHOLD;
   const effectiveViewMode: ViewMode = viewMode === 'all' && !showAllAllowed ? 'paged' : viewMode;
@@ -295,6 +305,25 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     [parseRefreshConcurrency]
   );
 
+  const removeDeletedFiles = useCallback(
+    (deletedNames: string[]) => {
+      if (deletedNames.length === 0) return;
+
+      setQuota((prev) => {
+        const next = { ...prev };
+        deletedNames.forEach((name) => {
+          delete next[name];
+        });
+        return next;
+      });
+
+      deletedNames.forEach((name) => {
+        onFileDeleted?.(name);
+      });
+    },
+    [onFileDeleted, setQuota]
+  );
+
   // Delete handler
   const handleDelete = useCallback(
     async (name: string) => {
@@ -303,14 +332,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       setDeletingFile(name);
       try {
         await authFilesApi.deleteFile(name);
-        // Clear quota cache for this credential
-        setQuota((prev) => {
-          const next = { ...prev };
-          delete next[name];
-          return next;
-        });
-        // Notify parent to update file list
-        onFileDeleted?.(name);
+        removeDeletedFiles([name]);
         showNotification(t('quota_management.delete_success'), 'success');
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : t('common.unknown_error');
@@ -319,8 +341,81 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         setDeletingFile(null);
       }
     },
-    [onFileDeleted, setQuota, showNotification, t]
+    [removeDeletedFiles, showNotification, t]
   );
+
+  const handleDeleteFailedFiles = useCallback(() => {
+    if (failedDisplayFiles.length === 0) {
+      showNotification(
+        t('quota_management.delete_failed_empty', {
+          defaultValue: '当前失败列表中没有可删除的认证文件',
+        }),
+        'info'
+      );
+      return;
+    }
+
+    showConfirmation({
+      title: t('quota_management.delete_failed_title', {
+        defaultValue: '删除失败认证文件',
+      }),
+      message: t('quota_management.delete_failed_confirm_batch', {
+        count: failedDisplayFiles.length,
+        defaultValue: '确定要删除当前失败列表中的 {{count}} 个认证文件吗？',
+      }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        setDeletingFailedFiles(true);
+        try {
+          const results = await Promise.allSettled(
+            failedDisplayFiles.map((file) => authFilesApi.deleteFile(file.name))
+          );
+
+          const deletedNames: string[] = [];
+          let failedCount = 0;
+
+          results.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              deletedNames.push(failedDisplayFiles[index].name);
+            } else {
+              failedCount += 1;
+            }
+          });
+
+          removeDeletedFiles(deletedNames);
+
+          if (failedCount === 0) {
+            showNotification(
+              t('quota_management.delete_failed_success_batch', {
+                count: deletedNames.length,
+                defaultValue: '已删除 {{count}} 个失败认证文件',
+              }),
+              'success'
+            );
+          } else if (deletedNames.length > 0) {
+            showNotification(
+              t('quota_management.delete_failed_partial_batch', {
+                success: deletedNames.length,
+                failed: failedCount,
+                defaultValue: '失败认证文件删除完成，成功 {{success}} 个，失败 {{failed}} 个',
+              }),
+              'warning'
+            );
+          } else {
+            showNotification(
+              t('quota_management.delete_failed_request_failed', {
+                defaultValue: '删除失败认证文件失败',
+              }),
+              'error'
+            );
+          }
+        } finally {
+          setDeletingFailedFiles(false);
+        }
+      },
+    });
+  }, [failedDisplayFiles, removeDeletedFiles, showConfirmation, showNotification, t]);
 
   // Single card refresh handler
   const handleRefreshSingle = useCallback(
@@ -736,6 +831,32 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               {t('quota_management.check_all')}
             </Button>
 
+            {activeTab === 'credentials' && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleDeleteFailedFiles}
+                disabled={
+                  disabled ||
+                  isBusy ||
+                  deletingFailedFiles ||
+                  statusFilter !== 'error' ||
+                  failedDisplayFiles.length === 0
+                }
+                loading={deletingFailedFiles}
+                title={t('quota_management.delete_failed_current', {
+                  defaultValue: '删除当前失败项',
+                })}
+                aria-label={t('quota_management.delete_failed_current', {
+                  defaultValue: '删除当前失败项',
+                })}
+              >
+                {t('quota_management.delete_failed_current', {
+                  defaultValue: '删除当前失败项',
+                })}
+              </Button>
+            )}
+
             <Button
               variant="secondary"
               size="sm"
@@ -920,13 +1041,13 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                 <QuotaCard
                   key={item.name}
                   item={item}
-                quota={quota[item.name]}
-                resolvedTheme={resolvedTheme}
-                i18nPrefix={config.i18nPrefix}
-                cardIdleMessageKey={config.cardIdleMessageKey}
-                cardClassName={config.cardClassName}
-                defaultType={config.type}
-                renderQuotaItems={config.renderQuotaItems}
+                  quota={quota[item.name]}
+                  resolvedTheme={resolvedTheme}
+                  i18nPrefix={config.i18nPrefix}
+                  cardIdleMessageKey={config.cardIdleMessageKey}
+                  cardClassName={config.cardClassName}
+                  defaultType={config.type}
+                  renderQuotaItems={config.renderQuotaItems}
                   onDelete={cardActionsEnabled ? handleDelete : undefined}
                   isDeleting={deletingFile === item.name}
                   canDelete={!isRuntimeOnlyAuthFile(item)}

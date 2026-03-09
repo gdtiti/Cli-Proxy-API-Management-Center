@@ -548,6 +548,10 @@
     "batch_deselect": "取消选择",
     "batch_enable": "启用",
     "batch_disable": "禁用",
+    "batch_download_button": "下载当前筛选",
+    "batch_download_none": "当前筛选下没有可下载的认证文件",
+    "batch_download_success": "已打包下载 {{count}} 个认证文件",
+    "batch_download_partial": "认证文件打包下载完成，成功 {{success}} 个，失败 {{failed}} 个",
     "prefix_proxy_button": "编辑认证文件字段",
     "auth_field_editor_title": "编辑认证文件字段 - {{name}}",
     "prefix_proxy_loading": "正在加载认证文件...",
@@ -1294,7 +1298,14 @@
     "description": "集中查看 OAuth 额度与剩余情况",
     "refresh_files": "刷新认证文件",
     "refresh_files_and_quota": "刷新认证文件&额度",
-    "card_idle_hint": "请使用顶部“刷新认证文件&额度”按钮获取最新额度。"
+    "card_idle_hint": "请使用顶部“刷新认证文件&额度”按钮获取最新额度。",
+    "delete_failed_current": "删除当前失败项",
+    "delete_failed_title": "删除失败认证文件",
+    "delete_failed_confirm_batch": "确定要删除当前失败列表中的 {{count}} 个认证文件吗？",
+    "delete_failed_empty": "当前失败列表中没有可删除的认证文件",
+    "delete_failed_success_batch": "已删除 {{count}} 个失败认证文件",
+    "delete_failed_partial_batch": "失败认证文件删除完成，成功 {{success}} 个，失败 {{failed}} 个",
+    "delete_failed_request_failed": "删除失败认证文件失败"
   },
   "system_info": {
     "title": "管理中心信息",

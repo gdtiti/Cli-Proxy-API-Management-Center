@@ -89,6 +89,7 @@ export function AuthFilesPage() {
     uploading,
     deleting,
     deletingAll,
+    batchDownloading,
     statusUpdating,
     fileInputRef,
     loadFiles,
@@ -97,6 +98,7 @@ export function AuthFilesPage() {
     handleDelete,
     handleDeleteAll,
     handleDownload,
+    handleBatchDownload,
     handleStatusToggle,
     toggleSelect,
     selectAllVisible,
@@ -279,6 +281,28 @@ export function AuthFilesPage() {
       return matchType && matchSearch;
     });
   }, [filesMatchingProblemFilter, filter, search]);
+
+  const downloadableFilteredFiles = useMemo(
+    () => filtered.filter((file) => !isRuntimeOnlyAuthFile(file)),
+    [filtered]
+  );
+
+  const batchDownloadArchiveName = useMemo(() => {
+    const segments = ['auth-files'];
+    if (filter !== 'all') {
+      const normalized = normalizeProviderKey(String(filter));
+      if (normalized) {
+        segments.push(normalized);
+      }
+    }
+    if (problemOnly) {
+      segments.push('problem');
+    }
+    if (search.trim()) {
+      segments.push('filtered');
+    }
+    return `${segments.join('-')}.zip`;
+  }, [filter, problemOnly, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -487,6 +511,27 @@ export function AuthFilesPage() {
           <div className={styles.headerActions}>
             <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
               {t('common.refresh')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                void handleBatchDownload(downloadableFilteredFiles, {
+                  archiveName: batchDownloadArchiveName,
+                })
+              }
+              disabled={
+                disableControls ||
+                loading ||
+                uploading ||
+                batchDownloading ||
+                downloadableFilteredFiles.length === 0
+              }
+              loading={batchDownloading}
+            >
+              {t('auth_files.batch_download_button', {
+                defaultValue: '下载当前筛选',
+              })}
             </Button>
             <Button
               size="sm"

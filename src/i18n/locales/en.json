@@ -548,6 +548,10 @@
     "batch_deselect": "Deselect",
     "batch_enable": "Enable",
     "batch_disable": "Disable",
+    "batch_download_button": "Download current filter",
+    "batch_download_none": "No downloadable auth files in the current filter",
+    "batch_download_success": "Downloaded {{count}} auth files as a ZIP archive",
+    "batch_download_partial": "Batch download completed: {{success}} succeeded, {{failed}} failed",
     "prefix_proxy_button": "Edit Auth Fields",
     "auth_field_editor_title": "Edit Auth Fields - {{name}}",
     "prefix_proxy_loading": "Loading auth file...",
@@ -1294,7 +1298,14 @@
     "description": "Monitor OAuth quota status for Antigravity, Codex, and Gemini CLI credentials.",
     "refresh_files": "Refresh auth files",
     "refresh_files_and_quota": "Refresh files & quota",
-    "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data."
+    "card_idle_hint": "Use the top \"Refresh files & quota\" button to fetch the latest quota data.",
+    "delete_failed_current": "Delete current failed items",
+    "delete_failed_title": "Delete failed auth files",
+    "delete_failed_confirm_batch": "Are you sure you want to delete {{count}} auth files from the current failed list?",
+    "delete_failed_empty": "There are no deletable auth files in the current failed list",
+    "delete_failed_success_batch": "Deleted {{count}} failed auth files",
+    "delete_failed_partial_batch": "Failed auth files deletion finished: {{success}} succeeded, {{failed}} failed",
+    "delete_failed_request_failed": "Failed to delete failed auth files"
   },
   "system_info": {
     "title": "Management Center Info",

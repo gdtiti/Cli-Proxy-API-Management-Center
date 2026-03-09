@@ -82,6 +82,7 @@ export function QuotaPage() {
         files={files}
         loading={loading}
         disabled={disableControls}
+        onFileDeleted={handleFileDeleted}
       />
       <QuotaSection
         config={ANTIGRAVITY_CONFIG}

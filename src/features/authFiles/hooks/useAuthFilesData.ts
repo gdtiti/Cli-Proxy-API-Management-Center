@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { authFilesApi } from '@/services/api';
-import { apiClient } from '@/services/api/client';
 import { useNotificationStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { formatFileSize } from '@/utils/format';
 import { MAX_AUTH_FILE_SIZE } from '@/utils/constants';
 import { downloadBlob } from '@/utils/download';
+import { createZipBlob } from '@/utils/zip';
 import {
   getTypeLabel,
   hasAuthFileStatusMessage,
@@ -20,6 +20,10 @@ type DeleteAllOptions = {
   onResetProblemOnly: () => void;
 };
 
+type BatchDownloadOptions = {
+  archiveName?: string;
+};
+
 export type UseAuthFilesDataResult = {
   files: AuthFileItem[];
   selectedFiles: Set<string>;
@@ -29,6 +33,7 @@ export type UseAuthFilesDataResult = {
   uploading: boolean;
   deleting: string | null;
   deletingAll: boolean;
+  batchDownloading: boolean;
   statusUpdating: Record<string, boolean>;
   fileInputRef: RefObject<HTMLInputElement | null>;
   loadFiles: () => Promise<void>;
@@ -37,6 +42,10 @@ export type UseAuthFilesDataResult = {
   handleDelete: (name: string) => void;
   handleDeleteAll: (options: DeleteAllOptions) => void;
   handleDownload: (name: string) => Promise<void>;
+  handleBatchDownload: (
+    targetFiles: AuthFileItem[],
+    options?: BatchDownloadOptions
+  ) => Promise<void>;
   handleStatusToggle: (item: AuthFileItem, enabled: boolean) => Promise<void>;
   toggleSelect: (name: string) => void;
   selectAllVisible: (visibleFiles: AuthFileItem[]) => void;
@@ -47,6 +56,26 @@ export type UseAuthFilesDataResult = {
 
 export type UseAuthFilesDataOptions = {
   refreshKeyStats: () => Promise<void>;
+};
+
+const toArchiveFilename = (archiveName?: string) => {
+  const normalized = String(archiveName ?? '')
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-');
+  if (normalized) {
+    return normalized.toLowerCase().endsWith('.zip') ? normalized : `${normalized}.zip`;
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `auth-files-${timestamp}.zip`;
+};
+
+const getModifiedAt = (file: AuthFileItem): Date | undefined => {
+  if (typeof file.modified !== 'number' || !Number.isFinite(file.modified)) return undefined;
+
+  const timestamp = file.modified > 1_000_000_000_000 ? file.modified : file.modified * 1000;
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
 export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFilesDataResult {
@@ -61,6 +90,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [batchDownloading, setBatchDownloading] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
@@ -358,16 +388,92 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const handleDownload = useCallback(
     async (name: string) => {
       try {
-        const response = await apiClient.getRaw(
-          `/auth-files/download?name=${encodeURIComponent(name)}`,
-          { responseType: 'blob' }
-        );
-        const blob = new Blob([response.data]);
+        const blob = await authFilesApi.downloadBlob(name);
         downloadBlob({ filename: name, blob });
         showNotification(t('auth_files.download_success'), 'success');
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : '';
         showNotification(`${t('notification.download_failed')}: ${errorMessage}`, 'error');
+      }
+    },
+    [showNotification, t]
+  );
+
+  const handleBatchDownload = useCallback(
+    async (targetFiles: AuthFileItem[], options?: BatchDownloadOptions) => {
+      const uniqueFiles = Array.from(
+        new Map(
+          targetFiles
+            .filter((file) => !isRuntimeOnlyAuthFile(file))
+            .map((file) => [file.name, file] as const)
+        ).values()
+      );
+
+      if (uniqueFiles.length === 0) {
+        showNotification(
+          t('auth_files.batch_download_none', {
+            defaultValue: '当前筛选下没有可下载的认证文件',
+          }),
+          'info'
+        );
+        return;
+      }
+
+      setBatchDownloading(true);
+      try {
+        const results = await Promise.allSettled(
+          uniqueFiles.map(async (file) => {
+            const blob = await authFilesApi.downloadBlob(file.name);
+            return {
+              name: file.name,
+              data: await blob.arrayBuffer(),
+              modifiedAt: getModifiedAt(file),
+            };
+          })
+        );
+
+        const entries: Array<{ name: string; data: ArrayBuffer; modifiedAt?: Date }> = [];
+        let failed = 0;
+
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            entries.push(result.value);
+          } else {
+            failed += 1;
+          }
+        });
+
+        if (entries.length === 0) {
+          showNotification(t('notification.download_failed'), 'error');
+          return;
+        }
+
+        const archiveBlob = createZipBlob(entries);
+        downloadBlob({
+          filename: toArchiveFilename(options?.archiveName),
+          blob: archiveBlob,
+        });
+
+        if (failed === 0) {
+          showNotification(
+            t('auth_files.batch_download_success', {
+              count: entries.length,
+              defaultValue: '已打包下载 {{count}} 个认证文件',
+            }),
+            'success'
+          );
+        } else {
+          showNotification(
+            t('auth_files.batch_download_partial', {
+              success: entries.length,
+              failed,
+              defaultValue: '认证文件打包下载完成，成功 {{success}} 个，失败 {{failed}} 个',
+            }),
+            'warning'
+          );
+        }
+      } finally {
+        setBatchDownloading(false);
       }
     },
     [showNotification, t]
@@ -546,6 +652,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     uploading,
     deleting,
     deletingAll,
+    batchDownloading,
     statusUpdating,
     fileInputRef,
     loadFiles,
@@ -554,6 +661,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     handleDelete,
     handleDeleteAll,
     handleDownload,
+    handleBatchDownload,
     handleStatusToggle,
     toggleSelect,
     selectAllVisible,
