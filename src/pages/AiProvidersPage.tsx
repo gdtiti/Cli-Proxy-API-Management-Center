@@ -25,7 +25,8 @@ import styles from './AiProvidersPage.module.scss';
 export function AiProvidersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { showNotification, showConfirmation } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
+  const showConfirmation = useNotificationStore((state) => state.showConfirmation);
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
 
@@ -81,7 +82,8 @@ export function AiProvidersPage() {
   }, [geminiKeys, normalizedQuery]);
 
   const filteredCodexConfigs = useMemo(() => {
-    if (!normalizedQuery) return codexConfigs.map((item, index) => ({ item, originalIndex: index }));
+    if (!normalizedQuery)
+      return codexConfigs.map((item, index) => ({ item, originalIndex: index }));
     return codexConfigs
       .map((item, index) => ({ item, originalIndex: index }))
       .filter(({ item }) => {
@@ -101,7 +103,8 @@ export function AiProvidersPage() {
   }, [codexConfigs, normalizedQuery]);
 
   const filteredClaudeConfigs = useMemo(() => {
-    if (!normalizedQuery) return claudeConfigs.map((item, index) => ({ item, originalIndex: index }));
+    if (!normalizedQuery)
+      return claudeConfigs.map((item, index) => ({ item, originalIndex: index }));
     return claudeConfigs
       .map((item, index) => ({ item, originalIndex: index }))
       .filter(({ item }) => {
@@ -121,7 +124,8 @@ export function AiProvidersPage() {
   }, [claudeConfigs, normalizedQuery]);
 
   const filteredVertexConfigs = useMemo(() => {
-    if (!normalizedQuery) return vertexConfigs.map((item, index) => ({ item, originalIndex: index }));
+    if (!normalizedQuery)
+      return vertexConfigs.map((item, index) => ({ item, originalIndex: index }));
     return vertexConfigs
       .map((item, index) => ({ item, originalIndex: index }))
       .filter(({ item }) => {
@@ -389,7 +393,9 @@ export function AiProvidersPage() {
     const entry = source[index];
     if (!entry) return;
     showConfirmation({
-      title: t(`ai_providers.${type}_delete_title`, { defaultValue: `Delete ${type === 'codex' ? 'Codex' : 'Claude'} Config` }),
+      title: t(`ai_providers.${type}_delete_title`, {
+        defaultValue: `Delete ${type === 'codex' ? 'Codex' : 'Claude'} Config`,
+      }),
       message: t(`ai_providers.${type}_delete_confirm`),
       variant: 'danger',
       confirmText: t('common.confirm'),
@@ -499,10 +505,18 @@ export function AiProvidersPage() {
               disableControls={disableControls}
               isSwitching={isSwitching}
               onAdd={() => openEditor('/ai-providers/gemini/new')}
-              onEdit={(index) => openEditor(`/ai-providers/gemini/${filteredGeminiKeys[index]?.originalIndex ?? index}`)}
+              onEdit={(index) =>
+                openEditor(
+                  `/ai-providers/gemini/${filteredGeminiKeys[index]?.originalIndex ?? index}`
+                )
+              }
               onDelete={(index) => deleteGemini(filteredGeminiKeys[index]?.originalIndex ?? index)}
               onToggle={(index, enabled) =>
-                void setConfigEnabled('gemini', filteredGeminiKeys[index]?.originalIndex ?? index, enabled)
+                void setConfigEnabled(
+                  'gemini',
+                  filteredGeminiKeys[index]?.originalIndex ?? index,
+                  enabled
+                )
               }
             />
           </div>
@@ -519,12 +533,23 @@ export function AiProvidersPage() {
               isSwitching={isSwitching}
               resolvedTheme={resolvedTheme}
               onAdd={() => openEditor('/ai-providers/codex/new')}
-              onEdit={(index) => openEditor(`/ai-providers/codex/${filteredCodexConfigs[index]?.originalIndex ?? index}`)}
+              onEdit={(index) =>
+                openEditor(
+                  `/ai-providers/codex/${filteredCodexConfigs[index]?.originalIndex ?? index}`
+                )
+              }
               onDelete={(index) =>
-                void deleteProviderEntry('codex', filteredCodexConfigs[index]?.originalIndex ?? index)
+                void deleteProviderEntry(
+                  'codex',
+                  filteredCodexConfigs[index]?.originalIndex ?? index
+                )
               }
               onToggle={(index, enabled) =>
-                void setConfigEnabled('codex', filteredCodexConfigs[index]?.originalIndex ?? index, enabled)
+                void setConfigEnabled(
+                  'codex',
+                  filteredCodexConfigs[index]?.originalIndex ?? index,
+                  enabled
+                )
               }
             />
           </div>
@@ -540,12 +565,23 @@ export function AiProvidersPage() {
               disableControls={disableControls}
               isSwitching={isSwitching}
               onAdd={() => openEditor('/ai-providers/claude/new')}
-              onEdit={(index) => openEditor(`/ai-providers/claude/${filteredClaudeConfigs[index]?.originalIndex ?? index}`)}
+              onEdit={(index) =>
+                openEditor(
+                  `/ai-providers/claude/${filteredClaudeConfigs[index]?.originalIndex ?? index}`
+                )
+              }
               onDelete={(index) =>
-                void deleteProviderEntry('claude', filteredClaudeConfigs[index]?.originalIndex ?? index)
+                void deleteProviderEntry(
+                  'claude',
+                  filteredClaudeConfigs[index]?.originalIndex ?? index
+                )
               }
               onToggle={(index, enabled) =>
-                void setConfigEnabled('claude', filteredClaudeConfigs[index]?.originalIndex ?? index, enabled)
+                void setConfigEnabled(
+                  'claude',
+                  filteredClaudeConfigs[index]?.originalIndex ?? index,
+                  enabled
+                )
               }
             />
           </div>
@@ -561,8 +597,14 @@ export function AiProvidersPage() {
               disableControls={disableControls}
               isSwitching={isSwitching}
               onAdd={() => openEditor('/ai-providers/vertex/new')}
-              onEdit={(index) => openEditor(`/ai-providers/vertex/${filteredVertexConfigs[index]?.originalIndex ?? index}`)}
-              onDelete={(index) => deleteVertex(filteredVertexConfigs[index]?.originalIndex ?? index)}
+              onEdit={(index) =>
+                openEditor(
+                  `/ai-providers/vertex/${filteredVertexConfigs[index]?.originalIndex ?? index}`
+                )
+              }
+              onDelete={(index) =>
+                deleteVertex(filteredVertexConfigs[index]?.originalIndex ?? index)
+              }
             />
           </div>
         )}
@@ -590,8 +632,14 @@ export function AiProvidersPage() {
               isSwitching={isSwitching}
               resolvedTheme={resolvedTheme}
               onAdd={() => openEditor('/ai-providers/openai/new')}
-              onEdit={(index) => openEditor(`/ai-providers/openai/${filteredOpenaiProviders[index]?.originalIndex ?? index}`)}
-              onDelete={(index) => deleteOpenai(filteredOpenaiProviders[index]?.originalIndex ?? index)}
+              onEdit={(index) =>
+                openEditor(
+                  `/ai-providers/openai/${filteredOpenaiProviders[index]?.originalIndex ?? index}`
+                )
+              }
+              onDelete={(index) =>
+                deleteOpenai(filteredOpenaiProviders[index]?.originalIndex ?? index)
+              }
             />
           </div>
         )}

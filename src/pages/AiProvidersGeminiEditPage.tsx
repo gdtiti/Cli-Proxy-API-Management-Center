@@ -42,7 +42,9 @@ const parseIndexParam = (value: string | undefined) => {
 };
 
 const stripGeminiModelResourceName = (value: string) => {
-  return String(value ?? '').trim().replace(/^\/?models\//i, '');
+  return String(value ?? '')
+    .trim()
+    .replace(/^\/?models\//i, '');
 };
 
 const normalizeModelEntries = (entries: Array<{ name: string; alias: string }>) =>
@@ -61,7 +63,9 @@ const buildGeminiSignature = (form: GeminiFormState) =>
   JSON.stringify({
     apiKey: String(form.apiKey ?? '').trim(),
     priority:
-      form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+      form.priority !== undefined && Number.isFinite(form.priority)
+        ? Math.trunc(form.priority)
+        : null,
     prefix: String(form.prefix ?? '').trim(),
     baseUrl: String(form.baseUrl ?? '').trim(),
     proxyUrl: String(form.proxyUrl ?? '').trim(),
@@ -76,7 +80,7 @@ export function AiProvidersGeminiEditPage() {
   const location = useLocation();
   const params = useParams<{ index?: string }>();
 
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const disableControls = connectionStatus !== 'connected';
 
@@ -89,7 +93,9 @@ export function AiProvidersGeminiEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState<GeminiFormState>(() => buildEmptyForm());
-  const [baselineSignature, setBaselineSignature] = useState(() => buildGeminiSignature(buildEmptyForm()));
+  const [baselineSignature, setBaselineSignature] = useState(() =>
+    buildGeminiSignature(buildEmptyForm())
+  );
 
   const [modelDiscoveryOpen, setModelDiscoveryOpen] = useState(false);
   const [modelDiscoveryEndpoint, setModelDiscoveryEndpoint] = useState('');
@@ -113,7 +119,9 @@ export function AiProvidersGeminiEditPage() {
   const invalidIndex = editIndex !== null && !initialData;
 
   const title =
-    editIndex !== null ? t('ai_providers.gemini_edit_modal_title') : t('ai_providers.gemini_add_modal_title');
+    editIndex !== null
+      ? t('ai_providers.gemini_edit_modal_title')
+      : t('ai_providers.gemini_add_modal_title');
 
   const handleBack = useCallback(() => {
     const state = location.state as LocationState;
@@ -225,7 +233,10 @@ export function AiProvidersGeminiEditPage() {
       });
 
       if (addedCount > 0) {
-        showNotification(t('ai_providers.gemini_models_fetch_added', { count: addedCount }), 'success');
+        showNotification(
+          t('ai_providers.gemini_models_fetch_added', { count: addedCount }),
+          'success'
+        );
       }
     },
     [setForm, showNotification, t]
@@ -319,7 +330,9 @@ export function AiProvidersGeminiEditPage() {
   };
 
   const handleApplyDiscoveredModels = () => {
-    const selectedModels = discoveredModels.filter((model) => modelDiscoverySelected.has(model.name));
+    const selectedModels = discoveredModels.filter((model) =>
+      modelDiscoverySelected.has(model.name)
+    );
     if (selectedModels.length) {
       mergeDiscoveredModels(selectedModels);
     }
@@ -374,7 +387,9 @@ export function AiProvidersGeminiEditPage() {
       updateConfigValue('gemini-api-key', nextList);
       clearCache('gemini-api-key');
       showNotification(
-        editIndex !== null ? t('notification.gemini_key_updated') : t('notification.gemini_key_added'),
+        editIndex !== null
+          ? t('notification.gemini_key_updated')
+          : t('notification.gemini_key_added'),
         'success'
       );
       allowNextNavigation();
@@ -400,7 +415,8 @@ export function AiProvidersGeminiEditPage() {
     updateConfigValue,
   ]);
 
-  const canOpenModelDiscovery = !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex;
+  const canOpenModelDiscovery =
+    !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex;
   const canApplyModelDiscovery = !disableControls && !saving && !modelDiscoveryFetching;
 
   return (
@@ -501,7 +517,9 @@ export function AiProvidersGeminiEditPage() {
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.gemini_models_label')}</label>
+                <label className={styles.modelConfigTitle}>
+                  {t('ai_providers.gemini_models_label')}
+                </label>
                 <div className={styles.modelConfigToolbar}>
                   <Button
                     variant="secondary"
@@ -572,14 +590,20 @@ export function AiProvidersGeminiEditPage() {
                   >
                     {t('common.cancel')}
                   </Button>
-                  <Button size="sm" onClick={handleApplyDiscoveredModels} disabled={!canApplyModelDiscovery}>
+                  <Button
+                    size="sm"
+                    onClick={handleApplyDiscoveredModels}
+                    disabled={!canApplyModelDiscovery}
+                  >
                     {t('ai_providers.gemini_models_fetch_apply')}
                   </Button>
                 </>
               }
             >
               <div className={styles.openaiModelsContent}>
-                <div className={styles.sectionHint}>{t('ai_providers.gemini_models_fetch_hint')}</div>
+                <div className={styles.sectionHint}>
+                  {t('ai_providers.gemini_models_fetch_hint')}
+                </div>
                 <div className={styles.openaiModelsEndpointSection}>
                   <label className={styles.openaiModelsEndpointLabel}>
                     {t('ai_providers.gemini_models_fetch_url_label')}
@@ -610,11 +634,17 @@ export function AiProvidersGeminiEditPage() {
                 />
                 {modelDiscoveryError && <div className="error-box">{modelDiscoveryError}</div>}
                 {modelDiscoveryFetching ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.gemini_models_fetch_loading')}</div>
+                  <div className={styles.sectionHint}>
+                    {t('ai_providers.gemini_models_fetch_loading')}
+                  </div>
                 ) : discoveredModels.length === 0 ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.gemini_models_fetch_empty')}</div>
+                  <div className={styles.sectionHint}>
+                    {t('ai_providers.gemini_models_fetch_empty')}
+                  </div>
                 ) : discoveredModelsFiltered.length === 0 ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.gemini_models_search_empty')}</div>
+                  <div className={styles.sectionHint}>
+                    {t('ai_providers.gemini_models_search_empty')}
+                  </div>
                 ) : (
                   <div className={styles.modelDiscoveryList}>
                     {discoveredModelsFiltered.map((model) => {

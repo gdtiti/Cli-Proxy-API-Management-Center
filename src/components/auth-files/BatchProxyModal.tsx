@@ -29,10 +29,10 @@ export function BatchProxyModal({
   fileProxies,
   existingTypes,
   getTypeLabel,
-  onComplete
+  onComplete,
 }: BatchProxyModalProps) {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
 
   const [proxyUrl, setProxyUrl] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -51,7 +51,7 @@ export function BatchProxyModal({
   });
 
   const toggleSelection = useCallback((name: string) => {
-    setSelectedFiles(prev => {
+    setSelectedFiles((prev) => {
       const next = new Set(prev);
       if (next.has(name)) {
         next.delete(name);
@@ -92,7 +92,7 @@ export function BatchProxyModal({
 
         jsonContent.proxy_url = proxyUrl;
         const updatedContent = JSON.stringify(jsonContent, null, 2);
-        
+
         const blob = new Blob([updatedContent], { type: 'application/json' });
         const file = new File([blob], fileName, { type: 'application/json' });
         await authFilesApi.upload(file);
@@ -106,15 +106,15 @@ export function BatchProxyModal({
     setProcessing(false);
     setProxyUrl('');
     setSelectedFiles(new Set());
-    
+
     showNotification(
-      t('auth_files.batch_proxy_result', { 
+      t('auth_files.batch_proxy_result', {
         success: successCount,
-        failed: failCount
-      }), 
+        failed: failCount,
+      }),
       failCount > 0 ? 'warning' : 'success'
     );
-    
+
     onComplete?.();
     onClose();
   }, [proxyUrl, selectedFiles, showNotification, t, onComplete, onClose]);
@@ -153,67 +153,69 @@ export function BatchProxyModal({
             </span>
           </div>
           <div className={styles.fileList}>
-            {existingTypes.filter(type => type !== 'all').map(type => {
-              const typeFiles = files.filter(f => f.type === type);
-              if (typeFiles.length === 0) return null;
-              
-              const allSelected = typeFiles.every(f => selectedFiles.has(f.name));
-              const someSelected = typeFiles.some(f => selectedFiles.has(f.name));
+            {existingTypes
+              .filter((type) => type !== 'all')
+              .map((type) => {
+                const typeFiles = files.filter((f) => f.type === type);
+                if (typeFiles.length === 0) return null;
 
-              return (
-                <div key={type} className={styles.typeGroup}>
-                  <div 
-                    className={styles.typeGroupHeader}
-                    onClick={() => {
-                      if (allSelected) {
-                        setSelectedFiles(prev => {
-                          const next = new Set(prev);
-                          typeFiles.forEach(f => next.delete(f.name));
-                          return next;
-                        });
-                      } else {
-                        setSelectedFiles(prev => {
-                          const next = new Set(prev);
-                          typeFiles.forEach(f => next.add(f.name));
-                          return next;
-                        });
-                      }
-                    }}
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={allSelected} 
-                      ref={input => {
-                        if (input) {
-                          input.indeterminate = !allSelected && someSelected;
+                const allSelected = typeFiles.every((f) => selectedFiles.has(f.name));
+                const someSelected = typeFiles.some((f) => selectedFiles.has(f.name));
+
+                return (
+                  <div key={type} className={styles.typeGroup}>
+                    <div
+                      className={styles.typeGroupHeader}
+                      onClick={() => {
+                        if (allSelected) {
+                          setSelectedFiles((prev) => {
+                            const next = new Set(prev);
+                            typeFiles.forEach((f) => next.delete(f.name));
+                            return next;
+                          });
+                        } else {
+                          setSelectedFiles((prev) => {
+                            const next = new Set(prev);
+                            typeFiles.forEach((f) => next.add(f.name));
+                            return next;
+                          });
                         }
                       }}
-                      readOnly 
-                    />
-                    <span className={styles.typeGroupLabel}>{getTypeLabel(type)}</span>
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(input) => {
+                          if (input) {
+                            input.indeterminate = !allSelected && someSelected;
+                          }
+                        }}
+                        readOnly
+                      />
+                      <span className={styles.typeGroupLabel}>{getTypeLabel(type)}</span>
+                    </div>
+                    <div className={styles.typeGroupFiles}>
+                      {typeFiles.map((file) => {
+                        const hasProxy = !!fileProxies[file.name];
+                        return (
+                          <div
+                            key={file.name}
+                            className={`${styles.fileItem} ${selectedFiles.has(file.name) ? styles.fileItemSelected : ''} ${hasProxy ? styles.fileItemHasProxy : ''}`}
+                            onClick={() => toggleSelection(file.name)}
+                            title={hasProxy ? `Proxy: ${fileProxies[file.name]}` : undefined}
+                          >
+                            <span className={styles.fileName}>{file.name}</span>
+                            {hasProxy && <span className={styles.proxyIndicator} />}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className={styles.typeGroupFiles}>
-                    {typeFiles.map(file => {
-                      const hasProxy = !!fileProxies[file.name];
-                      return (
-                        <div 
-                          key={file.name} 
-                          className={`${styles.fileItem} ${selectedFiles.has(file.name) ? styles.fileItemSelected : ''} ${hasProxy ? styles.fileItemHasProxy : ''}`}
-                          onClick={() => toggleSelection(file.name)}
-                          title={hasProxy ? `Proxy: ${fileProxies[file.name]}` : undefined}
-                        >
-                          <span className={styles.fileName}>{file.name}</span>
-                          {hasProxy && <span className={styles.proxyIndicator} />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
-        
+
         <div className={styles.proxyConfigSection}>
           <div className={styles.formGroup}>
             <label>{t('auth_files.proxy_url_label')}</label>
@@ -223,9 +225,7 @@ export function BatchProxyModal({
               placeholder="socks5://yourname:yourpassword@ip:port"
               disabled={processing}
             />
-            <div className={styles.hint}>
-              {t('auth_files.proxy_url_hint')}
-            </div>
+            <div className={styles.hint}>{t('auth_files.proxy_url_hint')}</div>
           </div>
         </div>
       </div>

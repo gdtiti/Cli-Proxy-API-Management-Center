@@ -6,7 +6,7 @@
 
 1. `llmdoc/overview/project-overview.md` - 项目是什么、解决什么问题
 2. `llmdoc/architecture/frontend-architecture.md` - 前端整体结构与路由分层
-3. `llmdoc/architecture/state-and-api.md` - 状态管理与 API 分层
+3. `llmdoc/architecture/state-and-api.md` - 状态管理、全局通知/确认流、启动期订阅约束与自动登录幂等边界
 4. `llmdoc/guides/development-workflow.md` - 常见开发工作流
 5. `llmdoc/guides/post-conflict-regression-checklist.md` - 冲突合并后的回归检查清单
 6. `llmdoc/reference/routes-and-pages.md` - 页面路由与功能入口速查

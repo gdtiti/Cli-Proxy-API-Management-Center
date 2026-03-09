@@ -5,29 +5,40 @@ import { useNotificationStore } from '@/stores';
 
 export function ConfirmationModal() {
   const { t } = useTranslation();
-  const confirmation = useNotificationStore((state) => state.confirmation);
+  const isOpen = useNotificationStore((state) => state.confirmation.isOpen);
+  const isLoading = useNotificationStore((state) => state.confirmation.isLoading);
+  const options = useNotificationStore((state) => state.confirmation.options);
   const hideConfirmation = useNotificationStore((state) => state.hideConfirmation);
   const setConfirmationLoading = useNotificationStore((state) => state.setConfirmationLoading);
-
-  const { isOpen, isLoading, options } = confirmation;
 
   if (!isOpen || !options) {
     return null;
   }
 
-  const { title, message, onConfirm, onCancel, confirmText, cancelText, variant = 'primary' } = options;
+  const {
+    title,
+    message,
+    onConfirm,
+    onCancel,
+    confirmText,
+    cancelText,
+    variant = 'primary',
+  } = options;
 
   const handleConfirm = async () => {
+    let confirmed = false;
+
     try {
       setConfirmationLoading(true);
       await onConfirm();
+      confirmed = true;
       hideConfirmation();
     } catch (error) {
       console.error('Confirmation action failed:', error);
-      // Optional: show error notification here if needed, 
-      // but usually the calling component handles specific errors.
     } finally {
-      setConfirmationLoading(false);
+      if (!confirmed) {
+        setConfirmationLoading(false);
+      }
     }
   };
 
@@ -52,11 +63,7 @@ export function ConfirmationModal() {
         <Button variant="ghost" onClick={handleCancel} disabled={isLoading}>
           {cancelText || t('common.cancel')}
         </Button>
-        <Button 
-          variant={variant} 
-          onClick={handleConfirm} 
-          loading={isLoading}
-        >
+        <Button variant={variant} onClick={handleConfirm} loading={isLoading}>
           {confirmText || t('common.confirm')}
         </Button>
       </div>

@@ -46,7 +46,8 @@ export type UseAuthFilesDataOptions = {
 export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFilesDataResult {
   const { refreshKeyStats } = options;
   const { t } = useTranslation();
-  const { showNotification, showConfirmation } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
+  const showConfirmation = useNotificationStore((state) => state.showConfirmation);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -215,7 +216,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
           } finally {
             setDeleting(null);
           }
-        }
+        },
       });
     },
     [showConfirmation, showNotification, t]
@@ -303,7 +304,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
           } finally {
             setDeletingAll(false);
           }
-        }
+        },
       });
     },
     [deselectAll, files, showConfirmation, showNotification, t]
@@ -471,18 +472,21 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
           });
 
           if (failCount === 0) {
-            showNotification(`${t('auth_files.delete_all_success')} (${deleted.length})`, 'success');
+            showNotification(
+              `${t('auth_files.delete_all_success')} (${deleted.length})`,
+              'success'
+            );
           } else {
             showNotification(
               t('auth_files.delete_filtered_partial', {
                 success: deleted.length,
                 failed: failCount,
-                type: t('auth_files.filter_all')
+                type: t('auth_files.filter_all'),
               }),
               'warning'
             );
           }
-        }
+        },
       });
     },
     [showConfirmation, showNotification, t]
@@ -510,6 +514,6 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     selectAllVisible,
     deselectAll,
     batchSetStatus,
-    batchDelete
+    batchDelete,
   };
 }

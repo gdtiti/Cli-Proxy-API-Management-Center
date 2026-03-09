@@ -13,7 +13,7 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
 } from 'chart.js';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -66,18 +66,24 @@ export interface UsageDetail {
 }
 
 export interface UsageData {
-  apis: Record<string, {
-    models: Record<string, {
-      details: UsageDetail[];
-    }>;
-  }>;
+  apis: Record<
+    string,
+    {
+      models: Record<
+        string,
+        {
+          details: UsageDetail[];
+        }
+      >;
+    }
+  >;
 }
 
 export function MonitorPage() {
   const { t } = useTranslation();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const isDark = resolvedTheme === 'dark';
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
 
   // 状态
   const [loading, setLoading] = useState(true);
@@ -99,13 +105,14 @@ export function MonitorPage() {
       const typeMap: Record<string, string> = {};
 
       // 并行加载所有提供商配置
-      const [openaiProviders, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs] = await Promise.all([
-        providersApi.getOpenAIProviders().catch(() => []),
-        providersApi.getGeminiKeys().catch(() => []),
-        providersApi.getClaudeConfigs().catch(() => []),
-        providersApi.getCodexConfigs().catch(() => []),
-        providersApi.getVertexConfigs().catch(() => []),
-      ]);
+      const [openaiProviders, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs] =
+        await Promise.all([
+          providersApi.getOpenAIProviders().catch(() => []),
+          providersApi.getGeminiKeys().catch(() => []),
+          providersApi.getClaudeConfigs().catch(() => []),
+          providersApi.getCodexConfigs().catch(() => []),
+          providersApi.getVertexConfigs().catch(() => []),
+        ]);
 
       // 处理 OpenAI 兼容提供商
       openaiProviders.forEach((provider) => {
@@ -214,7 +221,7 @@ export function MonitorPage() {
       // 并行加载使用数据和渠道映射
       const [response] = await Promise.all([
         usageApi.getUsage({ range: rangeStr }),
-        loadProviderMap()
+        loadProviderMap(),
       ]);
       // API 返回的数据可能在 response.usage 或直接在 response 中
       const data = response?.usage ?? response;
@@ -307,10 +314,7 @@ export function MonitorPage() {
         return;
       }
       const msg = err instanceof Error ? err.message : '';
-      showNotification(
-        `${t('usage_stats.clear_failed')}${msg ? `: ${msg}` : ''}`,
-        'error'
-      );
+      showNotification(`${t('usage_stats.clear_failed')}${msg ? `: ${msg}` : ''}`, 'error');
     } finally {
       setClearing(false);
     }
@@ -340,12 +344,7 @@ export function MonitorPage() {
           >
             {t('usage_stats.clear')}
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={loadData}
-            disabled={loading}
-          >
+          <Button variant="secondary" size="sm" onClick={loadData} disabled={loading}>
             {loading ? t('common.loading') : t('common.refresh')}
           </Button>
         </div>
@@ -357,10 +356,15 @@ export function MonitorPage() {
           <div className={styles.confirmBox}>
             <p>{t('usage_stats.clear_confirm')}</p>
             <div className={styles.confirmActions}>
-              <Button variant="danger" size="sm" onClick={async () => {
-                setShowClearConfirm(false);
-                await handleClearUsage();
-              }} loading={clearing}>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={async () => {
+                  setShowClearConfirm(false);
+                  await handleClearUsage();
+                }}
+                loading={clearing}
+              >
                 {t('common.confirm')}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setShowClearConfirm(false)}>
@@ -410,8 +414,18 @@ export function MonitorPage() {
 
       {/* 图表区域 */}
       <div className={styles.chartsGrid}>
-        <ModelDistributionChart data={filteredData} loading={loading} isDark={isDark} timeRange={timeRange} />
-        <DailyTrendChart data={filteredData} loading={loading} isDark={isDark} timeRange={timeRange} />
+        <ModelDistributionChart
+          data={filteredData}
+          loading={loading}
+          isDark={isDark}
+          timeRange={timeRange}
+        />
+        <DailyTrendChart
+          data={filteredData}
+          loading={loading}
+          isDark={isDark}
+          timeRange={timeRange}
+        />
       </div>
 
       {/* 小时级图表 */}
@@ -420,8 +434,18 @@ export function MonitorPage() {
 
       {/* 统计表格 */}
       <div className={styles.statsGrid}>
-        <ChannelStats data={filteredData} loading={loading} providerMap={providerMap} providerModels={providerModels} />
-        <FailureAnalysis data={filteredData} loading={loading} providerMap={providerMap} providerModels={providerModels} />
+        <ChannelStats
+          data={filteredData}
+          loading={loading}
+          providerMap={providerMap}
+          providerModels={providerModels}
+        />
+        <FailureAnalysis
+          data={filteredData}
+          loading={loading}
+          providerMap={providerMap}
+          providerModels={providerModels}
+        />
       </div>
 
       {/* 请求日志 */}

@@ -34,12 +34,12 @@ interface NotificationState {
   setConfirmationLoading: (loading: boolean) => void;
 }
 
-export const useNotificationStore = create<NotificationState>((set) => ({
+export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   confirmation: {
     isOpen: false,
     isLoading: false,
-    options: null
+    options: null,
   },
 
   showNotification: (message, type = 'info', duration = NOTIFICATION_DURATION_MS) => {
@@ -48,31 +48,33 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       id,
       message,
       type,
-      duration
+      duration,
     };
 
     set((state) => ({
-      notifications: [...state.notifications, notification]
+      notifications: [...state.notifications, notification],
     }));
 
     // 自动移除通知
     if (duration > 0) {
       setTimeout(() => {
-        set((state) => ({
-          notifications: state.notifications.filter((n) => n.id !== id)
-        }));
+        get().removeNotification(id);
       }, duration);
     }
   },
 
   removeNotification: (id) => {
     set((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== id)
+      notifications: state.notifications.some((n) => n.id === id)
+        ? state.notifications.filter((n) => n.id !== id)
+        : state.notifications,
     }));
   },
 
   clearAll: () => {
-    set({ notifications: [] });
+    set((state) => ({
+      notifications: state.notifications.length > 0 ? [] : state.notifications,
+    }));
   },
 
   showConfirmation: (options) => {
@@ -80,27 +82,34 @@ export const useNotificationStore = create<NotificationState>((set) => ({
       confirmation: {
         isOpen: true,
         isLoading: false,
-        options
-      }
+        options,
+      },
     });
   },
 
   hideConfirmation: () => {
     set((state) => ({
-      confirmation: {
-        ...state.confirmation,
-        isOpen: false,
-        options: null // Cleanup
-      }
+      confirmation:
+        !state.confirmation.isOpen && state.confirmation.options === null
+          ? state.confirmation
+          : {
+              ...state.confirmation,
+              isOpen: false,
+              isLoading: false,
+              options: null,
+            },
     }));
   },
 
   setConfirmationLoading: (loading) => {
     set((state) => ({
-      confirmation: {
-        ...state.confirmation,
-        isLoading: loading
-      }
+      confirmation:
+        state.confirmation.isLoading === loading
+          ? state.confirmation
+          : {
+              ...state.confirmation,
+              isLoading: loading,
+            },
     }));
-  }
+  },
 }));

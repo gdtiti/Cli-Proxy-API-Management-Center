@@ -9,7 +9,13 @@ import { parse as parseYaml, parseDocument } from 'yaml';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { IconCheck, IconChevronDown, IconChevronUp, IconRefreshCw, IconSearch } from '@/components/ui/icons';
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconRefreshCw,
+  IconSearch,
+} from '@/components/ui/icons';
 import { VisualConfigEditor } from '@/components/config/VisualConfigEditor';
 import { DiffModal } from '@/components/config/DiffModal';
 import { useVisualConfig } from '@/hooks/useVisualConfig';
@@ -31,7 +37,7 @@ function readCommercialModeFromYaml(yamlContent: string): boolean {
 
 export function ConfigPage() {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
@@ -40,7 +46,7 @@ export function ConfigPage() {
     visualDirty,
     loadVisualValuesFromYaml,
     applyVisualChangesToYaml,
-    setVisualValues
+    setVisualValues,
   } = useVisualConfig();
 
   const [activeTab, setActiveTab] = useState<ConfigEditorTab>(() => {
@@ -60,7 +66,10 @@ export function ConfigPage() {
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const [searchResults, setSearchResults] = useState<{ current: number; total: number }>({
+    current: 0,
+    total: 0,
+  });
   const [lastSearchedQuery, setLastSearchedQuery] = useState('');
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const floatingControlsRef = useRef<HTMLDivElement>(null);
@@ -135,7 +144,9 @@ export function ConfigPage() {
         try {
           const doc = parseDocument(latestServerYaml);
           diffOriginal = doc.toString({ indent: 2, lineWidth: 120, minContentWidth: 0 });
-        } catch { /* keep raw on parse failure */ }
+        } catch {
+          /* keep raw on parse failure */
+        }
       }
 
       if (diffOriginal === nextMergedYaml) {
@@ -164,25 +175,28 @@ export function ConfigPage() {
     setDirty(true);
   }, []);
 
-  const handleTabChange = useCallback((tab: ConfigEditorTab) => {
-    if (tab === activeTab) return;
+  const handleTabChange = useCallback(
+    (tab: ConfigEditorTab) => {
+      if (tab === activeTab) return;
 
-    if (tab === 'source') {
-      // Only rewrite YAML when there are pending visual changes; otherwise preserve raw YAML + comments.
-      if (visualDirty) {
-        const nextContent = applyVisualChangesToYaml(content);
-        if (nextContent !== content) {
-          setContent(nextContent);
-          setDirty(true);
+      if (tab === 'source') {
+        // Only rewrite YAML when there are pending visual changes; otherwise preserve raw YAML + comments.
+        if (visualDirty) {
+          const nextContent = applyVisualChangesToYaml(content);
+          if (nextContent !== content) {
+            setContent(nextContent);
+            setDirty(true);
+          }
         }
+      } else {
+        loadVisualValuesFromYaml(content);
       }
-    } else {
-      loadVisualValuesFromYaml(content);
-    }
 
-    setActiveTab(tab);
-    localStorage.setItem('config-management:tab', tab);
-  }, [activeTab, applyVisualChangesToYaml, content, loadVisualValuesFromYaml, visualDirty]);
+      setActiveTab(tab);
+      localStorage.setItem('config-management:tab', tab);
+    },
+    [activeTab, applyVisualChangesToYaml, content, loadVisualValuesFromYaml, visualDirty]
+  );
 
   // Search functionality
   const performSearch = useCallback((query: string, direction: 'next' | 'prev' = 'next') => {
@@ -244,7 +258,7 @@ export function ConfigPage() {
     // Scroll to and select the match
     view.dispatch({
       selection: { anchor: matchPos, head: matchPos + query.length },
-      scrollIntoView: true
+      scrollIntoView: true,
     });
     view.focus();
   }, []);
@@ -260,18 +274,24 @@ export function ConfigPage() {
     }
   }, []);
 
-  const executeSearch = useCallback((direction: 'next' | 'prev' = 'next') => {
-    if (!searchQuery) return;
-    setLastSearchedQuery(searchQuery);
-    performSearch(searchQuery, direction);
-  }, [searchQuery, performSearch]);
+  const executeSearch = useCallback(
+    (direction: 'next' | 'prev' = 'next') => {
+      if (!searchQuery) return;
+      setLastSearchedQuery(searchQuery);
+      performSearch(searchQuery, direction);
+    },
+    [searchQuery, performSearch]
+  );
 
-  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      executeSearch(e.shiftKey ? 'prev' : 'next');
-    }
-  }, [executeSearch]);
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeSearch(e.shiftKey ? 'prev' : 'next');
+      }
+    },
+    [executeSearch]
+  );
 
   const handlePrevMatch = useCallback(() => {
     if (!lastSearchedQuery) return;
@@ -334,12 +354,10 @@ export function ConfigPage() {
   }, []);
 
   // CodeMirror extensions
-  const extensions = useMemo(() => [
-    yaml(),
-    search(),
-    highlightSelectionMatches(),
-    keymap.of(searchKeymap)
-  ], []);
+  const extensions = useMemo(
+    () => [yaml(), search(), highlightSelectionMatches(), keymap.of(searchKeymap)],
+    []
+  );
 
   // Status text
   const getStatusText = () => {
@@ -363,7 +381,9 @@ export function ConfigPage() {
   const floatingActions = (
     <div className={styles.floatingActionContainer} ref={floatingActionsRef}>
       <div className={styles.floatingActionList}>
-        <div className={`${styles.floatingStatus} ${styles.status} ${getStatusClass()}`}>{getStatusText()}</div>
+        <div className={`${styles.floatingStatus} ${styles.status} ${getStatusClass()}`}>
+          {getStatusText()}
+        </div>
         <button
           type="button"
           className={styles.floatingActionButton}
@@ -433,7 +453,7 @@ export function ConfigPage() {
                     onChange={(e) => handleSearchChange(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     placeholder={t('config_management.search_placeholder', {
-                      defaultValue: '搜索配置内容...'
+                      defaultValue: '搜索配置内容...',
                     })}
                     disabled={disableControls || loading}
                     className={styles.searchInput}
@@ -443,7 +463,9 @@ export function ConfigPage() {
                           <span className={styles.searchCount}>
                             {searchResults.total > 0
                               ? `${searchResults.current} / ${searchResults.total}`
-                              : t('config_management.search_no_results', { defaultValue: '无结果' })}
+                              : t('config_management.search_no_results', {
+                                  defaultValue: '无结果',
+                                })}
                           </span>
                         )}
                         <button
@@ -464,7 +486,9 @@ export function ConfigPage() {
                     variant="secondary"
                     size="sm"
                     onClick={handlePrevMatch}
-                    disabled={!searchQuery || lastSearchedQuery !== searchQuery || searchResults.total === 0}
+                    disabled={
+                      !searchQuery || lastSearchedQuery !== searchQuery || searchResults.total === 0
+                    }
                     title={t('config_management.search_prev', { defaultValue: '上一个' })}
                   >
                     <IconChevronUp size={16} />
@@ -473,7 +497,9 @@ export function ConfigPage() {
                     variant="secondary"
                     size="sm"
                     onClick={handleNextMatch}
-                    disabled={!searchQuery || lastSearchedQuery !== searchQuery || searchResults.total === 0}
+                    disabled={
+                      !searchQuery || lastSearchedQuery !== searchQuery || searchResults.total === 0
+                    }
                     title={t('config_management.search_next', { defaultValue: '下一个' })}
                   >
                     <IconChevronDown size={16} />
@@ -508,7 +534,7 @@ export function ConfigPage() {
                   searchKeymap: true,
                   foldKeymap: true,
                   completionKeymap: false,
-                  lintKeymap: true
+                  lintKeymap: true,
                 }}
               />
             </div>
@@ -517,9 +543,7 @@ export function ConfigPage() {
           {/* Controls */}
           <div className={styles.controls}>
             {!isLoadedStatus && (
-              <span className={`${styles.status} ${getStatusClass()}`}>
-                {getStatusText()}
-              </span>
+              <span className={`${styles.status} ${getStatusClass()}`}>{getStatusText()}</span>
             )}
           </div>
         </div>

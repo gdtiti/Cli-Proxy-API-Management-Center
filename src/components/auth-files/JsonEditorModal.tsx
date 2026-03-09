@@ -25,7 +25,7 @@ interface JsonEditorModalProps {
 
 export function JsonEditorModal({ open, onClose, file, onSaved }: JsonEditorModalProps) {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
 
   const [content, setContent] = useState('');
@@ -35,17 +35,15 @@ export function JsonEditorModal({ open, onClose, file, onSaved }: JsonEditorModa
   const [dirty, setDirty] = useState(false);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
-  const jsonEditorExtensions = useMemo(() => [
-    json(),
-    cmSearch(),
-    highlightSelectionMatches(),
-    keymap.of(searchKeymap)
-  ], []);
+  const jsonEditorExtensions = useMemo(
+    () => [json(), cmSearch(), highlightSelectionMatches(), keymap.of(searchKeymap)],
+    []
+  );
 
   // 加载文件内容
   const loadContent = useCallback(async () => {
     if (!file) return;
-    
+
     setContent('');
     setOriginalContent('');
     setDirty(false);
@@ -87,10 +85,13 @@ export function JsonEditorModal({ open, onClose, file, onSaved }: JsonEditorModa
     }
   }, [open, file?.name]);
 
-  const handleChange = useCallback((value: string) => {
-    setContent(value);
-    setDirty(value !== originalContent);
-  }, [originalContent]);
+  const handleChange = useCallback(
+    (value: string) => {
+      setContent(value);
+      setDirty(value !== originalContent);
+    },
+    [originalContent]
+  );
 
   const handleSave = async () => {
     if (!file) return;
@@ -152,11 +153,7 @@ export function JsonEditorModal({ open, onClose, file, onSaved }: JsonEditorModa
           <Button variant="secondary" onClick={handleClose} disabled={saving}>
             {t('common.cancel')}
           </Button>
-          <Button
-            onClick={handleSave}
-            loading={saving}
-            disabled={!dirty || loading}
-          >
+          <Button onClick={handleSave} loading={saving} disabled={!dirty || loading}>
             {t('auth_files.edit_save')}
           </Button>
         </>
@@ -197,7 +194,7 @@ export function JsonEditorModal({ open, onClose, file, onSaved }: JsonEditorModa
               searchKeymap: true,
               foldKeymap: true,
               completionKeymap: false,
-              lintKeymap: true
+              lintKeymap: true,
             }}
           />
         </div>

@@ -46,9 +46,14 @@ interface UserAgentGroupModalProps {
   onBatchComplete?: () => void;
 }
 
-export function UserAgentGroupModal({ open, onClose, files, onBatchComplete }: UserAgentGroupModalProps) {
+export function UserAgentGroupModal({
+  open,
+  onClose,
+  files,
+  onBatchComplete,
+}: UserAgentGroupModalProps) {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
 
   const [group1, setGroup1] = useState<string[]>(() =>
     parseStoredGroup(STORAGE_KEY_GROUP1, DEFAULT_GROUP1)
@@ -142,7 +147,15 @@ export function UserAgentGroupModal({ open, onClose, files, onBatchComplete }: U
 
     onBatchComplete?.();
     handleClose();
-  }, [currentGroup1Text, currentGroup2Text, files, handleClose, onBatchComplete, showNotification, t]);
+  }, [
+    currentGroup1Text,
+    currentGroup2Text,
+    files,
+    handleClose,
+    onBatchComplete,
+    showNotification,
+    t,
+  ]);
 
   return (
     <Modal
@@ -198,7 +211,7 @@ export function UserAgentGroupModal({ open, onClose, files, onBatchComplete }: U
 
 export function useQuickSetUserAgent() {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const [quickSetting, setQuickSetting] = useState<string | null>(null);
 
   const quickSetUserAgent = useCallback(

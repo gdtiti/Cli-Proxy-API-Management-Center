@@ -13,6 +13,31 @@
 
 代码锚点：`src/stores/index.ts:5`、`src/stores/index.ts:14`
 
+### 全局通知与确认状态
+
+- `useNotificationStore` 同时承载 toast 列表与全局确认弹窗状态；确认态由 `confirmation.isOpen`、`confirmation.isLoading`、`confirmation.options` 三个字段组成：`src/stores/useNotificationStore.ts:22-35`、`src/stores/useNotificationStore.ts:37-43`
+- `showNotification()` 创建通知后仍按 `duration` 启动自动移除，但定时回调现在统一复用 `removeNotification(id)`，不再在超时分支复制筛选逻辑：`src/stores/useNotificationStore.ts:45-63`
+- `removeNotification()` 在目标 id 不存在时返回原 `notifications` 引用，`clearAll()` 在列表已空时同样返回原数组；这两个分支把“无实际变化不换引用”明确收敛到 store action 内：`src/stores/useNotificationStore.ts:66-77`
+- `hideConfirmation()` 在确认框已关闭且 `options` 已为空时返回现有 `confirmation` 对象；真正关闭时会同时把 `isOpen` 置为 `false`、清空 `options`，并将 `isLoading` 一并复位为 `false`：`src/stores/useNotificationStore.ts:90-101`
+- `setConfirmationLoading()` 仅在 loading 标志变化时创建新 `confirmation` 对象；相同值写回会直接复用原引用，减少确认流程中的无效广播：`src/stores/useNotificationStore.ts:104-113`
+
+### 启动期订阅约束
+
+- 启动路径上的组件和 hooks 现在统一采用“按字段/按 action 订阅”，避免整体订阅 store 或在 selector 中执行会返回新引用的函数
+- 明确禁止在 Zustand selector 中调用会返回新对象/新数组的 store 方法；例如 `useClientCacheStore((state) => state.getClients())` 会在每次快照比较时生成新数组，触发 `useSyncExternalStore` 持续判定快照变化，最终可能导致 `Maximum update depth exceeded`。当前实现改为直接订阅 `state.clients`：`src/components/client/ClientManagementModal.tsx:18-25`、`src/stores/useClientCacheStore.ts:142-152`
+- 同类修复已覆盖启动和登录链路上的高频节点：
+  - 通知 hook 只订阅 `showNotification`：`src/hooks/useApi.ts:24-57`
+  - `ConfirmationModal` 不再整体订阅 `state.confirmation`，而是分别订阅 `isOpen` / `isLoading` / `options`，把确认弹窗也纳入按字段订阅约束：`src/components/common/ConfirmationModal.tsx:6-12`
+  - 禁用模型 hook 分别订阅 `addDisabledModel` / `isDisabled`：`src/hooks/useDisableModel.ts:59-62`
+  - 系统页按字段订阅 auth / notification store：`src/pages/SystemPage.tsx:45-64`
+  - 之前已修复 `NotificationContainer`、`MainLayout`、`LoginPage`、`useClientKeyboardShortcuts` 等启动路径节点：`src/components/common/NotificationContainer.tsx:12-58`、`src/components/layout/MainLayout.tsx:182-199`、`src/pages/LoginPage.tsx:80-89`、`src/stores/useClientKeyboardShortcuts.ts:9-48`
+
+### 自动登录与 store 幂等要求
+
+- `useAuthStore.restoreSession()` 会先解析持久化的 `apiBase` / `managementKey` / `rememberPassword`，仅在解析结果与当前 store 不一致时才写回，避免启动期无变化重复 `set`：`src/stores/useAuthStore.ts:58-77`
+- 自动登录失败必须回退到可重试状态：清理 `isLoggedIn`、写回 `isAuthenticated: false` 和错误连接信息，并释放 `restoreSessionPromise`：`src/stores/useAuthStore.ts:79-107`
+- `useLanguageStore.setLanguage` 与 `useThemeStore.setTheme` 已具备幂等保护；`App` 仅同步外部实例，不再把语言在首屏 effect 中写回 store：`src/stores/useLanguageStore.ts:24-34`、`src/stores/useThemeStore.ts:42-50`、`src/App.tsx:47-55`
+
 ### 语言与主题 store 的幂等约束
 
 - `useLanguageStore.setLanguage` 会先校验目标语言是否合法，再在目标语言与当前值不同时才调用 `i18n.changeLanguage` 和 Zustand `set`：`src/stores/useLanguageStore.ts:24-33`
@@ -24,7 +49,14 @@
 - 已验证修复 `Maximum update depth exceeded`：问题出现在首屏阶段 store 初始化与外部同步重复触发更新
 - 当前边界是：store action 负责实际写入，`App` 负责必要的只读同步检查，避免出现 `store -> effect -> store` 循环：`src/App.tsx:47-51`、`src/stores/useLanguageStore.ts:24-33`
 - 额外为主题 store 增加幂等保护，降低初始化和系统主题变化时的重复更新风险：`src/stores/useThemeStore.ts:42-50`
-- 本次修复已按现有工程脚本验收通过：`pnpm type-check`、`pnpm build`；构建中的两行 `The system cannot find the path specified.` 仍属于已知环境噪音，参考 `llmdoc/guides/development-workflow.md:70-71` 与 `llmdoc/guides/post-conflict-regression-checklist.md:13-15`
+- 本轮又补齐了登录页 / 启动路径上的订阅与自动恢复修复，验证结果包括：`pnpm type-check` 通过，且 `http://localhost:5173/#/login` 已可正常打开，不再出现 `Maximum update depth exceeded`
+
+## 启动期状态与认证恢复检查清单
+
+1. selector 只返回稳定字段或稳定 action；不要在 selector 内执行 `getClients()`、`map()`、对象解构聚合等会制造新引用的逻辑：`src/components/client/ClientManagementModal.tsx:20-24`
+2. 自动恢复必须只有一个入口；当前入口是 `LoginPage`，`ProtectedRoute` 不负责发起恢复：`src/pages/LoginPage.tsx:139-179`、`src/router/ProtectedRoute.tsx:11-23`
+3. store setter 必须具备幂等性；无变化时直接 return，避免首屏 effect 和持久化 rehydrate 相互放大：`src/stores/useAuthStore.ts:66-77`、`src/stores/useLanguageStore.ts:28-33`、`src/stores/useThemeStore.ts:42-50`
+4. 自动恢复失败后必须清理登录标记并解除 promise 锁，否则后续节点切换可能持续复用旧失败结果：`src/stores/useAuthStore.ts:87-107`
 
 ## API 超时配置
 

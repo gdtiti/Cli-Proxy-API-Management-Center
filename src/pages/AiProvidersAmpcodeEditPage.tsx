@@ -46,7 +46,8 @@ export function AiProvidersAmpcodeEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { showNotification, showConfirmation } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
+  const showConfirmation = useNotificationStore((state) => state.showConfirmation);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const disableControls = connectionStatus !== 'connected';
 
@@ -249,7 +250,9 @@ export function AiProvidersAmpcodeEditPage() {
   const saveAmpcode = async () => {
     if (!loaded && mappingsDirty) {
       showConfirmation({
-        title: t('ai_providers.ampcode_mappings_overwrite_title', { defaultValue: 'Overwrite Mappings' }),
+        title: t('ai_providers.ampcode_mappings_overwrite_title', {
+          defaultValue: 'Overwrite Mappings',
+        }),
         message: t('ai_providers.ampcode_mappings_overwrite_confirm'),
         variant: 'secondary',
         confirmText: t('common.confirm'),

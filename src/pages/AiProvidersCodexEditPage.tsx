@@ -66,7 +66,9 @@ const buildCodexSignature = (form: ProviderFormState) =>
   JSON.stringify({
     apiKey: String(form.apiKey ?? '').trim(),
     priority:
-      form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+      form.priority !== undefined && Number.isFinite(form.priority)
+        ? Math.trunc(form.priority)
+        : null,
     prefix: String(form.prefix ?? '').trim(),
     baseUrl: String(form.baseUrl ?? '').trim(),
     websockets: Boolean(form.websockets),
@@ -82,7 +84,7 @@ export function AiProvidersCodexEditPage() {
   const location = useLocation();
   const params = useParams<{ index?: string }>();
 
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const disableControls = connectionStatus !== 'connected';
 
@@ -95,7 +97,9 @@ export function AiProvidersCodexEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState<ProviderFormState>(() => buildEmptyForm());
-  const [baselineSignature, setBaselineSignature] = useState(() => buildCodexSignature(buildEmptyForm()));
+  const [baselineSignature, setBaselineSignature] = useState(() =>
+    buildCodexSignature(buildEmptyForm())
+  );
 
   const [modelDiscoveryOpen, setModelDiscoveryOpen] = useState(false);
   const [modelDiscoveryEndpoint, setModelDiscoveryEndpoint] = useState('');
@@ -119,7 +123,9 @@ export function AiProvidersCodexEditPage() {
   const invalidIndex = editIndex !== null && !initialData;
 
   const title =
-    editIndex !== null ? t('ai_providers.codex_edit_modal_title') : t('ai_providers.codex_add_modal_title');
+    editIndex !== null
+      ? t('ai_providers.codex_edit_modal_title')
+      : t('ai_providers.codex_add_modal_title');
 
   const handleBack = useCallback(() => {
     const state = location.state as LocationState;
@@ -247,7 +253,10 @@ export function AiProvidersCodexEditPage() {
       });
 
       if (addedCount > 0) {
-        showNotification(t('ai_providers.codex_models_fetch_added', { count: addedCount }), 'success');
+        showNotification(
+          t('ai_providers.codex_models_fetch_added', { count: addedCount }),
+          'success'
+        );
       }
     },
     [setForm, showNotification, t]
@@ -333,7 +342,9 @@ export function AiProvidersCodexEditPage() {
   };
 
   const handleApplyDiscoveredModels = () => {
-    const selectedModels = discoveredModels.filter((model) => modelDiscoverySelected.has(model.name));
+    const selectedModels = discoveredModels.filter((model) =>
+      modelDiscoverySelected.has(model.name)
+    );
     if (selectedModels.length) {
       mergeDiscoveredModels(selectedModels);
     }
@@ -374,7 +385,9 @@ export function AiProvidersCodexEditPage() {
       updateConfigValue('codex-api-key', nextList);
       clearCache('codex-api-key');
       showNotification(
-        editIndex !== null ? t('notification.codex_config_updated') : t('notification.codex_config_added'),
+        editIndex !== null
+          ? t('notification.codex_config_updated')
+          : t('notification.codex_config_added'),
         'success'
       );
       allowNextNavigation();
@@ -514,7 +527,9 @@ export function AiProvidersCodexEditPage() {
 
             <div className={styles.modelConfigSection}>
               <div className={styles.modelConfigHeader}>
-                <label className={styles.modelConfigTitle}>{t('ai_providers.codex_models_label')}</label>
+                <label className={styles.modelConfigTitle}>
+                  {t('ai_providers.codex_models_label')}
+                </label>
                 <div className={styles.modelConfigToolbar}>
                   <Button
                     variant="secondary"
@@ -595,7 +610,9 @@ export function AiProvidersCodexEditPage() {
               }
             >
               <div className={styles.openaiModelsContent}>
-                <div className={styles.sectionHint}>{t('ai_providers.codex_models_fetch_hint')}</div>
+                <div className={styles.sectionHint}>
+                  {t('ai_providers.codex_models_fetch_hint')}
+                </div>
                 <div className={styles.openaiModelsEndpointSection}>
                   <label className={styles.openaiModelsEndpointLabel}>
                     {t('ai_providers.codex_models_fetch_url_label')}
@@ -626,11 +643,17 @@ export function AiProvidersCodexEditPage() {
                 />
                 {modelDiscoveryError && <div className="error-box">{modelDiscoveryError}</div>}
                 {modelDiscoveryFetching ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.codex_models_fetch_loading')}</div>
+                  <div className={styles.sectionHint}>
+                    {t('ai_providers.codex_models_fetch_loading')}
+                  </div>
                 ) : discoveredModels.length === 0 ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.codex_models_fetch_empty')}</div>
+                  <div className={styles.sectionHint}>
+                    {t('ai_providers.codex_models_fetch_empty')}
+                  </div>
                 ) : discoveredModelsFiltered.length === 0 ? (
-                  <div className={styles.sectionHint}>{t('ai_providers.codex_models_search_empty')}</div>
+                  <div className={styles.sectionHint}>
+                    {t('ai_providers.codex_models_search_empty')}
+                  </div>
                 ) : (
                   <div className={styles.modelDiscoveryList}>
                     {discoveredModelsFiltered.map((model) => {

@@ -10,10 +10,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { IconDownload, IconCheck, IconX } from '@/components/ui/icons';
 import { useNotificationStore } from '@/stores';
 import { authFilesApi } from '@/services/api';
-import {
-  validateAntigravityFile,
-  isAntigravityFileName,
-} from '@/services/antigravity/validator';
+import { validateAntigravityFile, isAntigravityFileName } from '@/services/antigravity/validator';
 import {
   convertAntigravityFile,
   downloadCredentials,
@@ -37,7 +34,7 @@ export function AntigravityImportModal({
   onImportComplete,
 }: AntigravityImportModalProps) {
   const { t } = useTranslation();
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<ImportStep>('upload');
@@ -119,9 +116,7 @@ export function AntigravityImportModal({
   // 切换选择状态
   const handleToggleSelect = useCallback((id: string) => {
     setPreviewItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, selected: !item.selected } : item
-      )
+      prev.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item))
     );
   }, []);
 
@@ -151,10 +146,7 @@ export function AntigravityImportModal({
         'success'
       );
     } catch (err) {
-      showNotification(
-        t('antigravity.download_failed', { defaultValue: '下载失败' }),
-        'error'
-      );
+      showNotification(t('antigravity.download_failed', { defaultValue: '下载失败' }), 'error');
     }
   }, [previewItems, showNotification, t]);
 
@@ -229,10 +221,7 @@ export function AntigravityImportModal({
         onChange={handleFileSelect}
         className={styles.fileInput}
       />
-      <div
-        className={styles.dropZone}
-        onClick={() => fileInputRef.current?.click()}
-      >
+      <div className={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
         <IconDownload size={48} className={styles.uploadIcon} />
         <p className={styles.uploadText}>
           {t('antigravity.drop_or_click', { defaultValue: '点击选择文件' })}
@@ -262,13 +251,11 @@ export function AntigravityImportModal({
 
         <div className={styles.previewHeader}>
           <span className={styles.fileInfo}>
-            {t('antigravity.file', { defaultValue: '文件' })}: {fileName} (
-            {previewItems.length}{' '}
+            {t('antigravity.file', { defaultValue: '文件' })}: {fileName} ({previewItems.length}{' '}
             {t('antigravity.accounts', { defaultValue: '个账号' })})
           </span>
           <span className={styles.selectedInfo}>
-            {t('antigravity.selected', { defaultValue: '已选择' })}:{' '}
-            {selectedCount}
+            {t('antigravity.selected', { defaultValue: '已选择' })}: {selectedCount}
           </span>
         </div>
 
@@ -292,8 +279,7 @@ export function AntigravityImportModal({
       <div className={styles.importingContainer}>
         <LoadingSpinner size={48} />
         <p className={styles.importingText}>
-          {t('antigravity.importing', { defaultValue: '正在导入...' })} (
-          {completed}/{total})
+          {t('antigravity.importing', { defaultValue: '正在导入...' })} ({completed}/{total})
         </p>
         <div className={styles.progressBar}>
           <div
@@ -344,9 +330,7 @@ export function AntigravityImportModal({
               .map((item) => (
                 <div key={item.id} className={styles.failedItem}>
                   <span>{item.original.email}</span>
-                  <span className={styles.errorMessage}>
-                    {item.errorMessage}
-                  </span>
+                  <span className={styles.errorMessage}>{item.errorMessage}</span>
                 </div>
               ))}
           </div>
@@ -374,10 +358,7 @@ export function AntigravityImportModal({
             <Button variant="secondary" onClick={handleDownload}>
               {t('antigravity.download_selected', { defaultValue: '下载选中' })}
             </Button>
-            <Button
-              onClick={handleImport}
-              disabled={previewItems.every((i) => !i.selected)}
-            >
+            <Button onClick={handleImport} disabled={previewItems.every((i) => !i.selected)}>
               {t('antigravity.import_to_server', { defaultValue: '导入到服务器' })}
             </Button>
           </>
@@ -392,9 +373,7 @@ export function AntigravityImportModal({
             <Button variant="secondary" onClick={resetState}>
               {t('antigravity.import_more', { defaultValue: '继续导入' })}
             </Button>
-            <Button onClick={handleClose}>
-              {t('common.done', { defaultValue: '完成' })}
-            </Button>
+            <Button onClick={handleClose}>{t('common.done', { defaultValue: '完成' })}</Button>
           </>
         );
 

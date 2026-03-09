@@ -48,7 +48,9 @@ const buildVertexSignature = (form: VertexFormState) =>
   JSON.stringify({
     apiKey: String(form.apiKey ?? '').trim(),
     priority:
-      form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+      form.priority !== undefined && Number.isFinite(form.priority)
+        ? Math.trunc(form.priority)
+        : null,
     prefix: String(form.prefix ?? '').trim(),
     baseUrl: String(form.baseUrl ?? '').trim(),
     proxyUrl: String(form.proxyUrl ?? '').trim(),
@@ -62,7 +64,7 @@ export function AiProvidersVertexEditPage() {
   const location = useLocation();
   const params = useParams<{ index?: string }>();
 
-  const { showNotification } = useNotificationStore();
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const disableControls = connectionStatus !== 'connected';
 
@@ -75,7 +77,9 @@ export function AiProvidersVertexEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState<VertexFormState>(() => buildEmptyForm());
-  const [baselineSignature, setBaselineSignature] = useState(() => buildVertexSignature(buildEmptyForm()));
+  const [baselineSignature, setBaselineSignature] = useState(() =>
+    buildVertexSignature(buildEmptyForm())
+  );
 
   const hasIndexParam = typeof params.index === 'string';
   const editIndex = useMemo(() => parseIndexParam(params.index), [params.index]);
@@ -89,7 +93,9 @@ export function AiProvidersVertexEditPage() {
   const invalidIndex = editIndex !== null && !initialData;
 
   const title =
-    editIndex !== null ? t('ai_providers.vertex_edit_modal_title') : t('ai_providers.vertex_add_modal_title');
+    editIndex !== null
+      ? t('ai_providers.vertex_edit_modal_title')
+      : t('ai_providers.vertex_add_modal_title');
 
   const handleBack = useCallback(() => {
     const state = location.state as LocationState;
@@ -224,7 +230,9 @@ export function AiProvidersVertexEditPage() {
       updateConfigValue('vertex-api-key', nextList);
       clearCache('vertex-api-key');
       showNotification(
-        editIndex !== null ? t('notification.vertex_config_updated') : t('notification.vertex_config_added'),
+        editIndex !== null
+          ? t('notification.vertex_config_updated')
+          : t('notification.vertex_config_added'),
         'success'
       );
       allowNextNavigation();
