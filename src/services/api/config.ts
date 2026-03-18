@@ -2,7 +2,7 @@
  * 配置相关 API
  */
 
-import { apiClient } from './client';
+import { apiClient, type ApiRequestConfig } from './client';
 import type { Config } from '@/types';
 import { normalizeConfigResponse } from './transformers';
 
@@ -10,15 +10,15 @@ export const configApi = {
   /**
    * 获取配置（会进行字段规范化）
    */
-  async getConfig(): Promise<Config> {
-    const raw = await apiClient.get('/config');
+  async getConfig(requestConfig?: ApiRequestConfig): Promise<Config> {
+    const raw = await apiClient.get('/config', requestConfig);
     return normalizeConfigResponse(raw);
   },
 
   /**
    * 获取原始配置（不做转换）
    */
-  getRawConfig: () => apiClient.get('/config'),
+  getRawConfig: (requestConfig?: ApiRequestConfig) => apiClient.get('/config', requestConfig),
 
   /**
    * 更新 Debug 模式

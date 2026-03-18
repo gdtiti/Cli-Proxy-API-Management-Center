@@ -45,3 +45,6 @@ tmpclaude*
 CLIProxyAPI-服务端
 CLIProxyAPI
 example
+
+# Auth files export (sensitive local output)
+auth-files-export/

@@ -7,6 +7,7 @@ import {
   IconFileText,
   IconSatellite
 } from '@/components/ui/icons';
+import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
 import styles from './DashboardPage.module.scss';
@@ -57,6 +58,15 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const apiKeysCache = useRef<string[]>([]);
+
+  const safeCount = (value: unknown): number | null => (Array.isArray(value) ? value.length : null);
+
+  const safeAuthFilesCount = (value: unknown): number | null => {
+    if (!value || typeof value !== 'object') return null;
+    const record = value as Record<string, unknown>;
+    const files = record.files;
+    return Array.isArray(files) ? files.length : null;
+  };
 
   useEffect(() => {
     apiKeysCache.current = [];
@@ -110,7 +120,7 @@ export function DashboardPage() {
     }
   }, [config?.apiKeys]);
 
-  const fetchModels = useCallback(async () => {
+  const fetchModels = useCallback(async (forceRefresh: boolean = false) => {
     if (connectionStatus !== 'connected' || !apiBase) {
       return;
     }
@@ -118,40 +128,49 @@ export function DashboardPage() {
     try {
       const apiKeys = await resolveApiKeysForModels();
       const primaryKey = apiKeys[0];
-      await fetchModelsFromStore(apiBase, primaryKey);
+      await fetchModelsFromStore(apiBase, primaryKey, forceRefresh);
     } catch {
       // Ignore model fetch errors on dashboard
     }
   }, [connectionStatus, apiBase, resolveApiKeysForModels, fetchModelsFromStore]);
 
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] = await Promise.allSettled([
+        apiKeysApi.list(),
+        authFilesApi.list(),
+        providersApi.getGeminiKeys(),
+        providersApi.getCodexConfigs(),
+        providersApi.getClaudeConfigs(),
+        providersApi.getOpenAIProviders()
+      ]);
+
+      setStats({
+        apiKeys: keysRes.status === 'fulfilled' ? safeCount(keysRes.value) : null,
+        authFiles: filesRes.status === 'fulfilled' ? safeAuthFilesCount(filesRes.value) : null
+      });
+
+      setProviderStats({
+        gemini: geminiRes.status === 'fulfilled' ? safeCount(geminiRes.value) : null,
+        codex: codexRes.status === 'fulfilled' ? safeCount(codexRes.value) : null,
+        claude: claudeRes.status === 'fulfilled' ? safeCount(claudeRes.value) : null,
+        openai: openaiRes.status === 'fulfilled' ? safeCount(openaiRes.value) : null
+      });
+    } catch (err) {
+      console.warn('Dashboard: failed to fetch stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleHeaderRefresh = useCallback(async () => {
+    await Promise.all([fetchStats(), fetchModels(true)]);
+  }, [fetchModels, fetchStats]);
+
+  useHeaderRefresh(handleHeaderRefresh);
+
   useEffect(() => {
-    const fetchStats = async () => {
-      setLoading(true);
-      try {
-        const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] = await Promise.allSettled([
-          apiKeysApi.list(),
-          authFilesApi.list(),
-          providersApi.getGeminiKeys(),
-          providersApi.getCodexConfigs(),
-          providersApi.getClaudeConfigs(),
-          providersApi.getOpenAIProviders()
-        ]);
-
-        setStats({
-          apiKeys: keysRes.status === 'fulfilled' ? keysRes.value.length : null,
-          authFiles: filesRes.status === 'fulfilled' ? filesRes.value.files.length : null
-        });
-
-        setProviderStats({
-          gemini: geminiRes.status === 'fulfilled' ? geminiRes.value.length : null,
-          codex: codexRes.status === 'fulfilled' ? codexRes.value.length : null,
-          claude: claudeRes.status === 'fulfilled' ? claudeRes.value.length : null,
-          openai: openaiRes.status === 'fulfilled' ? openaiRes.value.length : null
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
 
     if (connectionStatus === 'connected') {
       fetchStats();
@@ -159,7 +178,7 @@ export function DashboardPage() {
     } else {
       setLoading(false);
     }
-  }, [connectionStatus, fetchModels]);
+  }, [connectionStatus, fetchModels, fetchStats]);
 
   // Calculate total provider keys only when all provider stats are available.
   const providerStatsReady =

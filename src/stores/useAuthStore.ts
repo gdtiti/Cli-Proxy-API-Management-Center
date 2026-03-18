@@ -19,6 +19,7 @@ interface AuthStoreState extends AuthState {
 
   // 操作
   login: (credentials: LoginCredentials) => Promise<void>;
+  switchClient: (next: Pick<LoginCredentials, 'apiBase' | 'managementKey'>) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
   restoreSession: () => Promise<boolean>;
@@ -152,6 +153,73 @@ export const useAuthStore = create<AuthStoreState>()(
             connectionStatus: 'error',
             connectionError: message || 'Connection failed',
           });
+          throw error;
+        }
+      },
+
+      // 登录后切换客户端（不应触发全局 unauthorized -> logout）
+      switchClient: async (next) => {
+        const previous = { apiBase: get().apiBase, managementKey: get().managementKey };
+        const rememberPassword = get().rememberPassword;
+
+        const nextApiBase = normalizeApiBase(next.apiBase);
+        const nextManagementKey = next.managementKey.trim();
+
+        if (!nextApiBase || !nextManagementKey) {
+          throw new Error('连接信息不完整');
+        }
+
+        if (nextApiBase === previous.apiBase && nextManagementKey === previous.managementKey) {
+          return;
+        }
+
+        set({ connectionStatus: 'connecting', connectionError: null });
+
+        // 让旧的 /config 请求与缓存失效，避免切换过程中旧请求覆盖新会话状态
+        useConfigStore.getState().clearCache();
+        apiClient.setConfig({ apiBase: nextApiBase, managementKey: nextManagementKey });
+
+        try {
+          // 探测连接：如果新 key/base 无效，应该抑制全局 unauthorized 事件，
+          // 否则会把当前会话踢回登录页（体验回归）。
+          await useConfigStore.getState().fetchConfig(undefined, true, {
+            suppressUnauthorizedEvent: true,
+          });
+
+          set({
+            isAuthenticated: true,
+            apiBase: nextApiBase,
+            managementKey: nextManagementKey,
+            connectionStatus: 'connected',
+            connectionError: null,
+          });
+
+          if (rememberPassword) {
+            localStorage.setItem('isLoggedIn', 'true');
+          } else {
+            localStorage.removeItem('isLoggedIn');
+          }
+        } catch (error: unknown) {
+          // 回退到原连接，保持已登录态
+          useConfigStore.getState().clearCache();
+          apiClient.setConfig({ apiBase: previous.apiBase, managementKey: previous.managementKey });
+
+          try {
+            await useConfigStore.getState().fetchConfig(undefined, true, {
+              suppressUnauthorizedEvent: true,
+            });
+          } catch {
+            // ignore: 回退探测失败时仍保持会话，不强制登出；用户可手动刷新/重连
+          }
+
+          set({
+            isAuthenticated: true,
+            apiBase: previous.apiBase,
+            managementKey: previous.managementKey,
+            connectionStatus: 'connected',
+            connectionError: null,
+          });
+
           throw error;
         }
       },

@@ -12,6 +12,14 @@ import {
 } from '@/utils/constants';
 import { computeApiUrl } from '@/utils/connection';
 
+export type ApiRequestConfig = AxiosRequestConfig & {
+  /**
+   * 当某次请求预期可能返回 401（例如“切换客户端”探测连接）时，
+   * 允许抑制全局 unauthorized 事件，避免把用户强制登出。
+   */
+  suppressUnauthorizedEvent?: boolean;
+};
+
 class ApiClient {
   private instance: AxiosInstance;
   private apiBase: string = '';
@@ -154,7 +162,10 @@ class ApiClient {
       apiError.data = responseData;
 
       // 401 未授权 - 触发登出事件
-      if (error.response?.status === 401) {
+      const suppressUnauthorizedEvent = Boolean(
+        (error.config as ApiRequestConfig | undefined)?.suppressUnauthorizedEvent
+      );
+      if (error.response?.status === 401 && !suppressUnauthorizedEvent) {
         window.dispatchEvent(new Event('unauthorized'));
       }
 
@@ -171,7 +182,7 @@ class ApiClient {
   /**
    * GET 请求
    */
-  async get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T> {
     const response = await this.instance.get<T>(url, config);
     return response.data;
   }
@@ -179,7 +190,7 @@ class ApiClient {
   /**
    * POST 请求
    */
-  async post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async post<T = unknown>(url: string, data?: unknown, config?: ApiRequestConfig): Promise<T> {
     const response = await this.instance.post<T>(url, data, config);
     return response.data;
   }
@@ -187,7 +198,7 @@ class ApiClient {
   /**
    * PUT 请求
    */
-  async put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async put<T = unknown>(url: string, data?: unknown, config?: ApiRequestConfig): Promise<T> {
     const response = await this.instance.put<T>(url, data, config);
     return response.data;
   }
@@ -195,7 +206,7 @@ class ApiClient {
   /**
    * PATCH 请求
    */
-  async patch<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T = unknown>(url: string, data?: unknown, config?: ApiRequestConfig): Promise<T> {
     const response = await this.instance.patch<T>(url, data, config);
     return response.data;
   }
@@ -203,7 +214,7 @@ class ApiClient {
   /**
    * DELETE 请求
    */
-  async delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T> {
     const response = await this.instance.delete<T>(url, config);
     return response.data;
   }
@@ -211,7 +222,7 @@ class ApiClient {
   /**
    * 获取原始响应（用于下载等场景）
    */
-  async getRaw(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> {
+  async getRaw(url: string, config?: ApiRequestConfig): Promise<AxiosResponse> {
     return this.instance.get(url, config);
   }
 
@@ -221,7 +232,7 @@ class ApiClient {
   async postForm<T = unknown>(
     url: string,
     formData: FormData,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     const response = await this.instance.post<T>(url, formData, {
       ...config,
@@ -236,7 +247,7 @@ class ApiClient {
   /**
    * 保留对 axios.request 的访问，便于下载等场景
    */
-  async requestRaw(config: AxiosRequestConfig): Promise<AxiosResponse> {
+  async requestRaw(config: ApiRequestConfig): Promise<AxiosResponse> {
     return this.instance.request(config);
   }
 }

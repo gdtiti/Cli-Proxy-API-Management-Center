@@ -59,6 +59,7 @@ const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 export function AuthFilesPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
+  const showConfirmation = useNotificationStore((state) => state.showConfirmation);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const pageTransitionLayer = usePageTransitionLayer();
@@ -318,6 +319,13 @@ export function AuthFilesPage() {
     [filtered]
   );
 
+  const downloadableAllFiles = useMemo(
+    () => files.filter((file) => !isRuntimeOnlyAuthFile(file)),
+    [files]
+  );
+
+  const hasActiveFilter = filter !== 'all' || problemOnly || Boolean(search.trim());
+
   const batchDownloadArchiveName = useMemo(() => {
     const segments = ['auth-files'];
     if (filter !== 'all') {
@@ -334,6 +342,50 @@ export function AuthFilesPage() {
     }
     return `${segments.join('-')}.zip`;
   }, [filter, problemOnly, search]);
+
+  const batchDownloadAllArchiveName = useMemo(() => 'auth-files-all.zip', []);
+
+  const requestBatchDownload = useCallback(
+    (targetFiles: AuthFileItem[], archiveName: string) => {
+      const count = targetFiles.length;
+
+      // 大数量导出在浏览器中很容易触发资源限制（尤其是需要逐个下载再打包 ZIP 的实现）。
+      // 对“全部导出”这种场景给出明确提醒，避免用户只看到 net::ERR_INSUFFICIENT_RESOURCES 却不知道原因。
+      const CONFIRM_THRESHOLD = 2000;
+      if (count >= CONFIRM_THRESHOLD) {
+        showConfirmation({
+          title: t('auth_files.batch_download_large_title', { defaultValue: '文件数量过多' }),
+          message: (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div>
+                {t('auth_files.batch_download_large_message', {
+                  count,
+                  defaultValue:
+                    '当前将尝试打包下载 {{count}} 个认证文件。文件数量过多时，浏览器可能触发资源限制导致下载失败。',
+                })}
+              </div>
+              <div style={{ opacity: 0.85 }}>
+                {t('auth_files.batch_download_large_hint', {
+                  defaultValue:
+                    '建议优先按类型标签筛选后导出；如需全量导出，请使用本仓库的本地脚本导出到目录再处理。',
+                })}
+              </div>
+            </div>
+          ),
+          variant: 'secondary',
+          confirmText: t('auth_files.batch_download_large_confirm', { defaultValue: '仍然继续下载' }),
+          cancelText: t('common.cancel'),
+          onConfirm: async () => {
+            await handleBatchDownload(targetFiles, { archiveName });
+          },
+        });
+        return;
+      }
+
+      void handleBatchDownload(targetFiles, { archiveName });
+    },
+    [handleBatchDownload, showConfirmation, t]
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -555,24 +607,39 @@ export function AuthFilesPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() =>
-                void handleBatchDownload(downloadableFilteredFiles, {
-                  archiveName: batchDownloadArchiveName,
-                })
-              }
+              onClick={() => requestBatchDownload(downloadableAllFiles, batchDownloadAllArchiveName)}
               disabled={
                 disableControls ||
                 loading ||
                 uploading ||
                 batchDownloading ||
-                downloadableFilteredFiles.length === 0
+                downloadableAllFiles.length === 0
               }
               loading={batchDownloading}
             >
-              {t('auth_files.batch_download_button', {
-                defaultValue: '下载当前筛选',
+              {t('auth_files.batch_download_all_button', {
+                defaultValue: '下载全部',
               })}
             </Button>
+            {hasActiveFilter ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => requestBatchDownload(downloadableFilteredFiles, batchDownloadArchiveName)}
+                disabled={
+                  disableControls ||
+                  loading ||
+                  uploading ||
+                  batchDownloading ||
+                  downloadableFilteredFiles.length === 0
+                }
+                loading={batchDownloading}
+              >
+                {t('auth_files.batch_download_button', {
+                  defaultValue: '下载当前筛选',
+                })}
+              </Button>
+            ) : null}
             <Button
               size="sm"
               onClick={handleUploadClick}

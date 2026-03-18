@@ -7,6 +7,9 @@ import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { IconEye, IconEyeOff } from '@/components/ui/icons';
 import { useAuthStore, useLanguageStore, useNotificationStore } from '@/stores';
+import { ClientManagementModal } from '@/components/client/ClientManagementModal';
+import { ClientSelector } from '@/components/client/ClientSelector';
+import { useClientCacheStore, type ClientConfig } from '@/stores/useClientCacheStore';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
 import { isSupportedLanguage } from '@/utils/language';
@@ -79,6 +82,11 @@ export function LoginPage() {
   const storedBase = useAuthStore((state) => state.apiBase);
   const storedKey = useAuthStore((state) => state.managementKey);
   const storedRememberPassword = useAuthStore((state) => state.rememberPassword);
+  const activeClientId = useClientCacheStore((state) => state.activeClientId);
+  const getClientById = useClientCacheStore((state) => state.getClientById);
+  const setActiveClient = useClientCacheStore((state) => state.setActiveClient);
+  const clearActiveClient = useClientCacheStore((state) => state.clearActiveClient);
+  const updateLastConnected = useClientCacheStore((state) => state.updateLastConnected);
 
   const [apiBase, setApiBase] = useState('');
   const [managementKey, setManagementKey] = useState('');
@@ -89,6 +97,8 @@ export function LoginPage() {
   const [autoLoading, setAutoLoading] = useState(true);
   const [autoLoginSuccess, setAutoLoginSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [clientModalOpen, setClientModalOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   const detectedBase = useMemo(() => detectApiBaseFromLocation(), []);
   const languageOptions = useMemo(
@@ -136,6 +146,36 @@ export function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleSelectClient = useCallback((client: ClientConfig) => {
+    setSelectedClientId(client.id);
+    setApiBase(client.apiBase);
+    setManagementKey(client.managementKey);
+    setShowCustomBase(true);
+    setError('');
+  }, []);
+
+  useEffect(() => {
+    if (!activeClientId) return;
+    const client = getClientById(activeClientId);
+    if (!client) return;
+    handleSelectClient(client);
+  }, [activeClientId, getClientById, handleSelectClient]);
+
+  const syncClientCacheAfterLogin = useCallback(
+    (baseToUse: string, keyToUse: string) => {
+      if (!selectedClientId) return;
+      const selected = getClientById(selectedClientId);
+      if (!selected) return;
+
+      if (normalizeApiBase(selected.apiBase) !== normalizeApiBase(baseToUse)) return;
+      if (selected.managementKey.trim() !== keyToUse.trim()) return;
+
+      setActiveClient(selected.id);
+      updateLastConnected(selected.id);
+    },
+    [getClientById, selectedClientId, setActiveClient, updateLastConnected]
+  );
+
   const handleSubmit = useCallback(async () => {
     if (!managementKey.trim()) {
       setError(t('login.error_required'));
@@ -151,6 +191,7 @@ export function LoginPage() {
         managementKey: managementKey.trim(),
         rememberPassword
       });
+      syncClientCacheAfterLogin(baseToUse, managementKey.trim());
       showNotification(t('common.connected_status'), 'success');
       navigate('/', { replace: true });
     } catch (err: unknown) {
@@ -160,7 +201,17 @@ export function LoginPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, detectedBase, login, managementKey, navigate, rememberPassword, showNotification, t]);
+  }, [
+    apiBase,
+    detectedBase,
+    login,
+    managementKey,
+    navigate,
+    rememberPassword,
+    showNotification,
+    syncClientCacheAfterLogin,
+    t,
+  ]);
 
   const handleSubmitKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -226,6 +277,22 @@ export function LoginPage() {
                 <div className={styles.subtitle}>{t('login.subtitle')}</div>
               </div>
 
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <ClientSelector onSelectClient={handleSelectClient} />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setClientModalOpen(true)}
+                  title={t('client_management.title')}
+                >
+                  {t('client_management.title')}
+                </Button>
+              </div>
+              <ClientManagementModal
+                isOpen={clientModalOpen}
+                onClose={() => setClientModalOpen(false)}
+              />
+
               <div className={styles.connectionBox}>
                 <div className={styles.label}>{t('login.connection_current')}</div>
                 <div className={styles.value}>{apiBase || detectedBase}</div>
@@ -246,7 +313,11 @@ export function LoginPage() {
                   label={t('login.custom_connection_label')}
                   placeholder={t('login.custom_connection_placeholder')}
                   value={apiBase}
-                  onChange={(e) => setApiBase(e.target.value)}
+                  onChange={(e) => {
+                    clearActiveClient();
+                    setApiBase(e.target.value);
+                    setSelectedClientId(null);
+                  }}
                   hint={t('login.custom_connection_hint')}
                 />
               )}
@@ -257,7 +328,11 @@ export function LoginPage() {
                 placeholder={t('login.management_key_placeholder')}
                 type={showKey ? 'text' : 'password'}
                 value={managementKey}
-                onChange={(e) => setManagementKey(e.target.value)}
+                onChange={(e) => {
+                  clearActiveClient();
+                  setManagementKey(e.target.value);
+                  setSelectedClientId(null);
+                }}
                 onKeyDown={handleSubmitKeyDown}
                 rightElement={
                   <button

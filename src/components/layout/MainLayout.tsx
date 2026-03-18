@@ -10,8 +10,10 @@ import {
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { PageTransition } from '@/components/common/PageTransition';
 import { MainRoutes } from '@/router/MainRoutes';
+import { ClientManagementModal } from '@/components/client/ClientManagementModal';
 import {
   IconBot,
   IconChartLine,
@@ -31,6 +33,7 @@ import {
   useLanguageStore,
   useNotificationStore,
   useThemeStore,
+  useClientCacheStore,
 } from '@/stores';
 import { versionApi } from '@/services/api';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
@@ -228,6 +231,7 @@ export function MainLayout() {
   const serverVersion = useAuthStore((state) => state.serverVersion);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const logout = useAuthStore((state) => state.logout);
+  const switchClient = useAuthStore((state) => state.switchClient);
 
   const config = useConfigStore((state) => state.config);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
@@ -244,6 +248,8 @@ export function MainLayout() {
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [brandExpanded, setBrandExpanded] = useState(true);
+  const [clientModalOpen, setClientModalOpen] = useState(false);
+  const [pendingClientId, setPendingClientId] = useState<string>('');
   const contentRef = useRef<HTMLDivElement | null>(null);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
@@ -253,6 +259,12 @@ export function MainLayout() {
   const fullBrandName = 'CLI Proxy API Management Center';
   const abbrBrandName = t('title.abbr');
   const isLogsPage = location.pathname.startsWith('/logs');
+
+  const clients = useClientCacheStore((state) => state.clients);
+  const activeClientId = useClientCacheStore((state) => state.activeClientId);
+  const getClientById = useClientCacheStore((state) => state.getClientById);
+  const setActiveClient = useClientCacheStore((state) => state.setActiveClient);
+  const updateLastConnected = useClientCacheStore((state) => state.updateLastConnected);
 
   // 将顶栏高度写入 CSS 变量，确保侧栏/内容区计算一致，防止滚动时抖动
   useLayoutEffect(() => {
@@ -559,6 +571,86 @@ export function MainLayout() {
     }
   };
 
+  const handleClientSwitch = useCallback(
+    (clientId: string) => {
+      if (!clientId) return;
+      if (connectionStatus === 'connecting') return;
+      const current = activeClientId || '';
+      if (clientId === current) return;
+
+      const next = getClientById(clientId);
+      if (!next) {
+        showNotification(t('common.unknown_error'), 'error');
+        return;
+      }
+
+      setPendingClientId(clientId);
+      void (async () => {
+        try {
+          await switchClient({ apiBase: next.apiBase, managementKey: next.managementKey });
+          setActiveClient(clientId);
+          updateLastConnected(clientId);
+          showNotification(t('client_management.switch_success', { name: next.name }), 'success');
+          await triggerHeaderRefresh();
+        } catch (error: unknown) {
+          const isRecord = (value: unknown): value is Record<string, unknown> =>
+            value !== null && typeof value === 'object';
+          const status = isRecord(error) && typeof error.status === 'number' ? error.status : undefined;
+          const code = isRecord(error) && typeof error.code === 'string' ? error.code : undefined;
+          const message =
+            error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+
+          if (status === 401 || status === 403) {
+            showNotification(
+              t('client_management.switch_failed_unauthorized', { status }),
+              'error'
+            );
+            return;
+          }
+
+          if (
+            code === 'ECONNABORTED' ||
+            message.toLowerCase().includes('timeout')
+          ) {
+            showNotification(
+              t('client_management.switch_failed_timeout', { base: next.apiBase }),
+              'error'
+            );
+            return;
+          }
+
+          if (
+            code === 'ERR_NETWORK' ||
+            code === 'ECONNREFUSED' ||
+            message === 'Network Error' ||
+            message.toLowerCase().includes('connection refused')
+          ) {
+            showNotification(
+              t('client_management.switch_failed_network', { base: next.apiBase }),
+              'error'
+            );
+            return;
+          }
+
+          const suffix = message ? `: ${message}` : '';
+          showNotification(`${t('client_management.switch_failed')}${suffix}`, 'error');
+        } finally {
+          setPendingClientId('');
+        }
+      })();
+    },
+    [
+      activeClientId,
+      connectionStatus,
+      getClientById,
+      setActiveClient,
+      showNotification,
+      switchClient,
+      t,
+      updateLastConnected,
+    ]
+  );
+
   return (
     <div className="app-shell">
       <header className="main-header" ref={headerRef}>
@@ -597,6 +689,32 @@ export function MainLayout() {
               )}
             </span>
             <span className="base">{apiBase || '-'}</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {clients.length > 0 ? (
+              <Select
+                value={pendingClientId || activeClientId || ''}
+                options={clients.map((c) => ({
+                  value: c.id,
+                  label: `${c.name} (${c.apiBase})`,
+                }))}
+                onChange={handleClientSwitch}
+                placeholder={t('client_selector.placeholder')}
+                ariaLabel={t('client_selector.label')}
+                fullWidth={false}
+                disabled={connectionStatus === 'connecting'}
+              />
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setClientModalOpen(true)}
+              title={t('client_management.title')}
+              aria-label={t('client_management.title')}
+            >
+              <IconSettings size={16} />
+            </Button>
           </div>
 
           <div className="header-actions">
@@ -734,6 +852,8 @@ export function MainLayout() {
           </div>
         </div>
       </header>
+
+      <ClientManagementModal isOpen={clientModalOpen} onClose={() => setClientModalOpen(false)} />
 
       <div className="main-body">
         <aside

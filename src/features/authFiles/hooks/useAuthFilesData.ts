@@ -24,6 +24,15 @@ type BatchDownloadOptions = {
   archiveName?: string;
 };
 
+// 批量下载时如果一次性并发拉取过多文件，浏览器可能触发 net::ERR_INSUFFICIENT_RESOURCES。
+// 这里做限并发，避免导出“全部”时瞬间打爆连接/内存。
+const BATCH_DOWNLOAD_CONCURRENCY = 4;
+const resolveBatchDownloadConcurrency = (total: number) => {
+  if (total >= 5000) return 1;
+  if (total >= 2000) return 2;
+  return BATCH_DOWNLOAD_CONCURRENCY;
+};
+
 export type UseAuthFilesDataResult = {
   files: AuthFileItem[];
   selectedFiles: Set<string>;
@@ -61,6 +70,7 @@ export type UseAuthFilesDataOptions = {
 const toArchiveFilename = (archiveName?: string) => {
   const normalized = String(archiveName ?? '')
     .trim()
+    // eslint-disable-next-line no-control-regex -- 归档文件名需要剔除控制字符(0x00-0x1F)，否则部分平台/浏览器可能无法正确保存
     .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-');
   if (normalized) {
     return normalized.toLowerCase().endsWith('.zip') ? normalized : `${normalized}.zip`;
@@ -421,27 +431,32 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
 
       setBatchDownloading(true);
       try {
-        const results = await Promise.allSettled(
-          uniqueFiles.map(async (file) => {
-            const blob = await authFilesApi.downloadBlob(file.name);
-            return {
-              name: file.name,
-              data: await blob.arrayBuffer(),
-              modifiedAt: getModifiedAt(file),
-            };
-          })
-        );
-
         const entries: Array<{ name: string; data: ArrayBuffer; modifiedAt?: Date }> = [];
         let failed = 0;
+        const concurrency = Math.min(resolveBatchDownloadConcurrency(uniqueFiles.length), uniqueFiles.length);
+        let cursor = 0;
 
-        results.forEach((result) => {
-          if (result.status === 'fulfilled') {
-            entries.push(result.value);
-          } else {
-            failed += 1;
+        const workers = Array.from({ length: concurrency }, async () => {
+          while (cursor < uniqueFiles.length) {
+            const current = uniqueFiles[cursor];
+            cursor += 1;
+            if (!current) break;
+
+            try {
+              const blob = await authFilesApi.downloadBlob(current.name);
+              entries.push({
+                name: current.name,
+                data: await blob.arrayBuffer(),
+                modifiedAt: getModifiedAt(current),
+              });
+            } catch {
+              failed += 1;
+            }
           }
         });
+
+        await Promise.all(workers);
+        entries.sort((a, b) => a.name.localeCompare(b.name));
 
         if (entries.length === 0) {
           showNotification(t('notification.download_failed'), 'error');

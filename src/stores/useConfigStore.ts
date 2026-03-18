@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import type { Config } from '@/types';
 import type { RawConfigSection } from '@/types/config';
 import { configApi } from '@/services/api/config';
+import type { ApiRequestConfig } from '@/services/api/client';
 import { CACHE_EXPIRY_MS } from '@/utils/constants';
 
 interface ConfigCache {
@@ -22,8 +23,8 @@ interface ConfigState {
 
   // 操作
   fetchConfig: {
-    (section?: undefined, forceRefresh?: boolean): Promise<Config>;
-    (section: RawConfigSection, forceRefresh?: boolean): Promise<unknown>;
+    (section?: undefined, forceRefresh?: boolean, requestConfig?: ApiRequestConfig): Promise<Config>;
+    (section: RawConfigSection, forceRefresh?: boolean, requestConfig?: ApiRequestConfig): Promise<unknown>;
   };
   updateConfigValue: (section: RawConfigSection, value: unknown) => void;
   clearCache: (section?: RawConfigSection) => void;
@@ -108,7 +109,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   loading: false,
   error: null,
 
-  fetchConfig: (async (section?: RawConfigSection, forceRefresh: boolean = false) => {
+  fetchConfig: (async (
+    section?: RawConfigSection,
+    forceRefresh: boolean = false,
+    requestConfig?: ApiRequestConfig
+  ) => {
     const { cache, isCacheValid } = get();
 
     // 检查缓存
@@ -139,7 +144,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
     const requestId = (configRequestToken += 1);
     try {
-      const requestPromise = configApi.getConfig();
+      const requestPromise = configApi.getConfig(requestConfig);
       inFlightConfigRequest = { id: requestId, promise: requestPromise };
       const data = await requestPromise;
       const now = Date.now();
