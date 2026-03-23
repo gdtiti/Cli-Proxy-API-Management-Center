@@ -5,6 +5,7 @@
 import type {
   ClaudeUsagePayload,
   CodexUsagePayload,
+  GeminiCliCodeAssistPayload,
   GeminiCliQuotaPayload,
   KimiUsagePayload,
   KiroQuotaPayload,
@@ -193,6 +194,23 @@ export function parseGeminiCliQuotaPayload(payload: unknown): GeminiCliQuotaPayl
   }
   if (typeof payload === 'object') {
     return payload as GeminiCliQuotaPayload;
+  }
+  return null;
+}
+
+export function parseGeminiCliCodeAssistPayload(payload: unknown): GeminiCliCodeAssistPayload | null {
+  if (payload === undefined || payload === null) return null;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed) as GeminiCliCodeAssistPayload;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof payload === 'object') {
+    return payload as GeminiCliCodeAssistPayload;
   }
   return null;
 }
