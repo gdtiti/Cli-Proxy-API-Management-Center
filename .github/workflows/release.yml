@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name, for example v1.7.16'
+        required: true
+        type: string
 
 jobs:
   build-and-release:
@@ -19,6 +25,26 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Resolve release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            release_tag="${{ github.event.inputs.tag_name }}"
+            release_ref="${GITHUB_SHA}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+            release_ref="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "${release_tag}" =~ ^v.+$ ]]; then
+            echo "Release tag must start with v, got: ${release_tag}" >&2
+            exit 1
+          fi
+
+          echo "RELEASE_TAG=${release_tag}" >> "${GITHUB_ENV}"
+          echo "RELEASE_REF=${release_ref}" >> "${GITHUB_ENV}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -31,7 +57,7 @@ jobs:
       - name: Build all-in-one HTML
         run: npm run build
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ env.RELEASE_TAG }}
 
       - name: Prepare release assets
         run: |
@@ -42,12 +68,13 @@ jobs:
       - name: Generate release notes
         run: |
           set -euo pipefail
-          current_tag="${GITHUB_REF_NAME}"
+          current_tag="${RELEASE_TAG}"
+          current_ref="${RELEASE_REF}"
           previous_tag="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${current_tag}$" | head -n 1 || true)"
           if [ -n "${previous_tag}" ]; then
-            range="${previous_tag}..${current_tag}"
+            range="${previous_tag}..${current_ref}"
           else
-            range="${current_tag}"
+            range="${current_ref}"
           fi
 
           : > release-notes.md
@@ -56,6 +83,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           files: dist/management.html
           body_path: release-notes.md
           draft: false
