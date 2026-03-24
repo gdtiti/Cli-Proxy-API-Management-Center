@@ -1734,6 +1734,10 @@
   },
   "theme": {
     "switch": "Theme",
+    "family": "Style",
+    "mode": "Mode",
+    "family_official": "Official",
+    "family_dear7575": "Reference Blue Gray",
     "light": "Wool Paper",
     "white": "Pure White",
     "dark": "Dark",

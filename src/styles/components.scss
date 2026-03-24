@@ -92,7 +92,9 @@ textarea {
   padding: 10px 12px;
   background-color: var(--bg-secondary);
   color: var(--text-primary);
-  transition: border-color $transition-fast, box-shadow $transition-fast;
+  transition:
+    border-color $transition-fast,
+    box-shadow $transition-fast;
 
   &:focus {
     outline: none;
@@ -294,7 +296,9 @@ textarea {
     color: var(--text-secondary);
     border-radius: $radius-md;
     cursor: pointer;
-    transition: color 0.15s ease, background-color 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease;
 
     svg {
       display: block;
@@ -493,7 +497,10 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
   z-index: 10;
 
   svg {
@@ -655,8 +662,9 @@ textarea {
 
   .item-subtitle {
     color: var(--text-secondary);
-    font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-      monospace;
+    font-family:
+      ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
     word-break: break-all;
   }
 
@@ -763,7 +771,9 @@ textarea {
   max-height: 520px;
   overflow: auto;
   white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
   color: var(--text-primary);
 }
 
@@ -783,4 +793,159 @@ textarea {
 
 .hint {
   color: var(--text-secondary);
+}
+
+[data-theme-family='dear7575'] {
+  .btn {
+    position: relative;
+    isolation: isolate;
+    border-color: color-mix(in srgb, var(--border-color) 80%, transparent);
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      background-color $transition-fast,
+      border-color $transition-fast,
+      color $transition-fast,
+      box-shadow $transition-fast,
+      transform $transition-fast;
+    background-color: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
+    box-shadow: 0 8px 18px -18px rgba(2, 6, 23, 0.65);
+
+    &.btn-primary {
+      background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+      border-color: color-mix(in srgb, var(--primary-color) 72%, #0f172a);
+      box-shadow: 0 12px 24px -14px rgba($primary-color, 0.72);
+
+      &:hover {
+        background: linear-gradient(180deg, var(--primary-hover) 0%, var(--primary-active) 100%);
+        border-color: color-mix(in srgb, var(--primary-active) 72%, #0f172a);
+        transform: translateY(-1px);
+      }
+    }
+
+    &.btn-secondary {
+      background-color: color-mix(in srgb, var(--bg-tertiary) 72%, transparent);
+
+      &:hover {
+        transform: translateY(-1px);
+      }
+    }
+
+    &.btn-ghost {
+      &:hover {
+        background: color-mix(in srgb, var(--bg-tertiary) 82%, transparent);
+        border-color: color-mix(in srgb, var(--border-hover) 62%, transparent);
+      }
+    }
+
+    &.btn-danger {
+      &:hover {
+        transform: translateY(-1px);
+      }
+    }
+
+    &.btn-sm {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--bg-primary) 85%, transparent),
+        0 0 0 4px color-mix(in srgb, var(--primary-color) 38%, transparent);
+    }
+  }
+
+  .input,
+  textarea {
+    background-color: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+
+    &:focus {
+      box-shadow: 0 0 0 3px rgba($primary-color, 0.2);
+    }
+  }
+
+  .input {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+    line-height: 1.2;
+    box-sizing: border-box;
+  }
+
+  textarea {
+    padding: 10px 12px;
+  }
+
+  .card {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--bg-primary) 94%, #fff) 0%,
+        var(--bg-primary) 100%
+      ),
+      var(--glass-surface-bg);
+    border: 1px solid var(--glass-surface-border);
+    transition:
+      border-color $transition-fast,
+      box-shadow $transition-fast,
+      transform $transition-fast;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      top: -120px;
+      right: -90px;
+      pointer-events: none;
+      background: radial-gradient(circle at center, var(--spotlight-color) 0%, transparent 72%);
+    }
+
+    &:hover {
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-1px);
+    }
+  }
+
+  .card-header {
+    align-items: center;
+    padding-bottom: $spacing-sm;
+    border-bottom: 1px dashed color-mix(in srgb, var(--border-color) 75%, transparent);
+
+    .title {
+      letter-spacing: 0.01em;
+    }
+  }
+
+  .notification {
+    border: 1px solid var(--glass-surface-border);
+    background: var(--glass-surface-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .modal-overlay {
+    background: var(--overlay-scrim);
+  }
+
+  .modal {
+    background: var(--glass-surface-bg);
+    border: 1px solid var(--glass-surface-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .modal-footer {
+    background: color-mix(in srgb, var(--bg-primary) 90%, transparent);
+  }
 }

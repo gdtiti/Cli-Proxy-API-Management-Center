@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Theme } from '@/types';
+import type { Theme, ThemeFamily } from '@/types';
 import { STORAGE_KEY_THEME } from '@/utils/constants';
 
 type ResolvedTheme = 'light' | 'dark';
@@ -13,11 +13,15 @@ type AppliedTheme = ResolvedTheme | 'white';
 
 interface ThemeState {
   theme: Theme;
+  themeFamily: ThemeFamily;
   resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
+  setThemeFamily: (themeFamily: ThemeFamily) => void;
   cycleTheme: () => void;
   initializeTheme: () => () => void;
 }
+
+const DEFAULT_THEME_FAMILY: ThemeFamily = 'official';
 
 const getSystemTheme = (): ResolvedTheme => {
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -26,25 +30,49 @@ const getSystemTheme = (): ResolvedTheme => {
   return 'light';
 };
 
-const resolveAutoTheme = (): AppliedTheme => {
-  return getSystemTheme() === 'dark' ? 'dark' : 'white';
+const getAvailableThemes = (themeFamily: ThemeFamily): Theme[] => {
+  return themeFamily === 'dear7575'
+    ? ['light', 'dark', 'auto']
+    : ['light', 'white', 'dark', 'auto'];
+};
+
+const normalizeThemeForFamily = (theme: Theme, themeFamily: ThemeFamily): Theme => {
+  if (themeFamily === 'dear7575' && theme === 'white') {
+    return 'light';
+  }
+
+  return theme;
+};
+
+const resolveAutoTheme = (themeFamily: ThemeFamily): AppliedTheme => {
+  if (getSystemTheme() === 'dark') {
+    return 'dark';
+  }
+
+  return themeFamily === 'official' ? 'white' : 'light';
 };
 
 const normalizeResolvedTheme = (theme: AppliedTheme): ResolvedTheme => {
   return theme === 'dark' ? 'dark' : 'light';
 };
 
-const resolveTheme = (theme: Theme): AppliedTheme => {
-  if (theme === 'auto') {
-    return resolveAutoTheme();
+const resolveTheme = (theme: Theme, themeFamily: ThemeFamily): AppliedTheme => {
+  const normalizedTheme = normalizeThemeForFamily(theme, themeFamily);
+
+  if (normalizedTheme === 'auto') {
+    return resolveAutoTheme(themeFamily);
   }
-  if (theme === 'white') {
+
+  if (normalizedTheme === 'white') {
     return 'white';
   }
-  return theme;
+
+  return normalizedTheme;
 };
 
-const applyTheme = (resolved: AppliedTheme) => {
+const applyTheme = (resolved: AppliedTheme, themeFamily: ThemeFamily) => {
+  document.documentElement.setAttribute('data-theme-family', themeFamily);
+
   if (resolved === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
     return;
@@ -62,35 +90,56 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       theme: 'auto',
+      themeFamily: DEFAULT_THEME_FAMILY,
       resolvedTheme: 'light',
 
       setTheme: (theme) => {
-        const currentTheme = get().theme;
-        const resolved = resolveTheme(theme);
-        applyTheme(resolved);
+        const { themeFamily } = get();
+        const nextTheme = normalizeThemeForFamily(theme, themeFamily);
+        const resolved = resolveTheme(nextTheme, themeFamily);
+        applyTheme(resolved, themeFamily);
         const nextResolvedTheme = normalizeResolvedTheme(resolved);
-        if (currentTheme === theme && get().resolvedTheme === nextResolvedTheme) {
+        if (get().theme === nextTheme && get().resolvedTheme === nextResolvedTheme) {
           return;
         }
         set({
-          theme,
+          theme: nextTheme,
+          resolvedTheme: nextResolvedTheme,
+        });
+      },
+
+      setThemeFamily: (themeFamily) => {
+        const nextTheme = normalizeThemeForFamily(get().theme, themeFamily);
+        const resolved = resolveTheme(nextTheme, themeFamily);
+        applyTheme(resolved, themeFamily);
+        const nextResolvedTheme = normalizeResolvedTheme(resolved);
+
+        if (
+          get().themeFamily === themeFamily &&
+          get().theme === nextTheme &&
+          get().resolvedTheme === nextResolvedTheme
+        ) {
+          return;
+        }
+
+        set({
+          themeFamily,
+          theme: nextTheme,
           resolvedTheme: nextResolvedTheme,
         });
       },
 
       cycleTheme: () => {
-        const { theme, setTheme } = get();
-        const order: Theme[] = ['light', 'white', 'dark', 'auto'];
+        const { theme, themeFamily, setTheme } = get();
+        const order = getAvailableThemes(themeFamily);
         const currentIndex = order.indexOf(theme);
         const nextTheme = order[(currentIndex + 1) % order.length];
         setTheme(nextTheme);
       },
 
       initializeTheme: () => {
-        const { theme, setTheme } = get();
-
-        // 应用已保存的主题
-        setTheme(theme);
+        const { themeFamily, setThemeFamily } = get();
+        setThemeFamily(themeFamily);
 
         // 监听系统主题变化（仅在 auto 模式下生效）
         if (!window.matchMedia) {
@@ -99,10 +148,10 @@ export const useThemeStore = create<ThemeState>()(
 
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         const listener = () => {
-          const { theme: currentTheme } = get();
+          const { theme: currentTheme, themeFamily: currentThemeFamily } = get();
           if (currentTheme === 'auto') {
-            const resolved = resolveAutoTheme();
-            applyTheme(resolved);
+            const resolved = resolveAutoTheme(currentThemeFamily);
+            applyTheme(resolved, currentThemeFamily);
             set({ resolvedTheme: normalizeResolvedTheme(resolved) });
           }
         };

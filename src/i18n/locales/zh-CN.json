@@ -1734,6 +1734,10 @@
   },
   "theme": {
     "switch": "主题",
+    "family": "风格",
+    "mode": "模式",
+    "family_official": "官方原版",
+    "family_dear7575": "参考蓝灰",
     "light": "羊毛纸",
     "white": "纯白",
     "dark": "暗色",

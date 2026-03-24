@@ -39,7 +39,7 @@ import {
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
 import { isSupportedLanguage } from '@/utils/language';
-import type { Theme } from '@/types';
+import type { Theme, ThemeFamily } from '@/types';
 
 const sidebarIcons: Record<string, ReactNode> = {
   dashboard: <IconSidebarDashboard size={18} />,
@@ -157,56 +157,126 @@ const headerIcons = {
   ),
 };
 
-const THEME_CARDS: Array<{
+type ThemeCardDefinition = {
   key: Theme;
   labelKey: string;
   colors: { bg: string; card: string; border: string; text: string; textMuted: string };
-}> = [
+};
+
+type ThemeFamilyCardDefinition = {
+  key: ThemeFamily;
+  labelKey: string;
+  colors: { bg: string; card: string; accent: string; border: string; textMuted: string };
+};
+
+const THEME_FAMILY_CARDS: ThemeFamilyCardDefinition[] = [
   {
-    key: 'auto',
-    labelKey: 'theme.auto',
+    key: 'official',
+    labelKey: 'theme.family_official',
     colors: {
-      bg: 'linear-gradient(135deg, #ffffff 0 50%, #111111 50% 100%)',
-      card: 'linear-gradient(135deg, #ffffff 0 50%, #1a1a1a 50% 100%)',
-      border: '#bdbdbd',
-      text: '#2d2a26',
-      textMuted: 'linear-gradient(135deg, #c9c9c9 0 50%, #5a5a5a 50% 100%)',
-    },
-  },
-  {
-    key: 'white',
-    labelKey: 'theme.white',
-    colors: {
-      bg: '#ffffff',
-      card: '#ffffff',
-      border: '#e5e5e5',
-      text: '#2d2a26',
-      textMuted: '#a29c95',
-    },
-  },
-  {
-    key: 'light',
-    labelKey: 'theme.light',
-    colors: {
-      bg: '#faf9f5',
+      bg: 'linear-gradient(160deg, #faf9f5 0%, #ffffff 100%)',
       card: '#f0eee8',
+      accent: '#8b8680',
       border: '#e3e1db',
-      text: '#2d2a26',
       textMuted: '#a29c95',
     },
   },
   {
-    key: 'dark',
-    labelKey: 'theme.dark',
+    key: 'dear7575',
+    labelKey: 'theme.family_dear7575',
     colors: {
-      bg: '#151412',
-      card: '#1d1b18',
-      border: '#3a3530',
-      text: '#f6f4f1',
-      textMuted: '#9c958d',
+      bg: 'linear-gradient(160deg, #f3f6fb 0%, #dfe9fb 100%)',
+      card: '#ffffff',
+      accent: 'linear-gradient(180deg, #1967ff 0%, #0ea5e9 100%)',
+      border: '#c7d4e8',
+      textMuted: '#6f84a3',
     },
   },
 ];
+
+const THEME_MODE_CARDS: Record<ThemeFamily, ThemeCardDefinition[]> = {
+  official: [
+    {
+      key: 'auto',
+      labelKey: 'theme.auto',
+      colors: {
+        bg: 'linear-gradient(135deg, #ffffff 0 50%, #111111 50% 100%)',
+        card: 'linear-gradient(135deg, #ffffff 0 50%, #1a1a1a 50% 100%)',
+        border: '#bdbdbd',
+        text: '#2d2a26',
+        textMuted: 'linear-gradient(135deg, #c9c9c9 0 50%, #5a5a5a 50% 100%)',
+      },
+    },
+    {
+      key: 'white',
+      labelKey: 'theme.white',
+      colors: {
+        bg: '#ffffff',
+        card: '#ffffff',
+        border: '#e5e5e5',
+        text: '#2d2a26',
+        textMuted: '#a29c95',
+      },
+    },
+    {
+      key: 'light',
+      labelKey: 'theme.light',
+      colors: {
+        bg: '#faf9f5',
+        card: '#f0eee8',
+        border: '#e3e1db',
+        text: '#2d2a26',
+        textMuted: '#a29c95',
+      },
+    },
+    {
+      key: 'dark',
+      labelKey: 'theme.dark',
+      colors: {
+        bg: '#151412',
+        card: '#1d1b18',
+        border: '#3a3530',
+        text: '#f6f4f1',
+        textMuted: '#9c958d',
+      },
+    },
+  ],
+  dear7575: [
+    {
+      key: 'auto',
+      labelKey: 'theme.auto',
+      colors: {
+        bg: 'linear-gradient(135deg, #f3f6fb 0 50%, #0f1724 50% 100%)',
+        card: 'linear-gradient(135deg, #ffffff 0 50%, #141f2f 50% 100%)',
+        border: '#9eb3d1',
+        text: '#182132',
+        textMuted: 'linear-gradient(135deg, #7d8aa0 0 50%, #93a5c4 50% 100%)',
+      },
+    },
+    {
+      key: 'light',
+      labelKey: 'theme.light',
+      colors: {
+        bg: '#f3f6fb',
+        card: '#ffffff',
+        border: '#dbe4f2',
+        text: '#182132',
+        textMuted: '#7d8aa0',
+      },
+    },
+    {
+      key: 'dark',
+      labelKey: 'theme.dark',
+      colors: {
+        bg: '#0f1724',
+        card: '#141f2f',
+        border: '#2d3d56',
+        text: '#eaf0ff',
+        textMuted: '#93a5c4',
+      },
+    },
+  ],
+};
 
 export function MainLayout() {
   const { t } = useTranslation();
@@ -223,7 +293,9 @@ export function MainLayout() {
   const clearCache = useConfigStore((state) => state.clearCache);
 
   const theme = useThemeStore((state) => state.theme);
+  const themeFamily = useThemeStore((state) => state.themeFamily);
   const setTheme = useThemeStore((state) => state.setTheme);
+  const setThemeFamily = useThemeStore((state) => state.setThemeFamily);
   const language = useLanguageStore((state) => state.language);
   const setLanguage = useLanguageStore((state) => state.setLanguage);
 
@@ -243,6 +315,7 @@ export function MainLayout() {
   const fullBrandName = 'CLI Proxy API Management Center';
   const abbrBrandName = t('title.abbr');
   const isLogsPage = location.pathname.startsWith('/logs');
+  const themeModeCards = THEME_MODE_CARDS[themeFamily];
 
   const clients = useClientCacheStore((state) => state.clients);
   const activeClientId = useClientCacheStore((state) => state.activeClientId);
@@ -407,6 +480,13 @@ export function MainLayout() {
     [setTheme]
   );
 
+  const handleThemeFamilySelect = useCallback(
+    (nextThemeFamily: ThemeFamily) => {
+      setThemeFamily(nextThemeFamily);
+    },
+    [setThemeFamily]
+  );
+
   const handleLanguageSelect = useCallback(
     (nextLanguage: string) => {
       if (!isSupportedLanguage(nextLanguage)) {
@@ -546,7 +626,8 @@ export function MainLayout() {
         } catch (error: unknown) {
           const isRecord = (value: unknown): value is Record<string, unknown> =>
             value !== null && typeof value === 'object';
-          const status = isRecord(error) && typeof error.status === 'number' ? error.status : undefined;
+          const status =
+            isRecord(error) && typeof error.status === 'number' ? error.status : undefined;
           const code = isRecord(error) && typeof error.code === 'string' ? error.code : undefined;
           const message =
             error instanceof Error ? error.message : typeof error === 'string' ? error : '';
@@ -559,10 +640,7 @@ export function MainLayout() {
             return;
           }
 
-          if (
-            code === 'ECONNABORTED' ||
-            message.toLowerCase().includes('timeout')
-          ) {
+          if (code === 'ECONNABORTED' || message.toLowerCase().includes('timeout')) {
             showNotification(
               t('client_management.switch_failed_timeout', { base: next.apiBase }),
               'error'
@@ -745,52 +823,103 @@ export function MainLayout() {
                   role="menu"
                   aria-label={t('theme.switch')}
                 >
-                  {THEME_CARDS.map((tc) => (
-                    <button
-                      key={tc.key}
-                      type="button"
-                      className={`theme-card ${theme === tc.key ? 'active' : ''}`}
-                      onClick={() => handleThemeSelect(tc.key)}
-                      role="menuitemradio"
-                      aria-checked={theme === tc.key}
-                    >
-                      <div
-                        className="theme-card-preview"
-                        style={{
-                          background: tc.colors.bg,
-                          border: `1px solid ${tc.colors.border}`,
-                        }}
-                      >
-                        <div
-                          className="theme-card-header"
-                          style={{
-                            background: tc.colors.card,
-                            borderBottom: `1px solid ${tc.colors.border}`,
-                          }}
-                        />
-                        <div className="theme-card-body">
+                  <div className="theme-menu-section">
+                    <div className="theme-menu-section-title">{t('theme.family')}</div>
+                    <div className="theme-family-grid">
+                      {THEME_FAMILY_CARDS.map((fc) => (
+                        <button
+                          key={fc.key}
+                          type="button"
+                          className={`theme-family-card ${themeFamily === fc.key ? 'active' : ''}`}
+                          onClick={() => handleThemeFamilySelect(fc.key)}
+                          role="menuitemradio"
+                          aria-checked={themeFamily === fc.key}
+                        >
                           <div
-                            className="theme-card-sidebar"
+                            className="theme-family-preview"
                             style={{
-                              background: tc.colors.card,
-                              borderRight: `1px solid ${tc.colors.border}`,
+                              background: fc.colors.bg,
+                              border: `1px solid ${fc.colors.border}`,
                             }}
-                          />
-                          <div className="theme-card-content" style={{ background: tc.colors.bg }}>
+                          >
                             <div
-                              className="theme-card-line"
-                              style={{ background: tc.colors.textMuted }}
+                              className="theme-family-accent"
+                              style={{ background: fc.colors.accent }}
                             />
                             <div
-                              className="theme-card-line short"
-                              style={{ background: tc.colors.textMuted }}
-                            />
+                              className="theme-family-surface"
+                              style={{ background: fc.colors.card }}
+                            >
+                              <div
+                                className="theme-family-line"
+                                style={{ background: fc.colors.textMuted }}
+                              />
+                              <div
+                                className="theme-family-line short"
+                                style={{ background: fc.colors.textMuted }}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <span className="theme-card-label">{t(tc.labelKey)}</span>
-                    </button>
-                  ))}
+                          <span className="theme-family-label">{t(fc.labelKey)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="theme-menu-section">
+                    <div className="theme-menu-section-title">{t('theme.mode')}</div>
+                    <div className="theme-card-grid">
+                      {themeModeCards.map((tc) => (
+                        <button
+                          key={tc.key}
+                          type="button"
+                          className={`theme-card ${theme === tc.key ? 'active' : ''}`}
+                          onClick={() => handleThemeSelect(tc.key)}
+                          role="menuitemradio"
+                          aria-checked={theme === tc.key}
+                        >
+                          <div
+                            className="theme-card-preview"
+                            style={{
+                              background: tc.colors.bg,
+                              border: `1px solid ${tc.colors.border}`,
+                            }}
+                          >
+                            <div
+                              className="theme-card-header"
+                              style={{
+                                background: tc.colors.card,
+                                borderBottom: `1px solid ${tc.colors.border}`,
+                              }}
+                            />
+                            <div className="theme-card-body">
+                              <div
+                                className="theme-card-sidebar"
+                                style={{
+                                  background: tc.colors.card,
+                                  borderRight: `1px solid ${tc.colors.border}`,
+                                }}
+                              />
+                              <div
+                                className="theme-card-content"
+                                style={{ background: tc.colors.bg }}
+                              >
+                                <div
+                                  className="theme-card-line"
+                                  style={{ background: tc.colors.textMuted }}
+                                />
+                                <div
+                                  className="theme-card-line short"
+                                  style={{ background: tc.colors.textMuted }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <span className="theme-card-label">{t(tc.labelKey)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

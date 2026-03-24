@@ -50,6 +50,10 @@
 
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --glass-surface-bg: color-mix(in srgb, var(--bg-primary) 100%, transparent);
+  --glass-surface-border: color-mix(in srgb, var(--border-color) 100%, transparent);
+  --spotlight-color: rgba(59, 130, 246, 0.1);
+  --overlay-scrim: rgba(15, 23, 42, 0.35);
 
   --radius-md: 8px;
   --accent-tertiary: var(--bg-tertiary);
@@ -103,6 +107,10 @@
 
   --shadow: 0 1px 2px 0 rgb(0 0 0 / 0.08);
   --shadow-lg: 0 10px 18px -3px rgb(0 0 0 / 0.1);
+  --glass-surface-bg: color-mix(in srgb, var(--bg-primary) 100%, transparent);
+  --glass-surface-border: color-mix(in srgb, var(--border-color) 100%, transparent);
+  --spotlight-color: rgba(139, 134, 128, 0.1);
+  --overlay-scrim: rgba(15, 23, 42, 0.32);
 
   --radius-md: 8px;
   --accent-tertiary: var(--bg-tertiary);
@@ -156,7 +164,123 @@
 
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+  --glass-surface-bg: color-mix(in srgb, var(--bg-primary) 100%, transparent);
+  --glass-surface-border: color-mix(in srgb, var(--border-color) 100%, transparent);
+  --spotlight-color: rgba(59, 130, 246, 0.18);
+  --overlay-scrim: rgba(3, 8, 20, 0.56);
 
   --radius-md: 8px;
+  --accent-tertiary: var(--bg-tertiary);
+}
+
+[data-theme-family='dear7575'] {
+  --bg-secondary: #f3f6fb;
+  --bg-primary: #ffffff;
+  --bg-tertiary: #eaf0fa;
+  --bg-hover: #e2ebf8;
+  --bg-quinary: #edf2fa;
+  --bg-error-light: rgba(220, 38, 38, 0.1);
+
+  --text-primary: #182132;
+  --text-secondary: #4f5d75;
+  --text-tertiary: #7d8aa0;
+  --text-quaternary: #a4afbf;
+  --text-muted: var(--text-tertiary);
+
+  --border-color: #dbe4f2;
+  --border-secondary: var(--border-color);
+  --border-primary: #c7d4e8;
+  --border-hover: #b6c7e0;
+
+  --primary-color: #1967ff;
+  --primary-hover: #1457da;
+  --primary-active: #1048b7;
+  --primary-contrast: #ffffff;
+
+  --success-color: #059669;
+  --warning-color: #d97706;
+  --error-color: #dc2626;
+  --danger-color: var(--error-color);
+  --info-color: var(--primary-color);
+
+  --warning-bg: rgba(217, 119, 6, 0.12);
+  --warning-border: rgba(217, 119, 6, 0.35);
+  --warning-text: var(--warning-color);
+
+  --success-badge-bg: #d9f5ea;
+  --success-badge-text: #065f46;
+  --success-badge-border: #34d399;
+
+  --failure-badge-bg: rgba(220, 38, 38, 0.12);
+  --failure-badge-text: #991b1b;
+  --failure-badge-border: rgba(220, 38, 38, 0.35);
+
+  --count-badge-bg: rgba(25, 103, 255, 0.12);
+  --count-badge-text: var(--primary-active);
+
+  --shadow: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 16px 32px -12px rgb(15 23 42 / 0.22);
+  --glass-surface-bg: color-mix(in srgb, var(--bg-primary) 88%, transparent);
+  --glass-surface-border: color-mix(in srgb, var(--border-color) 78%, transparent);
+  --spotlight-color: rgba(25, 103, 255, 0.16);
+  --overlay-scrim: rgba(10, 18, 34, 0.38);
+
+  --radius-md: 10px;
+  --accent-tertiary: var(--bg-tertiary);
+}
+
+[data-theme-family='dear7575'][data-theme='dark'] {
+  --bg-secondary: #0f1724;
+  --bg-primary: #141f2f;
+  --bg-tertiary: #1b2a3d;
+  --bg-hover: #22344d;
+  --bg-quinary: #121b29;
+  --bg-error-light: rgba(248, 113, 113, 0.2);
+
+  --text-primary: #eaf0ff;
+  --text-secondary: #c4d1e8;
+  --text-tertiary: #93a5c4;
+  --text-quaternary: #667996;
+  --text-muted: var(--text-tertiary);
+
+  --border-color: #2d3d56;
+  --border-secondary: var(--border-color);
+  --border-primary: #3b4e6d;
+  --border-hover: #4e6488;
+
+  --primary-color: #5b9bff;
+  --primary-hover: #4d8ef8;
+  --primary-active: #78adff;
+  --primary-contrast: #ffffff;
+
+  --success-color: #34d399;
+  --warning-color: #f59e0b;
+  --error-color: #f87171;
+  --danger-color: var(--error-color);
+  --info-color: var(--primary-color);
+
+  --warning-bg: rgba(245, 158, 11, 0.22);
+  --warning-border: rgba(245, 158, 11, 0.45);
+  --warning-text: #f8c77a;
+
+  --success-badge-bg: rgba(5, 150, 105, 0.22);
+  --success-badge-text: #6ee7b7;
+  --success-badge-border: #10b981;
+
+  --failure-badge-bg: rgba(248, 113, 113, 0.24);
+  --failure-badge-text: #fda4a4;
+  --failure-badge-border: rgba(248, 113, 113, 0.45);
+
+  --count-badge-bg: rgba(91, 155, 255, 0.28);
+  --count-badge-text: var(--primary-active);
+
+  --shadow: 0 1px 3px 0 rgb(2 6 23 / 0.5);
+  --shadow-lg: 0 16px 30px -10px rgb(2 6 23 / 0.6);
+  --glass-surface-bg: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  --glass-surface-border: color-mix(in srgb, var(--border-color) 68%, transparent);
+  --spotlight-color: rgba(91, 155, 255, 0.24);
+  --overlay-scrim: rgba(3, 8, 20, 0.56);
+
+  --radius-md: 10px;
   --accent-tertiary: var(--bg-tertiary);
 }

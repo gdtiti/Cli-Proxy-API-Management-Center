@@ -3,6 +3,7 @@
  */
 
 export type Theme = 'light' | 'white' | 'dark' | 'auto';
+export type ThemeFamily = 'official' | 'dear7575';
 
 export type Language = 'zh-CN' | 'en' | 'ru';
 
