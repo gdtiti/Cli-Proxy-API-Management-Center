@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { UsageData } from '@/pages/MonitorPage';
+import { collectUsageDetails, extractTotalTokens, getModelStats } from '@/utils/usage';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface KpiCardsProps {
@@ -45,10 +46,30 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
       };
     }
 
-    let totalRequests = 0;
-    let successRequests = 0;
-    let failedRequests = 0;
-    let totalTokens = 0;
+    const modelStats = getModelStats(data, {});
+    const summaryFromModels = modelStats.reduce(
+      (acc, model) => {
+        acc.totalRequests += model.requests;
+        acc.successRequests += model.successCount;
+        acc.failedRequests += model.failureCount;
+        acc.totalTokens += model.tokens;
+        return acc;
+      },
+      { totalRequests: 0, successRequests: 0, failedRequests: 0, totalTokens: 0 }
+    );
+
+    const details = collectUsageDetails(data);
+    const detailsTokenTotal = details.reduce((sum, detail) => sum + extractTotalTokens(detail), 0);
+
+    let totalRequests = typeof data.total_requests === 'number' ? data.total_requests : summaryFromModels.totalRequests;
+    let successRequests = typeof data.success_count === 'number' ? data.success_count : summaryFromModels.successRequests;
+    let failedRequests = typeof data.failure_count === 'number' ? data.failure_count : summaryFromModels.failedRequests;
+    let totalTokens =
+      typeof data.total_tokens === 'number'
+        ? data.total_tokens
+        : summaryFromModels.totalTokens > 0
+          ? summaryFromModels.totalTokens
+          : detailsTokenTotal;
     let inputTokens = 0;
     let outputTokens = 0;
     let reasoningTokens = 0;
@@ -57,26 +78,26 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
     // 收集所有时间戳用于计算 TPM/RPM
     const timestamps: number[] = [];
 
-    Object.values(data.apis).forEach((apiData) => {
-      Object.values(apiData.models).forEach((modelData) => {
-        modelData.details.forEach((detail) => {
-          totalRequests++;
-          if (detail.failed) {
-            failedRequests++;
-          } else {
-            successRequests++;
-          }
+    details.forEach((detail) => {
+      inputTokens += detail.tokens.input_tokens || 0;
+      outputTokens += detail.tokens.output_tokens || 0;
+      reasoningTokens += detail.tokens.reasoning_tokens || 0;
+      cachedTokens += detail.tokens.cached_tokens || 0;
 
-          totalTokens += detail.tokens.total_tokens || 0;
-          inputTokens += detail.tokens.input_tokens || 0;
-          outputTokens += detail.tokens.output_tokens || 0;
-          reasoningTokens += detail.tokens.reasoning_tokens || 0;
-          cachedTokens += detail.tokens.cached_tokens || 0;
-
-          timestamps.push(new Date(detail.timestamp).getTime());
-        });
-      });
+      const timestamp = new Date(detail.timestamp).getTime();
+      if (Number.isFinite(timestamp) && timestamp > 0) {
+        timestamps.push(timestamp);
+      }
     });
+
+    const effectiveTotalRequests = Math.max(totalRequests, successRequests + failedRequests, 0);
+    totalRequests = effectiveTotalRequests;
+    if (successRequests + failedRequests > totalRequests) {
+      successRequests = Math.max(totalRequests - failedRequests, 0);
+    }
+    if (totalTokens <= 0 && detailsTokenTotal > 0) {
+      totalTokens = detailsTokenTotal;
+    }
 
     const successRate = totalRequests > 0 ? (successRequests / totalRequests) * 100 : 0;
 
@@ -94,6 +115,12 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
       avgTpm = Math.round(totalTokens / timeSpanMinutes);
       avgRpm = Math.round(totalRequests / timeSpanMinutes * 10) / 10;
       avgRpd = Math.round(totalRequests / timeSpanDays);
+    } else if (totalRequests > 0 || totalTokens > 0) {
+      const dayWindow = Math.max(timeRange, 1);
+      const minuteWindow = dayWindow * 24 * 60;
+      avgTpm = Math.round(totalTokens / minuteWindow);
+      avgRpm = Math.round((totalRequests / minuteWindow) * 10) / 10;
+      avgRpd = Math.round(totalRequests / dayWindow);
     }
 
     return {
@@ -110,7 +137,7 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
       avgRpm,
       avgRpd,
     };
-  }, [data]);
+  }, [data, timeRange]);
 
   const timeRangeLabel = timeRange === 1
     ? t('monitor.today')

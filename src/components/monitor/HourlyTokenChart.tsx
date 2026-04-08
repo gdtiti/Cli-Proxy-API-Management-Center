@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Chart } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { buildHourlySeriesByModel, buildHourlyTokenBreakdown } from '@/utils/usage';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface HourlyTokenChartProps {
@@ -16,68 +17,66 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
   const { t } = useTranslation();
   const [hourRange, setHourRange] = useState<HourRange>(12);
 
-  // 按小时聚合 Token 数据
+  // 按小时聚合 Token 数据（优先明细；无明细时回退到聚合 buckets）
   const hourlyData = useMemo(() => {
-    if (!data?.apis) return { hours: [], totalTokens: [], inputTokens: [], outputTokens: [], reasoningTokens: [], cachedTokens: [] };
-
-    const now = new Date();
-    const cutoffTime = new Date(now.getTime() - hourRange * 60 * 60 * 1000);
-    cutoffTime.setMinutes(0, 0, 0);
-    const hoursCount = hourRange + 1;
-
-    // 生成所有小时的时间点
-    const allHours: string[] = [];
-    for (let i = 0; i < hoursCount; i++) {
-      const hourTime = new Date(cutoffTime.getTime() + i * 60 * 60 * 1000);
-      const hourKey = hourTime.toISOString().slice(0, 13); // YYYY-MM-DDTHH
-      allHours.push(hourKey);
+    if (!data?.apis) {
+      return {
+        hours: [],
+        totalTokens: [] as number[],
+        inputTokens: [] as number[],
+        outputTokens: [] as number[],
+        hasBreakdown: false,
+        hasData: false,
+      };
     }
 
-    // 初始化所有小时的数据为0
-    const hourlyStats: Record<string, {
-      total: number;
-      input: number;
-      output: number;
-      reasoning: number;
-      cached: number;
-    }> = {};
-    allHours.forEach((hour) => {
-      hourlyStats[hour] = { total: 0, input: 0, output: 0, reasoning: 0, cached: 0 };
-    });
+    const hourWindow = hourRange + 1;
+    const totalSeries = buildHourlySeriesByModel(data, 'tokens', hourWindow);
+    const breakdownSeries = buildHourlyTokenBreakdown(data, hourWindow);
+    const hours = totalSeries.labels;
+    if (!hours.length) {
+      return {
+        hours: [],
+        totalTokens: [] as number[],
+        inputTokens: [] as number[],
+        outputTokens: [] as number[],
+        hasBreakdown: false,
+        hasData: false,
+      };
+    }
 
-    // 收集每小时的 Token 数据（只统计成功请求）
-    Object.values(data.apis).forEach((apiData) => {
-      Object.values(apiData.models).forEach((modelData) => {
-        modelData.details.forEach((detail) => {
-          // 跳过失败请求，失败请求的 Token 数据不准确
-          if (detail.failed) return;
-
-          const timestamp = new Date(detail.timestamp);
-          if (timestamp < cutoffTime) return;
-
-          const hourKey = timestamp.toISOString().slice(0, 13); // YYYY-MM-DDTHH
-          if (!hourlyStats[hourKey]) {
-            hourlyStats[hourKey] = { total: 0, input: 0, output: 0, reasoning: 0, cached: 0 };
-          }
-          hourlyStats[hourKey].total += detail.tokens.total_tokens || 0;
-          hourlyStats[hourKey].input += detail.tokens.input_tokens || 0;
-          hourlyStats[hourKey].output += detail.tokens.output_tokens || 0;
-          hourlyStats[hourKey].reasoning += detail.tokens.reasoning_tokens || 0;
-          hourlyStats[hourKey].cached += detail.tokens.cached_tokens || 0;
-        });
+    const totalTokens = hours.map((_, index) => {
+      let total = 0;
+      totalSeries.dataByModel.forEach((values) => {
+        total += values[index] || 0;
       });
+      return total / 1000;
     });
 
-    // 获取排序后的小时列表
-    const hours = allHours.sort();
+    const breakdownLabelIndex = new Map(
+      breakdownSeries.labels.map((label, index) => [label, index])
+    );
 
+    const inputTokens = hours.map((hourLabel) => {
+      const index = breakdownLabelIndex.get(hourLabel);
+      if (index === undefined) return 0;
+      return (breakdownSeries.dataByCategory.input[index] || 0) / 1000;
+    });
+
+    const outputTokens = hours.map((hourLabel) => {
+      const index = breakdownLabelIndex.get(hourLabel);
+      if (index === undefined) return 0;
+      return (breakdownSeries.dataByCategory.output[index] || 0) / 1000;
+    });
+
+    const hasData = totalTokens.some((value) => value > 0);
     return {
       hours,
-      totalTokens: hours.map((h) => (hourlyStats[h]?.total || 0) / 1000),
-      inputTokens: hours.map((h) => (hourlyStats[h]?.input || 0) / 1000),
-      outputTokens: hours.map((h) => (hourlyStats[h]?.output || 0) / 1000),
-      reasoningTokens: hours.map((h) => (hourlyStats[h]?.reasoning || 0) / 1000),
-      cachedTokens: hours.map((h) => (hourlyStats[h]?.cached || 0) / 1000),
+      totalTokens,
+      inputTokens,
+      outputTokens,
+      hasBreakdown: breakdownSeries.hasData,
+      hasData,
     };
   }, [data, hourRange]);
 
@@ -91,13 +90,13 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
   // 图表数据
   const chartData = useMemo(() => {
     const labels = hourlyData.hours.map((hour) => {
-      const date = new Date(hour + ':00:00Z'); // 添加 Z 表示 UTC 时间，确保正确转换为本地时间显示
-      return `${date.getHours()}:00`;
+      return hour.slice(-5);
     });
 
-    return {
-      labels,
-      datasets: [
+    const datasets: any[] = [];
+
+    if (hourlyData.hasBreakdown) {
+      datasets.push(
         {
           type: 'line' as const,
           label: t('monitor.hourly_token.input'),
@@ -123,19 +122,25 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
           order: 0,
           pointRadius: 3,
           pointBackgroundColor: '#f97316',
-        },
-        {
-          type: 'bar' as const,
-          label: t('monitor.hourly_token.total'),
-          data: hourlyData.totalTokens,
-          backgroundColor: 'rgba(59, 130, 246, 0.6)',
-          borderColor: 'rgba(59, 130, 246, 0.6)',
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y',
-          order: 1,
-        },
-      ],
+        }
+      );
+    }
+
+    datasets.push({
+      type: 'bar' as const,
+      label: t('monitor.hourly_token.total'),
+      data: hourlyData.totalTokens,
+      backgroundColor: 'rgba(59, 130, 246, 0.6)',
+      borderColor: 'rgba(59, 130, 246, 0.6)',
+      borderWidth: 1,
+      borderRadius: 4,
+      yAxisID: 'y',
+      order: 1,
+    });
+
+    return {
+      labels,
+      datasets,
     };
   }, [hourlyData, t]);
 
@@ -258,7 +263,7 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
       </div>
 
       <div className={styles.chartContent}>
-        {loading || hourlyData.hours.length === 0 ? (
+        {loading || !hourlyData.hasData ? (
           <div className={styles.chartEmpty}>
             {loading ? t('common.loading') : t('monitor.no_data')}
           </div>

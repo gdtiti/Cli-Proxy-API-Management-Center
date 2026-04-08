@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Doughnut } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { getModelStats } from '@/utils/usage';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface ModelDistributionChartProps {
@@ -39,26 +40,12 @@ export function ModelDistributionChart({ data, loading, isDark, timeRange }: Mod
   const distributionData = useMemo(() => {
     if (!data?.apis) return [];
 
-    const modelStats: Record<string, { requests: number; tokens: number }> = {};
-
-    Object.values(data.apis).forEach((apiData) => {
-      Object.entries(apiData.models).forEach(([modelName, modelData]) => {
-        if (!modelStats[modelName]) {
-          modelStats[modelName] = { requests: 0, tokens: 0 };
-        }
-        modelData.details.forEach((detail) => {
-          modelStats[modelName].requests++;
-          modelStats[modelName].tokens += detail.tokens.total_tokens || 0;
-        });
-      });
-    });
-
-    // 转换为数组并排序
-    const sorted = Object.entries(modelStats)
-      .map(([name, stats]) => ({
-        name,
-        requests: stats.requests,
-        tokens: stats.tokens,
+    const sorted = getModelStats(data, {})
+      .filter((item) => item.requests > 0 || item.tokens > 0)
+      .map((item) => ({
+        name: item.model,
+        requests: item.requests,
+        tokens: item.tokens,
       }))
       .sort((a, b) => {
         if (viewMode === 'request') {

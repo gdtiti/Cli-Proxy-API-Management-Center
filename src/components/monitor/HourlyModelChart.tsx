@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Chart } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { buildHourlySeriesByModel, collectUsageDetails, formatHourLabel, getModelStats } from '@/utils/usage';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface HourlyModelChartProps {
@@ -26,64 +27,34 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
   const { t } = useTranslation();
   const [hourRange, setHourRange] = useState<HourRange>(12);
 
-  // 按小时聚合数据
+  // 按小时聚合数据（优先明细；无明细时回退到聚合 buckets）
   const hourlyData = useMemo(() => {
-    if (!data?.apis) return { hours: [], models: [], modelData: {} as Record<string, number[]>, successRates: [] };
-
-    const now = new Date();
-    const cutoffTime = new Date(now.getTime() - hourRange * 60 * 60 * 1000);
-    cutoffTime.setMinutes(0, 0, 0);
-    const hoursCount = hourRange + 1;
-
-    // 生成所有小时的时间点
-    const allHours: string[] = [];
-    for (let i = 0; i < hoursCount; i++) {
-      const hourTime = new Date(cutoffTime.getTime() + i * 60 * 60 * 1000);
-      const hourKey = hourTime.toISOString().slice(0, 13); // YYYY-MM-DDTHH
-      allHours.push(hourKey);
+    if (!data?.apis) {
+      return {
+        hours: [],
+        models: [],
+        modelData: {} as Record<string, number[]>,
+        successRates: [] as number[],
+        hasData: false,
+      };
     }
 
-    // 收集每小时每个模型的请求数
-    const hourlyStats: Record<string, Record<string, { success: number; failed: number }>> = {};
-    const modelSet = new Set<string>();
+    const hourWindow = hourRange + 1;
+    const requestSeries = buildHourlySeriesByModel(data, 'requests', hourWindow);
+    const hours = requestSeries.labels;
+    if (!hours.length) {
+      return {
+        hours: [],
+        models: [],
+        modelData: {} as Record<string, number[]>,
+        successRates: [] as number[],
+        hasData: false,
+      };
+    }
 
-    // 初始化所有小时
-    allHours.forEach((hour) => {
-      hourlyStats[hour] = {};
-    });
-
-    Object.values(data.apis).forEach((apiData) => {
-      Object.entries(apiData.models).forEach(([modelName, modelData]) => {
-        modelSet.add(modelName);
-        modelData.details.forEach((detail) => {
-          const timestamp = new Date(detail.timestamp);
-          if (timestamp < cutoffTime) return;
-
-          const hourKey = timestamp.toISOString().slice(0, 13); // YYYY-MM-DDTHH
-          if (!hourlyStats[hourKey]) {
-            hourlyStats[hourKey] = {};
-          }
-          if (!hourlyStats[hourKey][modelName]) {
-            hourlyStats[hourKey][modelName] = { success: 0, failed: 0 };
-          }
-          if (detail.failed) {
-            hourlyStats[hourKey][modelName].failed++;
-          } else {
-            hourlyStats[hourKey][modelName].success++;
-          }
-        });
-      });
-    });
-
-    // 获取排序后的小时列表
-    const hours = allHours.sort();
-
-    // 计算每个模型的总请求数，取 Top 6
     const modelTotals: Record<string, number> = {};
-    hours.forEach((hour) => {
-      Object.entries(hourlyStats[hour]).forEach(([model, stats]) => {
-        modelTotals[model] = (modelTotals[model] || 0) + stats.success + stats.failed;
-      });
+    requestSeries.dataByModel.forEach((values, modelName) => {
+      modelTotals[modelName] = values.reduce((sum, value) => sum + value, 0);
     });
 
     const topModels = Object.entries(modelTotals)
@@ -91,27 +62,45 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
       .slice(0, 6)
       .map(([name]) => name);
 
-    // 构建每个模型的数据数组
     const modelData: Record<string, number[]> = {};
     topModels.forEach((model) => {
-      modelData[model] = hours.map((hour) => {
-        const stats = hourlyStats[hour][model];
-        return stats ? stats.success + stats.failed : 0;
-      });
+      modelData[model] = requestSeries.dataByModel.get(model) || new Array(hours.length).fill(0);
     });
 
-    // 计算每小时的成功率
-    const successRates = hours.map((hour) => {
-      let totalSuccess = 0;
-      let totalRequests = 0;
-      Object.values(hourlyStats[hour]).forEach((stats) => {
-        totalSuccess += stats.success;
-        totalRequests += stats.success + stats.failed;
-      });
-      return totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0;
-    });
+    const successRates = new Array(hours.length).fill(0);
+    const details = collectUsageDetails(data);
+    if (details.length) {
+      const hourBuckets = hours.map(() => ({ success: 0, total: 0 }));
+      const hourIndexMap = new Map(hours.map((hour, index) => [hour, index]));
 
-    return { hours, models: topModels, modelData, successRates };
+      details.forEach((detail) => {
+        const timestamp =
+          typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+        const normalized = new Date(timestamp);
+        normalized.setMinutes(0, 0, 0);
+        const hourLabel = formatHourLabel(normalized);
+        const bucketIndex = hourIndexMap.get(hourLabel);
+        if (bucketIndex === undefined) return;
+        hourBuckets[bucketIndex].total += 1;
+        if (!detail.failed) {
+          hourBuckets[bucketIndex].success += 1;
+        }
+      });
+
+      hourBuckets.forEach((bucket, index) => {
+        successRates[index] = bucket.total > 0 ? (bucket.success / bucket.total) * 100 : 0;
+      });
+    } else {
+      const modelStats = getModelStats(data, {});
+      const totalRequests = modelStats.reduce((sum, item) => sum + item.requests, 0);
+      const totalSuccess = modelStats.reduce((sum, item) => sum + item.successCount, 0);
+      const fallbackRate = totalRequests > 0 ? (totalSuccess / totalRequests) * 100 : 0;
+      successRates.fill(fallbackRate);
+    }
+
+    const hasData = topModels.some((model) => modelData[model]?.some((value) => value > 0));
+    return { hours, models: topModels, modelData, successRates, hasData };
   }, [data, hourRange]);
 
   // 获取时间范围标签
@@ -124,8 +113,7 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
   // 图表数据
   const chartData = useMemo(() => {
     const labels = hourlyData.hours.map((hour) => {
-      const date = new Date(hour + ':00:00Z'); // 添加 Z 表示 UTC 时间，确保正确转换为本地时间显示
-      return `${date.getHours()}:00`;
+      return hour.slice(-5);
     });
 
     // 成功率折线放在最前面
@@ -298,7 +286,7 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
       </div>
 
       <div className={styles.chartContent}>
-        {loading || hourlyData.hours.length === 0 ? (
+        {loading || !hourlyData.hasData ? (
           <div className={styles.chartEmpty}>
             {loading ? t('common.loading') : t('monitor.no_data')}
           </div>

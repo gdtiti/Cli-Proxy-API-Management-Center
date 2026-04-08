@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Chart } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { buildDailySeriesByModel, buildDailyTokenBreakdown } from '@/utils/usage';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface DailyTrendChartProps {
@@ -11,86 +12,140 @@ interface DailyTrendChartProps {
   timeRange: number;
 }
 
-interface DailyStat {
-  date: string;
-  requests: number;
-  successRequests: number;
-  failedRequests: number;
-  inputTokens: number;
-  outputTokens: number;
-  reasoningTokens: number;
-  cachedTokens: number;
+interface DailyChartSeries {
+  labels: string[];
+  requests: number[];
+  totalTokens: number[];
+  inputTokens: number[];
+  outputTokens: number[];
+  hasTokenBreakdown: boolean;
+  hasData: boolean;
 }
 
 export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrendChartProps) {
   const { t } = useTranslation();
 
-  // 按日期聚合数据
-  const dailyData = useMemo((): DailyStat[] => {
-    if (!data?.apis) return [];
-
-    const dailyStats: Record<string, {
-      requests: number;
-      successRequests: number;
-      failedRequests: number;
-      inputTokens: number;
-      outputTokens: number;
-      reasoningTokens: number;
-      cachedTokens: number;
-    }> = {};
-
-    // 辅助函数：获取本地日期字符串 YYYY-MM-DD
-    const getLocalDateString = (timestamp: string): string => {
-      const date = new Date(timestamp);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+  // 按日期聚合数据（优先明细；无明细时回退到聚合 buckets）
+  const dailyData = useMemo((): DailyChartSeries => {
+    const empty: DailyChartSeries = {
+      labels: [],
+      requests: [],
+      totalTokens: [],
+      inputTokens: [],
+      outputTokens: [],
+      hasTokenBreakdown: false,
+      hasData: false,
     };
 
-    Object.values(data.apis).forEach((apiData) => {
-      Object.values(apiData.models).forEach((modelData) => {
-        modelData.details.forEach((detail) => {
-          // 使用本地日期而非 UTC 日期
-          const date = getLocalDateString(detail.timestamp);
-          if (!dailyStats[date]) {
-            dailyStats[date] = {
-              requests: 0,
-              successRequests: 0,
-              failedRequests: 0,
-              inputTokens: 0,
-              outputTokens: 0,
-              reasoningTokens: 0,
-              cachedTokens: 0,
-            };
-          }
-          dailyStats[date].requests++;
-          if (detail.failed) {
-            dailyStats[date].failedRequests++;
-          } else {
-            dailyStats[date].successRequests++;
-            // 只统计成功请求的 Token
-            dailyStats[date].inputTokens += detail.tokens.input_tokens || 0;
-            dailyStats[date].outputTokens += detail.tokens.output_tokens || 0;
-            dailyStats[date].reasoningTokens += detail.tokens.reasoning_tokens || 0;
-            dailyStats[date].cachedTokens += detail.tokens.cached_tokens || 0;
-          }
-        });
-      });
-    });
+    if (!data?.apis) return empty;
 
-    // 转换为数组并按日期排序
-    return Object.entries(dailyStats)
-      .map(([date, stats]) => ({ date, ...stats }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const requestSeries = buildDailySeriesByModel(data, 'requests');
+    const totalTokenSeries = buildDailySeriesByModel(data, 'tokens');
+    const tokenBreakdownSeries = buildDailyTokenBreakdown(data);
+
+    const labels = Array.from(
+      new Set([
+        ...requestSeries.labels,
+        ...totalTokenSeries.labels,
+        ...tokenBreakdownSeries.labels,
+      ])
+    ).sort((a, b) => a.localeCompare(b));
+    if (!labels.length) {
+      return empty;
+    }
+
+    const buildTotalMap = (series: { labels: string[]; dataByModel: Map<string, number[]> }) => {
+      const result = new Map<string, number>();
+      series.labels.forEach((label, index) => {
+        let total = 0;
+        series.dataByModel.forEach((values) => {
+          total += values[index] || 0;
+        });
+        result.set(label, total);
+      });
+      return result;
+    };
+
+    const buildCategoryMap = (series: { labels: string[]; dataByCategory: Record<string, number[]> }, key: string) => {
+      const result = new Map<string, number>();
+      const values = series.dataByCategory[key] || [];
+      series.labels.forEach((label, index) => {
+        result.set(label, values[index] || 0);
+      });
+      return result;
+    };
+
+    const requestMap = buildTotalMap(requestSeries);
+    const totalTokenMap = buildTotalMap(totalTokenSeries);
+    const inputTokenMap = buildCategoryMap(tokenBreakdownSeries, 'input');
+    const outputTokenMap = buildCategoryMap(tokenBreakdownSeries, 'output');
+
+    const requests = labels.map((label) => requestMap.get(label) || 0);
+    const totalTokens = labels.map((label) => totalTokenMap.get(label) || 0);
+    const inputTokens = labels.map((label) => inputTokenMap.get(label) || 0);
+    const outputTokens = labels.map((label) => outputTokenMap.get(label) || 0);
+    const hasTokenBreakdown = tokenBreakdownSeries.hasData;
+    const hasData = requests.some((value) => value > 0) || totalTokens.some((value) => value > 0);
+
+    return {
+      labels,
+      requests,
+      totalTokens,
+      inputTokens,
+      outputTokens,
+      hasTokenBreakdown,
+      hasData,
+    };
   }, [data]);
 
   // 图表数据
   const chartData = useMemo(() => {
-    const labels = dailyData.map((item) => {
-      const date = new Date(item.date);
+    const labels = dailyData.labels.map((item) => {
+      const date = new Date(`${item}T00:00:00`);
       return `${date.getMonth() + 1}/${date.getDate()}`;
     });
+
+    const tokenDatasets = dailyData.hasTokenBreakdown
+      ? [
+          {
+            type: 'bar' as const,
+            label: t('monitor.trend.input_tokens'),
+            data: dailyData.inputTokens.map((value) => value / 1000),
+            backgroundColor: 'rgba(34, 197, 94, 0.7)',
+            borderColor: 'rgba(34, 197, 94, 0.7)',
+            borderWidth: 1,
+            borderRadius: 0,
+            yAxisID: 'y',
+            order: 1,
+            stack: 'tokens',
+          },
+          {
+            type: 'bar' as const,
+            label: t('monitor.trend.output_tokens'),
+            data: dailyData.outputTokens.map((value) => value / 1000),
+            backgroundColor: 'rgba(249, 115, 22, 0.7)',
+            borderColor: 'rgba(249, 115, 22, 0.7)',
+            borderWidth: 1,
+            borderRadius: 4,
+            yAxisID: 'y',
+            order: 1,
+            stack: 'tokens',
+          },
+        ]
+      : [
+          {
+            type: 'bar' as const,
+            label: t('monitor.hourly_token.total'),
+            data: dailyData.totalTokens.map((value) => value / 1000),
+            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+            borderColor: 'rgba(59, 130, 246, 0.6)',
+            borderWidth: 1,
+            borderRadius: 4,
+            yAxisID: 'y',
+            order: 1,
+            stack: 'tokens',
+          },
+        ];
 
     return {
       labels,
@@ -98,7 +153,7 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
         {
           type: 'line' as const,
           label: t('monitor.trend.requests'),
-          data: dailyData.map((item) => item.requests),
+          data: dailyData.requests,
           borderColor: '#3b82f6',
           backgroundColor: '#3b82f6',
           borderWidth: 3,
@@ -109,30 +164,7 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
           pointRadius: 3,
           pointBackgroundColor: '#3b82f6',
         },
-        {
-          type: 'bar' as const,
-          label: t('monitor.trend.input_tokens'),
-          data: dailyData.map((item) => item.inputTokens / 1000),
-          backgroundColor: 'rgba(34, 197, 94, 0.7)',
-          borderColor: 'rgba(34, 197, 94, 0.7)',
-          borderWidth: 1,
-          borderRadius: 0,
-          yAxisID: 'y',
-          order: 1,
-          stack: 'tokens',
-        },
-        {
-          type: 'bar' as const,
-          label: t('monitor.trend.output_tokens'),
-          data: dailyData.map((item) => item.outputTokens / 1000),
-          backgroundColor: 'rgba(249, 115, 22, 0.7)',
-          borderColor: 'rgba(249, 115, 22, 0.7)',
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y',
-          order: 1,
-          stack: 'tokens',
-        },
+        ...tokenDatasets,
       ],
     };
   }, [dailyData, t]);
@@ -266,7 +298,7 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
       </div>
 
       <div className={styles.chartContent}>
-        {loading || dailyData.length === 0 ? (
+        {loading || !dailyData.hasData ? (
           <div className={styles.chartEmpty}>
             {loading ? t('common.loading') : t('monitor.no_data')}
           </div>

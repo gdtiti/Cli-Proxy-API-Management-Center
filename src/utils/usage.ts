@@ -110,6 +110,11 @@ const toUsageSummaryFields = (summary: UsageSummary) => ({
   total_tokens: summary.totalTokens
 });
 
+const toNonNegativeNumber = (value: unknown): number => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+};
+
 export function filterUsageByTimeRange<T>(usageData: T, range: UsageTimeRange, nowMs: number = Date.now()): T {
   if (range === 'all') {
     return usageData;
@@ -152,6 +157,33 @@ export function filterUsageByTimeRange<T>(usageData: T, range: UsageTimeRange, n
       const detailsRaw = Array.isArray(modelEntry.details) ? modelEntry.details : [];
       const modelSummary = createUsageSummary();
       const filteredDetails: unknown[] = [];
+
+      if (!detailsRaw.length) {
+        modelSummary.totalRequests = toNonNegativeNumber(modelEntry.total_requests);
+        modelSummary.totalTokens = toNonNegativeNumber(modelEntry.total_tokens);
+        modelSummary.failureCount = toNonNegativeNumber(modelEntry.failure_count);
+        modelSummary.successCount =
+          typeof modelEntry.success_count === 'number'
+            ? toNonNegativeNumber(modelEntry.success_count)
+            : Math.max(modelSummary.totalRequests - modelSummary.failureCount, 0);
+
+        if (modelSummary.totalRequests <= 0 && modelSummary.totalTokens <= 0) {
+          return;
+        }
+
+        filteredModels[modelName] = {
+          ...modelEntry,
+          ...toUsageSummaryFields(modelSummary),
+          details: []
+        };
+        hasModelData = true;
+
+        apiSummary.totalRequests += modelSummary.totalRequests;
+        apiSummary.successCount += modelSummary.successCount;
+        apiSummary.failureCount += modelSummary.failureCount;
+        apiSummary.totalTokens += modelSummary.totalTokens;
+        return;
+      }
 
       detailsRaw.forEach((detail) => {
         const detailRecord = isRecord(detail) ? detail : null;
@@ -1007,6 +1039,21 @@ export function buildHourlySeriesByModel(
   let hasData = false;
 
   if (!details.length) {
+    const usageRecord = isRecord(usageData) ? usageData : null;
+    const hourlyRaw = metric === 'tokens' ? usageRecord?.tokens_by_hour : usageRecord?.requests_by_hour;
+    const hourlyBuckets = isRecord(hourlyRaw) ? hourlyRaw : null;
+    if (hourlyBuckets) {
+      const values = new Array(labels.length).fill(0);
+      for (let i = 0; i < labels.length; i++) {
+        const bucketStart = earliestTime + i * hourMs;
+        const hourKey = new Date(bucketStart).getHours().toString().padStart(2, '0');
+        values[i] = toNonNegativeNumber(hourlyBuckets[hourKey]);
+      }
+      hasData = values.some((value) => value > 0);
+      if (hasData) {
+        dataByModel.set('All Models', values);
+      }
+    }
     return { labels, dataByModel, hasData };
   }
 
@@ -1064,7 +1111,25 @@ export function buildDailySeriesByModel(
   let hasData = false;
 
   if (!details.length) {
-    return { labels: [], dataByModel: new Map(), hasData };
+    const usageRecord = isRecord(usageData) ? usageData : null;
+    const dailyRaw = metric === 'tokens' ? usageRecord?.tokens_by_day : usageRecord?.requests_by_day;
+    const dailyBuckets = isRecord(dailyRaw) ? dailyRaw : null;
+    if (!dailyBuckets) {
+      return { labels: [], dataByModel: new Map(), hasData };
+    }
+
+    const labels = Object.keys(dailyBuckets).sort((a, b) => a.localeCompare(b));
+    if (!labels.length) {
+      return { labels, dataByModel: new Map(), hasData };
+    }
+
+    const values = labels.map((label) => toNonNegativeNumber(dailyBuckets[label]));
+    hasData = values.some((value) => value > 0);
+    const dataByModel = new Map<string, number[]>();
+    if (hasData) {
+      dataByModel.set('All Models', values);
+    }
+    return { labels, dataByModel, hasData };
   }
 
   details.forEach((detail) => {

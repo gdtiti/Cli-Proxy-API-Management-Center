@@ -65,18 +65,32 @@ export interface UsageDetail {
   };
 }
 
+export interface UsageModelData {
+  details: UsageDetail[];
+  total_requests?: number;
+  success_count?: number;
+  failure_count?: number;
+  total_tokens?: number;
+}
+
+export interface UsageApiData {
+  models: Record<string, UsageModelData>;
+  total_requests?: number;
+  success_count?: number;
+  failure_count?: number;
+  total_tokens?: number;
+}
+
 export interface UsageData {
-  apis: Record<
-    string,
-    {
-      models: Record<
-        string,
-        {
-          details: UsageDetail[];
-        }
-      >;
-    }
-  >;
+  apis: Record<string, UsageApiData>;
+  total_requests?: number;
+  success_count?: number;
+  failure_count?: number;
+  total_tokens?: number;
+  requests_by_day?: Record<string, number>;
+  tokens_by_day?: Record<string, number>;
+  requests_by_hour?: Record<string, number>;
+  tokens_by_hour?: Record<string, number>;
 }
 
 export function MonitorPage() {
@@ -249,46 +263,15 @@ export function MonitorPage() {
       return null;
     }
 
-    const now = new Date();
-    const cutoffTime = new Date(now.getTime() - timeRange * 24 * 60 * 60 * 1000);
+    if (!apiFilter) {
+      return usageData;
+    }
 
-    const filtered: UsageData = { apis: {} };
-
-    Object.entries(usageData.apis).forEach(([apiKey, apiData]) => {
-      // 如果有 API 过滤器，检查是否匹配
-      if (apiFilter && !apiKey.toLowerCase().includes(apiFilter.toLowerCase())) {
-        return;
-      }
-
-      // 检查 apiData 是否有 models 属性
-      if (!apiData?.models) {
-        return;
-      }
-
-      const filteredModels: Record<string, { details: UsageDetail[] }> = {};
-
-      Object.entries(apiData.models).forEach(([modelName, modelData]) => {
-        // 检查 modelData 是否有 details 属性
-        if (!modelData?.details || !Array.isArray(modelData.details)) {
-          return;
-        }
-
-        const filteredDetails = modelData.details.filter((detail) => {
-          const timestamp = new Date(detail.timestamp);
-          return timestamp >= cutoffTime;
-        });
-
-        if (filteredDetails.length > 0) {
-          filteredModels[modelName] = { details: filteredDetails };
-        }
-      });
-
-      if (Object.keys(filteredModels).length > 0) {
-        filtered.apis[apiKey] = { models: filteredModels };
-      }
-    });
-
-    return filtered;
+    const keyword = apiFilter.toLowerCase();
+    const filteredApis = Object.fromEntries(
+      Object.entries(usageData.apis).filter(([apiKey]) => apiKey.toLowerCase().includes(keyword))
+    );
+    return { ...usageData, apis: filteredApis };
   }, [usageData, timeRange, apiFilter]);
 
   // 处理时间范围变化
