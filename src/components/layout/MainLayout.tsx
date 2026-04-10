@@ -15,6 +15,7 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
   IconBot,
   IconChartLine,
+  IconCode,
   IconFileText,
   IconInfo,
   IconKey,
@@ -43,6 +44,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   authFiles: <IconFileText size={18} />,
   oauth: <IconShield size={18} />,
   quota: <IconTimer size={18} />,
+  codexManagement: <IconCode size={18} />,
   usage: <IconChartLine size={18} />,
   config: <IconSettings size={18} />,
   logs: <IconScrollText size={18} />,
@@ -358,6 +360,7 @@ export function MainLayout() {
     { path: '/auth-files', label: t('nav.auth_files'), icon: sidebarIcons.authFiles },
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
+    { path: '/codex-management', label: t('nav.codex_management'), icon: sidebarIcons.codexManagement },
     { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
     { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
     ...(config?.loggingToFile
