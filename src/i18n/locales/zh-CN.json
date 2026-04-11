@@ -147,7 +147,8 @@
     "usage_stats": "使用统计",
     "config_management": "配置面板",
     "logs": "日志查看",
-    "system_info": "中心信息"
+    "system_info": "中心信息",
+    "codex_management": "Codex 管理"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -587,15 +588,13 @@
     "batch_invert_page": "反选当前页",
     "batch_deselect": "取消选择",
     "batch_download": "下载选中",
-    "batch_download_success": "已开始下载 {{count}} 个文件",
-    "batch_download_partial": "下载完成：成功 {{success}} 个，失败 {{failed}} 个",
+    "batch_download_success": "已打包下载 {{count}} 个认证文件",
+    "batch_download_partial": "认证文件打包下载完成，成功 {{success}} 个，失败 {{failed}} 个",
     "batch_enable": "启用",
     "batch_disable": "禁用",
     "batch_download_all_button": "下载全部",
     "batch_download_button": "下载当前筛选",
     "batch_download_none": "当前筛选下没有可下载的认证文件",
-    "batch_download_success": "已打包下载 {{count}} 个认证文件",
-    "batch_download_partial": "认证文件打包下载完成，成功 {{success}} 个，失败 {{failed}} 个",
     "batch_download_large_title": "文件数量过多",
     "batch_download_large_message": "当前将尝试打包下载 {{count}} 个认证文件。文件数量过多时，浏览器可能触发资源限制导致下载失败。",
     "batch_download_large_hint": "建议优先按类型标签筛选后导出；如需全量导出，请使用本仓库的本地脚本导出到目录再处理。",
@@ -1754,5 +1753,91 @@
     "build_date": "构建时间",
     "version": "管理中心版本",
     "author": "作者"
+  },
+  "codex_management": {
+    "title": "Codex 管理",
+    "description": "分标签查看 Codex 账号、用量、事件与配置，并用可视化规则编辑 payload。",
+    "config_saved": "Codex 配置已保存",
+    "status_all": "全部状态",
+    "all_accounts": "全部账号",
+    "page_size": "每页条数",
+    "status": "状态",
+    "search_placeholder": "搜索 auth_index、账号、文件名或原因",
+    "detail": "详情",
+    "tabs": {
+      "accounts": "账号",
+      "usage": "用量",
+      "events": "事件",
+      "config": "配置"
+    },
+    "summary": {
+      "accounts": "账号总数",
+      "disabled": "已禁用",
+      "quota_exceeded": "额度受限",
+      "requests": "请求总数"
+    },
+    "accounts": {
+      "title": "账号列表",
+      "description": "分页查看 Codex 认证文件的当前状态与配额恢复信息。"
+    },
+    "usage": {
+      "title": "用量汇总",
+      "description": "按账号查看请求量与 token 消耗。"
+    },
+    "events": {
+      "title": "事件记录",
+      "description": "查看配额检查、恢复等待和错误事件。"
+    },
+    "config": {
+      "title": "可视化配置",
+      "description": "不直接编辑大段 JSON，用规则表单维护 Codex header defaults 与 payload 规则。",
+      "user_agent": "User-Agent",
+      "beta_features": "Beta Features",
+      "instructions_title": "instructions 配置方式",
+      "instructions_note": "后端没有单独的 instructions 字段，需要通过 payload.default 或 payload.override 规则写入。",
+      "context_title": "1M context 说明",
+      "context_note": "后端没有原生 one_million_context 开关，只能通过 payload 规则设置相关参数。",
+      "default_description": "默认追加到请求 payload 的规则。",
+      "default_raw_description": "以原始 JSON 值追加到请求 payload 的规则。",
+      "override_description": "覆盖已有 payload 字段的规则。",
+      "override_raw_description": "以原始 JSON 值覆盖 payload 字段的规则。"
+    },
+    "table": {
+      "auth_index": "Auth Index",
+      "account": "账号",
+      "file": "文件",
+      "status": "状态",
+      "quota": "配额信息",
+      "recover": "恢复时间",
+      "requests": "请求数",
+      "avg_total": "平均总 Tokens",
+      "actions": "操作",
+      "input_tokens": "输入 Tokens",
+      "output_tokens": "输出 Tokens",
+      "cached_tokens": "缓存 Tokens",
+      "total_tokens": "总 Tokens",
+      "recovered_tokens": "已恢复 Tokens",
+      "created_at": "创建时间",
+      "event_type": "事件类型",
+      "reason": "原因"
+    },
+    "detail_cards": {
+      "account": "账号信息",
+      "quota": "配额状态",
+      "last_refresh": "最近刷新",
+      "messages": "状态消息",
+      "events": "关联事件"
+    },
+    "empty": {
+      "accounts": "暂无账号数据",
+      "accounts_description": "连接后刷新页面以获取 Codex 账号状态。",
+      "usage": "暂无用量数据",
+      "usage_description": "当前还没有可展示的 Codex 用量记录。",
+      "events": "暂无事件数据",
+      "events_description": "当前筛选条件下没有匹配的事件。",
+      "detail": "暂无详情",
+      "detail_description": "这个账号目前没有返回详情数据。",
+      "detail_events": "这个账号暂无事件记录"
+    }
   }
 }

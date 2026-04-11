@@ -16,6 +16,7 @@ import { MainRoutes } from '@/router/MainRoutes';
 import { ClientManagementModal } from '@/components/client/ClientManagementModal';
 import {
   IconActivity,
+  IconCode,
   IconSidebarAuthFiles,
   IconSidebarConfig,
   IconSidebarDashboard,
@@ -47,6 +48,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   authFiles: <IconSidebarAuthFiles size={18} />,
   oauth: <IconSidebarOauth size={18} />,
   quota: <IconSidebarQuota size={18} />,
+  codexManagement: <IconCode size={18} />,
   usage: <IconSidebarUsage size={18} />,
   config: <IconSidebarConfig size={18} />,
   logs: <IconSidebarLogs size={18} />,
@@ -520,6 +522,7 @@ export function MainLayout() {
     { path: '/auth-files', label: t('nav.auth_files'), icon: sidebarIcons.authFiles },
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
+    { path: '/codex-management', label: t('nav.codex_management'), icon: sidebarIcons.codexManagement },
     { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]

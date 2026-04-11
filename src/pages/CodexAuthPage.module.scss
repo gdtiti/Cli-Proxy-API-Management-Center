@@ -1,0 +1,372 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: $spacing-md;
+  flex-wrap: wrap;
+}
+
+.pageTitle {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pageDescription {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.pageActions {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: $spacing-md;
+
+  @include tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summaryCard {
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.summaryLabel {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.summaryValue {
+  font-size: 30px;
+  color: var(--text-primary);
+}
+
+.tabs {
+  display: flex;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+}
+
+.tabButton {
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: $radius-md;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: var(--text-primary);
+    border-color: var(--primary-color);
+  }
+}
+
+.tabButtonActive {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-primary));
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) repeat(2, minmax(160px, 220px));
+  gap: $spacing-md;
+  align-items: end;
+  margin-bottom: $spacing-md;
+
+  @include tablet {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.toolbarField,
+.typeField,
+.valueField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+
+  th,
+  td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  tbody tr:hover {
+    background: color-mix(in srgb, var(--primary-color) 4%, transparent);
+  }
+}
+
+.mono {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.subtle {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusSuccess {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.statusWarning {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.statusError {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.statusMuted {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.paginationMeta {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.paginationActions {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.configLayout {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.configHeaderGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-md;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.noticeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-md;
+  margin-top: $spacing-md;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.noticeCard,
+.noteItem,
+.ruleCard {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+}
+
+.noticeCard p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.notesPanel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.noteKey {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.noteValue {
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ruleList {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.ruleHeader,
+.paramSectionHeader,
+.configActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+}
+
+.paramSection {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  margin-top: $spacing-sm;
+}
+
+.paramList {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.paramRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px minmax(220px, 1.2fr) auto;
+  gap: $spacing-sm;
+  align-items: start;
+
+  @include tablet {
+    grid-template-columns: 1fr 160px;
+  }
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.paramActions {
+  display: flex;
+  align-items: end;
+  min-height: 100%;
+}
+
+.modalLoading {
+  padding: $spacing-lg 0;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.detailContent {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-md;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.detailList {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+
+  span {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  strong {
+    color: var(--text-primary);
+    word-break: break-word;
+  }
+}
+
+.messageStack {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.errorText {
+  color: var(--danger-color);
+}

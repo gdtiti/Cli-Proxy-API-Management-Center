@@ -17,6 +17,7 @@ import { AuthFilesOAuthModelAliasEditPage } from '@/pages/AuthFilesOAuthModelAli
 import { OAuthPage } from '@/pages/OAuthPage';
 import { QuotaPage } from '@/pages/QuotaPage';
 import { ConfigPage } from '@/pages/ConfigPage';
+import { CodexAuthPage } from '@/pages/CodexAuthPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
 import { MonitorPage } from '@/pages/MonitorPage';
@@ -73,6 +74,7 @@ const mainRoutes = [
   { path: '/auth-files/oauth-model-alias', element: <AuthFilesOAuthModelAliasEditPage /> },
   { path: '/oauth', element: <OAuthPage /> },
   { path: '/quota', element: <QuotaPage /> },
+  { path: '/codex-management', element: <CodexAuthPage /> },
   { path: '/config', element: <ConfigPage /> },
   { path: '/logs', element: <LogsPage /> },
   { path: '/system', element: <SystemPage /> },

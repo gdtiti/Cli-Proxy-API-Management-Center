@@ -147,7 +147,8 @@
     "usage_stats": "Статистика использования",
     "config_management": "Панель конфигурации",
     "logs": "Просмотр логов",
-    "system_info": "Информация системы"
+    "system_info": "Информация системы",
+    "codex_management": "Codex Management"
   },
   "dashboard": {
     "title": "Панель управления",
@@ -587,15 +588,13 @@
     "batch_invert_page": "Инвертировать страницу",
     "batch_deselect": "Отменить",
     "batch_download": "Скачать выбранные",
-    "batch_download_success": "Запущена загрузка {{count}} файлов",
-    "batch_download_partial": "Загрузка завершена: успешно {{success}}, ошибок {{failed}}",
+    "batch_download_success": "Скачано {{count}} файлов авторизации в ZIP-архиве",
+    "batch_download_partial": "Пакетная загрузка завершена: {{success}} успешно, {{failed}} не удалось",
     "batch_enable": "Включить",
     "batch_disable": "Отключить",
     "batch_download_all_button": "Скачать всё",
     "batch_download_button": "Скачать текущий фильтр",
     "batch_download_none": "Нет файлов авторизации для скачивания при текущем фильтре",
-    "batch_download_success": "Скачано {{count}} файлов авторизации в ZIP-архиве",
-    "batch_download_partial": "Пакетная загрузка завершена: {{success}} успешно, {{failed}} не удалось",
     "batch_download_large_title": "Слишком много файлов",
     "batch_download_large_message": "Будет предпринята попытка упаковать и скачать {{count}} файлов авторизации. При большом количестве браузер может упереться в лимиты ресурсов и загрузка может завершиться ошибкой.",
     "batch_download_large_hint": "Рекомендуется сначала экспортировать по типу/тегу. Для полного экспорта используйте локальный скрипт и сохраняйте файлы в каталог для дальнейшей обработки.",
@@ -1759,5 +1758,91 @@
     "build_date": "Время сборки",
     "version": "Версия интерфейса управления",
     "author": "Автор"
+  },
+  "codex_management": {
+    "title": "Codex Management",
+    "description": "Просмотр аккаунтов Codex, usage, событий и настроек по вкладкам с визуальным редактором payload rules.",
+    "config_saved": "Настройки Codex сохранены",
+    "status_all": "Все статусы",
+    "all_accounts": "Все аккаунты",
+    "page_size": "Размер страницы",
+    "status": "Статус",
+    "search_placeholder": "Поиск по auth index, аккаунту, файлу или причине",
+    "detail": "Детали",
+    "tabs": {
+      "accounts": "Аккаунты",
+      "usage": "Usage",
+      "events": "События",
+      "config": "Config"
+    },
+    "summary": {
+      "accounts": "Аккаунты",
+      "disabled": "Отключено",
+      "quota_exceeded": "Квота заблокирована",
+      "requests": "Запросы"
+    },
+    "accounts": {
+      "title": "Аккаунты",
+      "description": "Постраничный просмотр статуса и времени восстановления аккаунтов Codex."
+    },
+    "usage": {
+      "title": "Usage",
+      "description": "Просмотр запросов и token usage по каждому аккаунту."
+    },
+    "events": {
+      "title": "События",
+      "description": "Проверки квот, ожидание восстановления и ошибки."
+    },
+    "config": {
+      "title": "Visual Config",
+      "description": "Настраивайте Codex header defaults и payload rules через форму, а не через большой JSON блок.",
+      "user_agent": "User-Agent",
+      "beta_features": "Beta Features",
+      "instructions_title": "Как задать instructions",
+      "instructions_note": "Отдельного поля instructions нет. Добавляйте его через payload.default или payload.override.",
+      "context_title": "Примечание про 1M context",
+      "context_note": "Нативного one_million_context переключателя нет. Используйте payload rules для нужных параметров.",
+      "default_description": "Правила, которые по умолчанию добавляются в payload.",
+      "default_raw_description": "Правила, которые добавляются как raw JSON values.",
+      "override_description": "Правила, которые переопределяют поля payload.",
+      "override_raw_description": "Правила, которые переопределяют payload raw JSON values."
+    },
+    "table": {
+      "auth_index": "Auth Index",
+      "account": "Аккаунт",
+      "file": "Файл",
+      "status": "Статус",
+      "quota": "Квота",
+      "recover": "Восстановление",
+      "requests": "Запросы",
+      "avg_total": "Средние Total Tokens",
+      "actions": "Действия",
+      "input_tokens": "Input Tokens",
+      "output_tokens": "Output Tokens",
+      "cached_tokens": "Cached Tokens",
+      "total_tokens": "Total Tokens",
+      "recovered_tokens": "Recovered Tokens",
+      "created_at": "Создано",
+      "event_type": "Тип события",
+      "reason": "Причина"
+    },
+    "detail_cards": {
+      "account": "Аккаунт",
+      "quota": "Квота",
+      "last_refresh": "Последнее обновление",
+      "messages": "Сообщения",
+      "events": "События"
+    },
+    "empty": {
+      "accounts": "Нет данных по аккаунтам",
+      "accounts_description": "Обновите страницу после подключения сервера.",
+      "usage": "Нет данных usage",
+      "usage_description": "Пока нет доступных записей usage.",
+      "events": "Нет событий",
+      "events_description": "Текущие фильтры не дали результатов.",
+      "detail": "Нет деталей",
+      "detail_description": "Для этого аккаунта не пришли детали.",
+      "detail_events": "Для этого аккаунта нет событий"
+    }
   }
 }

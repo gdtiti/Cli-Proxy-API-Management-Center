@@ -9,6 +9,7 @@ export * from './auth';
 export * from './provider';
 export * from './ampcode';
 export * from './authFile';
+export * from './codexAuth';
 export * from './oauth';
 export * from './usage';
 export * from './log';
