@@ -11,17 +11,24 @@ import { useAuthStore, useNotificationStore } from '@/stores';
 import type {
   CodexAuthConfig,
   CodexAuthConfigPayload,
+  CodexConfigGuide,
   CodexAuthDetail,
   CodexAuthEvent,
   CodexAuthSnapshot,
+  CodexFieldGroup,
+  CodexFilterPathHint,
+  CodexPayloadFieldHint,
   CodexPayloadFilterRule,
+  CodexPayloadPreset,
   CodexPayloadRule,
   CodexUsageRollup,
 } from '@/types';
 import styles from './CodexAuthPage.module.scss';
 
 type TabKey = 'accounts' | 'usage' | 'events' | 'config';
-type RuleValueType = 'string' | 'number' | 'boolean' | 'json';
+type RuleValueType = 'string' | 'number' | 'boolean' | 'json' | 'raw_json';
+type RuleCollectionKey = 'defaultRules' | 'defaultRawRules' | 'overrideRules' | 'overrideRawRules';
+type RuleTargetId = 'default' | 'default_raw' | 'override' | 'override_raw' | 'filter';
 
 type EditableParam = {
   id: string;
@@ -105,7 +112,25 @@ const RULE_VALUE_OPTIONS = [
   { value: 'number', label: 'number' },
   { value: 'boolean', label: 'boolean' },
   { value: 'json', label: 'json' },
+  { value: 'raw_json', label: 'raw_json' },
 ] as const;
+const RULE_SECTION_CONFIG: Array<{
+  key: RuleCollectionKey;
+  target: RuleTargetId;
+  title: string;
+  descriptionKey: string;
+}> = [
+  { key: 'defaultRules', target: 'default', title: 'payload.default', descriptionKey: 'codex_management.config.default_description' },
+  { key: 'defaultRawRules', target: 'default_raw', title: 'payload.default_raw', descriptionKey: 'codex_management.config.default_raw_description' },
+  { key: 'overrideRules', target: 'override', title: 'payload.override', descriptionKey: 'codex_management.config.override_description' },
+  { key: 'overrideRawRules', target: 'override_raw', title: 'payload.override_raw', descriptionKey: 'codex_management.config.override_raw_description' },
+];
+const RULE_TARGET_TO_COLLECTION_KEY: Record<Exclude<RuleTargetId, 'filter'>, RuleCollectionKey> = {
+  default: 'defaultRules',
+  default_raw: 'defaultRawRules',
+  override: 'overrideRules',
+  override_raw: 'overrideRawRules',
+};
 
 const nextLocalId = (prefix: string) => {
   localIdSeed += 1;
@@ -141,6 +166,21 @@ const createEmptyConfigEditor = (): ConfigEditorState => ({
   filterRules: [],
   notes: {},
 });
+
+const normalizeRuleValueType = (valueType?: string): RuleValueType => {
+  switch (String(valueType ?? '').trim().toLowerCase()) {
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    case 'json':
+      return 'json';
+    case 'raw_json':
+      return 'raw_json';
+    default:
+      return 'string';
+  }
+};
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return '-';
@@ -238,8 +278,27 @@ const detectRuleValueType = (value: unknown): RuleValueType => {
 
 const stringifyRuleValue = (value: unknown, type: RuleValueType) => {
   if (type === 'json') return JSON.stringify(value ?? null, null, 2);
+  if (type === 'raw_json') {
+    if (typeof value === 'string') return value;
+    return JSON.stringify(value ?? null, null, 2);
+  }
   if (type === 'boolean') return value ? 'true' : 'false';
   return value === undefined || value === null ? '' : String(value);
+};
+
+const findFieldHint = (
+  fieldHints: CodexPayloadFieldHint[] | undefined,
+  path: string,
+  ruleTarget?: string
+): CodexPayloadFieldHint | undefined => {
+  const normalizedPath = String(path ?? '').trim();
+  if (!normalizedPath || !Array.isArray(fieldHints)) return undefined;
+
+  return fieldHints.find((hint) => {
+    if (hint.path !== normalizedPath) return false;
+    if (!ruleTarget) return true;
+    return Array.isArray(hint.rule_targets) ? hint.rule_targets.includes(ruleTarget) : false;
+  });
 };
 
 const modelsToText = (models: Array<{ name?: string }> | undefined) =>
@@ -288,6 +347,29 @@ const buildConfigEditor = (config: CodexAuthConfig): ConfigEditorState => ({
   notes: config.notes ?? {},
 });
 
+const buildEditableRuleFromPreset = (
+  preset: CodexPayloadPreset,
+  fieldHints: CodexPayloadFieldHint[]
+): EditableRule => {
+  const params = Object.entries(preset.params ?? {}).map(([path, value]) => {
+    const hint = findFieldHint(fieldHints, path, preset.rule_target);
+    const type = hint ? normalizeRuleValueType(hint.value_type) : detectRuleValueType(value);
+    return createEditableParam(path, type, stringifyRuleValue(value, type));
+  });
+
+  return {
+    id: nextLocalId('rule'),
+    modelsText: modelsToText(preset.models),
+    params: params.length > 0 ? params : [createEditableParam()],
+  };
+};
+
+const buildEditableFilterRuleFromPreset = (preset: CodexPayloadPreset): EditableFilterRule => ({
+  id: nextLocalId('filter'),
+  modelsText: modelsToText(preset.models),
+  filtersText: Array.isArray(preset.paths) ? preset.paths.join('\n') : '',
+});
+
 const parseModelsText = (text: string) =>
   text
     .split(/[\n,]/)
@@ -310,6 +392,16 @@ const parseRuleValue = (type: RuleValueType, rawValue: string, fieldPath: string
       throw new Error(`${fieldPath} must be true or false`);
     }
     return normalized === 'true';
+  }
+  if (type === 'raw_json') {
+    try {
+      JSON.parse(rawValue);
+    } catch (error) {
+      throw new Error(
+        `${fieldPath} must be valid JSON${error instanceof Error && error.message ? `: ${error.message}` : ''}`
+      );
+    }
+    return rawValue;
   }
   try {
     return JSON.parse(rawValue);
@@ -416,8 +508,13 @@ function PaginationBar({ page, total, pageSize, onPageChange }: PaginationProps)
 interface RuleGroupProps {
   title: string;
   description: string;
+  ruleTarget: RuleTargetId;
   rules: EditableRule[];
+  fieldHints: CodexPayloadFieldHint[];
+  groupHints: CodexFieldGroup[];
+  presets: CodexPayloadPreset[];
   onAddRule: () => void;
+  onApplyPreset: (preset: CodexPayloadPreset) => void;
   onRemoveRule: (ruleId: string) => void;
   onModelsChange: (ruleId: string, value: string) => void;
   onAddParam: (ruleId: string) => void;
@@ -428,8 +525,13 @@ interface RuleGroupProps {
 function PayloadRuleGroup({
   title,
   description,
+  ruleTarget,
   rules,
+  fieldHints,
+  groupHints,
+  presets,
   onAddRule,
+  onApplyPreset,
   onRemoveRule,
   onModelsChange,
   onAddParam,
@@ -447,6 +549,40 @@ function PayloadRuleGroup({
       }
     >
       <div className={styles.ruleList}>
+        {presets.length > 0 ? (
+          <div className={styles.quickPresetRow}>
+            {presets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={styles.quickChipButton}
+                onClick={() => onApplyPreset(preset)}
+                title={preset.description}
+              >
+                {preset.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {groupHints.length > 0 ? (
+          <div className={styles.fieldGroupList}>
+            {groupHints.map((group) => (
+              <div key={group.id} className={styles.fieldGroupCard}>
+                <div className={styles.fieldGroupTitle}>{group.title}</div>
+                <div className={styles.fieldGroupDescription}>{group.description}</div>
+                <div className={styles.fieldChipList}>
+                  {group.paths.map((path) => (
+                    <span key={path} className={styles.fieldChip}>
+                      {path}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {rules.length === 0 ? (
           <EmptyState title="No rules yet" description="Add a visual rule instead of editing JSON directly." />
         ) : (
@@ -475,12 +611,27 @@ function PayloadRuleGroup({
                 <div className={styles.paramList}>
                   {rule.params.map((param) => (
                     <div key={param.id} className={styles.paramRow}>
-                      <Input
-                        label="Path"
-                        value={param.path}
-                        onChange={(event) => onParamChange(rule.id, param.id, 'path', event.target.value)}
-                        placeholder="instructions"
-                      />
+                      <div>
+                        <Input
+                          label="Path"
+                          value={param.path}
+                          onChange={(event) => onParamChange(rule.id, param.id, 'path', event.target.value)}
+                          placeholder="instructions"
+                          list={`${title.replace(/\W+/g, '-').toLowerCase()}-paths`}
+                        />
+                        {(() => {
+                          const hint = findFieldHint(fieldHints, param.path, ruleTarget);
+                          return hint ? (
+                            <div className={styles.paramHint}>
+                              <strong>{hint.label}</strong>
+                              <span>{hint.description}</span>
+                              {hint.example !== undefined ? (
+                                <code>{stringifyRuleValue(hint.example, normalizeRuleValueType(hint.value_type))}</code>
+                              ) : null}
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
                       <div className={styles.typeField}>
                         <label className={styles.fieldLabel}>Type</label>
                         <Select
@@ -497,9 +648,26 @@ function PayloadRuleGroup({
                         <textarea
                           value={param.value}
                           onChange={(event) => onParamChange(rule.id, param.id, 'value', event.target.value)}
-                          rows={param.type === 'json' ? 4 : 2}
-                          placeholder={param.type === 'json' ? '{"key":"value"}' : 'Value'}
+                          rows={param.type === 'json' || param.type === 'raw_json' ? 4 : 2}
+                          placeholder={param.type === 'json' || param.type === 'raw_json' ? '{"key":"value"}' : 'Value'}
                         />
+                        {(() => {
+                          const hint = findFieldHint(fieldHints, param.path, ruleTarget);
+                          return hint?.enum?.length ? (
+                            <div className={styles.enumChipList}>
+                              {hint.enum.map((value) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={styles.quickChipButton}
+                                  onClick={() => onParamChange(rule.id, param.id, 'value', value)}
+                                >
+                                  {value}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                       <div className={styles.paramActions}>
                         <Button size="sm" variant="ghost" onClick={() => onRemoveParam(rule.id, param.id)}>
@@ -514,18 +682,36 @@ function PayloadRuleGroup({
           ))
         )}
       </div>
+      <datalist id={`${title.replace(/\W+/g, '-').toLowerCase()}-paths`}>
+        {fieldHints.map((hint) => (
+          <option key={`${hint.path}-${hint.rule_targets.join('-')}`} value={hint.path}>
+            {hint.label}
+          </option>
+        ))}
+      </datalist>
     </Card>
   );
 }
 
 interface FilterRuleGroupProps {
   rules: EditableFilterRule[];
+  suggestions: CodexFilterPathHint[];
+  presets: CodexPayloadPreset[];
   onAddRule: () => void;
+  onApplyPreset: (preset: CodexPayloadPreset) => void;
   onRemoveRule: (ruleId: string) => void;
   onChange: (ruleId: string, key: 'modelsText' | 'filtersText', value: string) => void;
 }
 
-function FilterRuleGroup({ rules, onAddRule, onRemoveRule, onChange }: FilterRuleGroupProps) {
+function FilterRuleGroup({
+  rules,
+  suggestions,
+  presets,
+  onAddRule,
+  onApplyPreset,
+  onRemoveRule,
+  onChange,
+}: FilterRuleGroupProps) {
   return (
     <Card
       title="Payload Filter"
@@ -537,6 +723,36 @@ function FilterRuleGroup({ rules, onAddRule, onRemoveRule, onChange }: FilterRul
       }
     >
       <div className={styles.ruleList}>
+        {presets.length > 0 ? (
+          <div className={styles.quickPresetRow}>
+            {presets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={styles.quickChipButton}
+                onClick={() => onApplyPreset(preset)}
+                title={preset.description}
+              >
+                {preset.title}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {suggestions.length > 0 ? (
+          <div className={styles.fieldGroupCard}>
+            <div className={styles.fieldGroupTitle}>Suggested paths</div>
+            <div className={styles.fieldGroupDescription}>
+              Common fields that are often removed for upstream compatibility.
+            </div>
+            <div className={styles.fieldChipList}>
+              {suggestions.map((hint) => (
+                <span key={hint.path} className={styles.fieldChip} title={hint.description}>
+                  {hint.path}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {rules.length === 0 ? (
           <EmptyState title="No filter rules yet" description="Use filter rules to remove specific params by model." />
         ) : (
@@ -561,6 +777,28 @@ function FilterRuleGroup({ rules, onAddRule, onRemoveRule, onChange }: FilterRul
                 rows={4}
                 placeholder="store\nverbosity"
               />
+              {suggestions.length > 0 ? (
+                <div className={styles.enumChipList}>
+                  {suggestions.map((hint) => (
+                    <button
+                      key={`${rule.id}-${hint.path}`}
+                      type="button"
+                      className={styles.quickChipButton}
+                      title={hint.description}
+                      onClick={() => {
+                        const existing = rule.filtersText
+                          .split(/\r?\n|,/)
+                          .map((item) => item.trim())
+                          .filter(Boolean);
+                        if (existing.includes(hint.path)) return;
+                        onChange(rule.id, 'filtersText', [...existing, hint.path].join('\n'));
+                      }}
+                    >
+                      {hint.path}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="hint">Separate multiple paths with commas or new lines.</div>
             </div>
           ))
@@ -583,6 +821,7 @@ export function CodexAuthPage() {
   const [accounts, setAccounts] = useState<CodexAuthSnapshot[]>([]);
   const [usage, setUsage] = useState<CodexUsageRollup[]>([]);
   const [events, setEvents] = useState<CodexAuthEvent[]>([]);
+  const [configGuide, setConfigGuide] = useState<CodexConfigGuide | null>(null);
   const [configEditor, setConfigEditor] = useState<ConfigEditorState>(createEmptyConfigEditor);
   const [accountsSearch, setAccountsSearch] = useState('');
   const [accountsStatus, setAccountsStatus] = useState('all');
@@ -625,6 +864,7 @@ export function CodexAuthPage() {
   const loadConfig = useCallback(async () => {
     const config = await codexAuthApi.getConfig();
     setConfigEditor(buildConfigEditor(config));
+    setConfigGuide(config.guide ?? null);
   }, []);
 
   const loadAccounts = useCallback(async () => {
@@ -696,6 +936,33 @@ export function CodexAuthPage() {
       totalRequests,
     };
   }, [accounts, usage]);
+
+  const guideFieldHints = useMemo(() => configGuide?.field_hints ?? [], [configGuide]);
+  const guideFilterHints = useMemo(() => configGuide?.filter_paths ?? [], [configGuide]);
+  const guidePresets = useMemo(() => configGuide?.presets ?? [], [configGuide]);
+  const guideDocs = useMemo(() => Object.entries(configGuide?.official_docs ?? {}), [configGuide]);
+  const guideFieldGroups = useMemo(() => configGuide?.field_groups ?? [], [configGuide]);
+  const guideHeaderHints = useMemo(() => configGuide?.header_fields ?? [], [configGuide]);
+  const userAgentHint = useMemo(
+    () => guideHeaderHints.find((hint) => ['user_agent', 'userAgent'].includes(hint.id)),
+    [guideHeaderHints]
+  );
+  const betaFeaturesHint = useMemo(
+    () => guideHeaderHints.find((hint) => ['beta_features', 'betaFeatures'].includes(hint.id)),
+    [guideHeaderHints]
+  );
+  const groupedGuideFields = useMemo(
+    () =>
+      guideFieldGroups
+        .map((group) => ({
+          ...group,
+          hints: group.paths
+            .map((path) => findFieldHint(guideFieldHints, path))
+            .filter((hint): hint is CodexPayloadFieldHint => Boolean(hint)),
+        }))
+        .filter((group) => group.hints.length > 0),
+    [guideFieldGroups, guideFieldHints]
+  );
 
   const statusOptions = useMemo(() => {
     const values = new Set<string>();
@@ -1026,6 +1293,21 @@ export function CodexAuthPage() {
   const updateFilterCollection = useCallback((updater: (rules: EditableFilterRule[]) => EditableFilterRule[]) => {
     setConfigEditor((current) => ({ ...current, filterRules: updater(current.filterRules) }));
   }, []);
+
+  const handleApplyPreset = useCallback(
+    (preset: CodexPayloadPreset) => {
+      if (preset.rule_target === 'filter') {
+        updateFilterCollection((rules) => [...rules, buildEditableFilterRuleFromPreset(preset)]);
+        return;
+      }
+
+      const targetKey = RULE_TARGET_TO_COLLECTION_KEY[preset.rule_target as Exclude<RuleTargetId, 'filter'>];
+      if (!targetKey) return;
+
+      updateRuleCollection(targetKey, (rules) => [...rules, buildEditableRuleFromPreset(preset, guideFieldHints)]);
+    },
+    [guideFieldHints, updateFilterCollection, updateRuleCollection]
+  );
 
   const handleConfigSave = async () => {
     setSavingConfig(true);
@@ -1580,24 +1862,97 @@ export function CodexAuthPage() {
                 value={configEditor.userAgent}
                 onChange={(event) => setConfigEditor((current) => ({ ...current, userAgent: event.target.value }))}
                 placeholder="Mozilla/5.0 ..."
+                hint={userAgentHint?.description}
               />
               <Input
                 label={t('codex_management.config.beta_features')}
                 value={configEditor.betaFeatures}
                 onChange={(event) => setConfigEditor((current) => ({ ...current, betaFeatures: event.target.value }))}
                 placeholder="feature-a, feature-b"
+                hint={betaFeaturesHint?.description}
               />
             </div>
             <div className={styles.noticeGrid}>
               <div className={styles.noticeCard}>
                 <strong>{t('codex_management.config.instructions_title')}</strong>
                 <p>{t('codex_management.config.instructions_note')}</p>
+                {guideHeaderHints.length > 0 ? (
+                  <div className={styles.headerHintList}>
+                    {guideHeaderHints.map((hint) => (
+                      <div key={hint.id} className={styles.headerHintItem}>
+                        <span>{hint.label}</span>
+                        <p>{hint.description}</p>
+                        {hint.example !== undefined ? <code>{String(hint.example)}</code> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className={styles.noticeCard}>
                 <strong>{t('codex_management.config.context_title')}</strong>
                 <p>{t('codex_management.config.context_note')}</p>
+                {configGuide?.context_windows ? (
+                  <div className={styles.contextStats}>
+                    <div className={styles.contextStat}>
+                      <span>GPT-5</span>
+                      <strong>{formatNumber(configGuide.context_windows.gpt5_max_context_tokens)}</strong>
+                    </div>
+                    <div className={styles.contextStat}>
+                      <span>GPT-4.1</span>
+                      <strong>{formatNumber(configGuide.context_windows.gpt41_max_context_tokens)}</strong>
+                    </div>
+                    <div className={styles.contextStat}>
+                      <span>Official 1M for GPT-5</span>
+                      <strong>{configGuide.context_windows.gpt5_supports_official_one_million ? 'Yes' : 'No'}</strong>
+                    </div>
+                    <div className={styles.contextStat}>
+                      <span>Recommended long context family</span>
+                      <strong>{configGuide.context_windows.official_one_million_recommended_family || '-'}</strong>
+                    </div>
+                  </div>
+                ) : null}
+                {guideDocs.length > 0 ? (
+                  <div className={styles.docLinks}>
+                    {guideDocs.map(([key, url]) => (
+                      <a
+                        key={key}
+                        className={styles.docLink}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={url}
+                      >
+                        {key}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
+            {groupedGuideFields.length > 0 ? (
+              <div className={styles.fieldGuidePanel}>
+                {groupedGuideFields.map((group) => (
+                  <div key={group.id} className={styles.fieldGuideCard}>
+                    <div className={styles.fieldGuideHeader}>
+                      <strong>{group.title}</strong>
+                      <span>{group.description}</span>
+                    </div>
+                    <div className={styles.fieldGuideBody}>
+                      {group.hints.map((hint) => (
+                        <div key={`${group.id}-${hint.path}`} className={styles.fieldGuideItem}>
+                          <div className={styles.fieldGuidePath}>{hint.path}</div>
+                          <div className={styles.fieldGuideMeta}>
+                            <span>{hint.label}</span>
+                            <span>{hint.value_type}</span>
+                          </div>
+                          <p>{hint.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {Object.keys(configEditor.notes).length > 0 ? (
               <div className={styles.notesPanel}>
                 {Object.entries(configEditor.notes).map(([key, value]) => (
@@ -1610,211 +1965,82 @@ export function CodexAuthPage() {
             ) : null}
           </Card>
 
-          <PayloadRuleGroup
-            title="payload.default"
-            description={t('codex_management.config.default_description')}
-            rules={configEditor.defaultRules}
-            onAddRule={() => updateRuleCollection('defaultRules', (rules) => [...rules, createEditableRule()])}
-            onRemoveRule={(ruleId) => updateRuleCollection('defaultRules', (rules) => rules.filter((rule) => rule.id !== ruleId))}
-            onModelsChange={(ruleId, value) =>
-              updateRuleCollection('defaultRules', (rules) =>
-                rules.map((rule) => (rule.id === ruleId ? { ...rule, modelsText: value } : rule))
-              )
-            }
-            onAddParam={(ruleId) =>
-              updateRuleCollection('defaultRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId ? { ...rule, params: [...rule.params, createEditableParam()] } : rule
-                )
-              )
-            }
-            onRemoveParam={(ruleId, paramId) =>
-              updateRuleCollection('defaultRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params:
-                          rule.params.filter((param) => param.id !== paramId).length > 0
-                            ? rule.params.filter((param) => param.id !== paramId)
-                            : [createEditableParam()],
-                      }
-                    : rule
-                )
-              )
-            }
-            onParamChange={(ruleId, paramId, key, value) =>
-              updateRuleCollection('defaultRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params: rule.params.map((param) =>
-                          param.id === paramId ? { ...param, [key]: value } : param
-                        ),
-                      }
-                    : rule
-                )
-              )
-            }
-          />
+          {RULE_SECTION_CONFIG.map((section) => {
+            const sectionRules = configEditor[section.key];
+            const sectionFieldHints = guideFieldHints.filter((hint) => hint.rule_targets.includes(section.target));
+            const sectionGroupHints = groupedGuideFields.filter((group) =>
+              Array.isArray(group.rule_targets) && group.rule_targets.length > 0
+                ? group.rule_targets.includes(section.target)
+                : true
+            );
+            const sectionPresets = guidePresets.filter((preset) => preset.rule_target === section.target);
 
-          <PayloadRuleGroup
-            title="payload.default_raw"
-            description={t('codex_management.config.default_raw_description')}
-            rules={configEditor.defaultRawRules}
-            onAddRule={() => updateRuleCollection('defaultRawRules', (rules) => [...rules, createEditableRule()])}
-            onRemoveRule={(ruleId) =>
-              updateRuleCollection('defaultRawRules', (rules) => rules.filter((rule) => rule.id !== ruleId))
-            }
-            onModelsChange={(ruleId, value) =>
-              updateRuleCollection('defaultRawRules', (rules) =>
-                rules.map((rule) => (rule.id === ruleId ? { ...rule, modelsText: value } : rule))
-              )
-            }
-            onAddParam={(ruleId) =>
-              updateRuleCollection('defaultRawRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId ? { ...rule, params: [...rule.params, createEditableParam()] } : rule
-                )
-              )
-            }
-            onRemoveParam={(ruleId, paramId) =>
-              updateRuleCollection('defaultRawRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params:
-                          rule.params.filter((param) => param.id !== paramId).length > 0
-                            ? rule.params.filter((param) => param.id !== paramId)
-                            : [createEditableParam()],
-                      }
-                    : rule
-                )
-              )
-            }
-            onParamChange={(ruleId, paramId, key, value) =>
-              updateRuleCollection('defaultRawRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params: rule.params.map((param) =>
-                          param.id === paramId ? { ...param, [key]: value } : param
-                        ),
-                      }
-                    : rule
-                )
-              )
-            }
-          />
-
-          <PayloadRuleGroup
-            title="payload.override"
-            description={t('codex_management.config.override_description')}
-            rules={configEditor.overrideRules}
-            onAddRule={() => updateRuleCollection('overrideRules', (rules) => [...rules, createEditableRule()])}
-            onRemoveRule={(ruleId) =>
-              updateRuleCollection('overrideRules', (rules) => rules.filter((rule) => rule.id !== ruleId))
-            }
-            onModelsChange={(ruleId, value) =>
-              updateRuleCollection('overrideRules', (rules) =>
-                rules.map((rule) => (rule.id === ruleId ? { ...rule, modelsText: value } : rule))
-              )
-            }
-            onAddParam={(ruleId) =>
-              updateRuleCollection('overrideRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId ? { ...rule, params: [...rule.params, createEditableParam()] } : rule
-                )
-              )
-            }
-            onRemoveParam={(ruleId, paramId) =>
-              updateRuleCollection('overrideRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params:
-                          rule.params.filter((param) => param.id !== paramId).length > 0
-                            ? rule.params.filter((param) => param.id !== paramId)
-                            : [createEditableParam()],
-                      }
-                    : rule
-                )
-              )
-            }
-            onParamChange={(ruleId, paramId, key, value) =>
-              updateRuleCollection('overrideRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params: rule.params.map((param) =>
-                          param.id === paramId ? { ...param, [key]: value } : param
-                        ),
-                      }
-                    : rule
-                )
-              )
-            }
-          />
-
-          <PayloadRuleGroup
-            title="payload.override_raw"
-            description={t('codex_management.config.override_raw_description')}
-            rules={configEditor.overrideRawRules}
-            onAddRule={() => updateRuleCollection('overrideRawRules', (rules) => [...rules, createEditableRule()])}
-            onRemoveRule={(ruleId) =>
-              updateRuleCollection('overrideRawRules', (rules) => rules.filter((rule) => rule.id !== ruleId))
-            }
-            onModelsChange={(ruleId, value) =>
-              updateRuleCollection('overrideRawRules', (rules) =>
-                rules.map((rule) => (rule.id === ruleId ? { ...rule, modelsText: value } : rule))
-              )
-            }
-            onAddParam={(ruleId) =>
-              updateRuleCollection('overrideRawRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId ? { ...rule, params: [...rule.params, createEditableParam()] } : rule
-                )
-              )
-            }
-            onRemoveParam={(ruleId, paramId) =>
-              updateRuleCollection('overrideRawRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params:
-                          rule.params.filter((param) => param.id !== paramId).length > 0
-                            ? rule.params.filter((param) => param.id !== paramId)
-                            : [createEditableParam()],
-                      }
-                    : rule
-                )
-              )
-            }
-            onParamChange={(ruleId, paramId, key, value) =>
-              updateRuleCollection('overrideRawRules', (rules) =>
-                rules.map((rule) =>
-                  rule.id === ruleId
-                    ? {
-                        ...rule,
-                        params: rule.params.map((param) =>
-                          param.id === paramId ? { ...param, [key]: value } : param
-                        ),
-                      }
-                    : rule
-                )
-              )
-            }
-          />
+            return (
+              <PayloadRuleGroup
+                key={section.key}
+                title={section.title}
+                description={t(section.descriptionKey)}
+                ruleTarget={section.target}
+                rules={sectionRules}
+                fieldHints={sectionFieldHints}
+                groupHints={sectionGroupHints}
+                presets={sectionPresets}
+                onApplyPreset={handleApplyPreset}
+                onAddRule={() => updateRuleCollection(section.key, (rules) => [...rules, createEditableRule()])}
+                onRemoveRule={(ruleId) =>
+                  updateRuleCollection(section.key, (rules) => rules.filter((rule) => rule.id !== ruleId))
+                }
+                onModelsChange={(ruleId, value) =>
+                  updateRuleCollection(section.key, (rules) =>
+                    rules.map((rule) => (rule.id === ruleId ? { ...rule, modelsText: value } : rule))
+                  )
+                }
+                onAddParam={(ruleId) =>
+                  updateRuleCollection(section.key, (rules) =>
+                    rules.map((rule) =>
+                      rule.id === ruleId ? { ...rule, params: [...rule.params, createEditableParam()] } : rule
+                    )
+                  )
+                }
+                onRemoveParam={(ruleId, paramId) =>
+                  updateRuleCollection(section.key, (rules) =>
+                    rules.map((rule) =>
+                      rule.id === ruleId
+                        ? {
+                            ...rule,
+                            params:
+                              rule.params.filter((param) => param.id !== paramId).length > 0
+                                ? rule.params.filter((param) => param.id !== paramId)
+                                : [createEditableParam()],
+                          }
+                        : rule
+                    )
+                  )
+                }
+                onParamChange={(ruleId, paramId, key, value) =>
+                  updateRuleCollection(section.key, (rules) =>
+                    rules.map((rule) =>
+                      rule.id === ruleId
+                        ? {
+                            ...rule,
+                            params: rule.params.map((param) =>
+                              param.id === paramId ? { ...param, [key]: value } : param
+                            ),
+                          }
+                        : rule
+                    )
+                  )
+                }
+              />
+            );
+          })}
 
           <FilterRuleGroup
             rules={configEditor.filterRules}
+            suggestions={guideFilterHints}
+            presets={guidePresets.filter((preset) => preset.rule_target === 'filter')}
             onAddRule={() => updateFilterCollection((rules) => [...rules, createEditableFilterRule()])}
+            onApplyPreset={handleApplyPreset}
             onRemoveRule={(ruleId) => updateFilterCollection((rules) => rules.filter((rule) => rule.id !== ruleId))}
             onChange={(ruleId, key, value) =>
               updateFilterCollection((rules) =>

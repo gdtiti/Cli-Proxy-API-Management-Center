@@ -62,6 +62,7 @@ export const codexAuthApi = {
         override_raw: normalizePayloadRules(data?.payload?.override_raw),
         filter: normalizePayloadRules(data?.payload?.filter),
       },
+      guide: data?.guide,
       notes: data?.notes ?? {},
     };
   },

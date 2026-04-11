@@ -345,6 +345,174 @@
   line-height: 1.6;
 }
 
+.headerHintList {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.headerHintItem {
+  padding: $spacing-sm;
+  border-radius: $radius-sm;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+
+  span {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  p {
+    margin: 6px 0 0;
+  }
+
+  code {
+    display: inline-flex;
+    margin-top: 8px;
+    font-size: 12px;
+    word-break: break-all;
+  }
+}
+
+.contextStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contextStat {
+  padding: $spacing-sm;
+  border-radius: $radius-sm;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  strong {
+    color: var(--text-primary);
+    word-break: break-word;
+  }
+}
+
+.docLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-top: $spacing-md;
+}
+
+.docLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 24%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary));
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+
+  &:hover {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+  }
+}
+
+.fieldGuidePanel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: $spacing-md;
+  margin-top: $spacing-md;
+}
+
+.fieldGuideCard {
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-secondary);
+  padding: $spacing-md;
+}
+
+.fieldGuideHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: $spacing-sm;
+
+  strong {
+    color: var(--text-primary);
+  }
+
+  span {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.fieldGuideBody {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.fieldGuideItem {
+  padding-top: $spacing-sm;
+  border-top: 1px solid var(--border-color);
+
+  &:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+}
+
+.fieldGuidePath {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.fieldGuideMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+}
+
 .notesPanel {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -393,6 +561,70 @@
   gap: $spacing-sm;
 }
 
+.quickPresetRow,
+.enumChipList,
+.fieldChipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.quickChipButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 24%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary));
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+
+  &:hover {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 14%, var(--bg-primary));
+  }
+}
+
+.fieldGroupList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: $spacing-sm;
+}
+
+.fieldGroupCard {
+  border: 1px dashed var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-primary);
+  padding: $spacing-sm $spacing-md;
+}
+
+.fieldGroupTitle {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.fieldGroupDescription {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.fieldChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
 .paramRow {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) 140px minmax(220px, 1.2fr) auto;
@@ -412,6 +644,36 @@
   display: flex;
   align-items: end;
   min-height: 100%;
+}
+
+.paramHint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: $spacing-sm;
+  border-radius: $radius-sm;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-primary));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 18%, var(--border-color));
+
+  strong {
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+
+  span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  code {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    font-size: 12px;
+    word-break: break-all;
+  }
 }
 
 .modalLoading {

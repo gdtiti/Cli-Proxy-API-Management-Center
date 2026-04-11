@@ -90,6 +90,76 @@ export interface CodexPayloadFilterRule {
   params: string[];
 }
 
+export interface CodexHeaderFieldHint {
+  id: string;
+  label: string;
+  value_type: string;
+  description: string;
+  example?: unknown;
+}
+
+export interface CodexRuleTargetGuide {
+  id: string;
+  title: string;
+  raw: boolean;
+  description: string;
+}
+
+export interface CodexFieldGroup {
+  id: string;
+  title: string;
+  description: string;
+  rule_targets?: string[];
+  paths: string[];
+}
+
+export interface CodexPayloadFieldHint {
+  path: string;
+  label: string;
+  value_type: string;
+  rule_targets: string[];
+  description: string;
+  enum?: string[];
+  example?: unknown;
+  official: boolean;
+}
+
+export interface CodexFilterPathHint {
+  path: string;
+  label: string;
+  description: string;
+}
+
+export interface CodexPayloadPreset {
+  id: string;
+  title: string;
+  description: string;
+  rule_target: string;
+  raw: boolean;
+  official: boolean;
+  models: CodexPayloadModelRule[];
+  params?: Record<string, unknown>;
+  paths?: string[];
+}
+
+export interface CodexContextWindowsGuide {
+  gpt5_max_context_tokens: number;
+  gpt41_max_context_tokens: number;
+  gpt5_supports_official_one_million: boolean;
+  official_one_million_recommended_family: string;
+}
+
+export interface CodexConfigGuide {
+  context_windows: CodexContextWindowsGuide;
+  header_fields: CodexHeaderFieldHint[];
+  rule_targets: CodexRuleTargetGuide[];
+  field_groups: CodexFieldGroup[];
+  field_hints: CodexPayloadFieldHint[];
+  filter_paths: CodexFilterPathHint[];
+  presets: CodexPayloadPreset[];
+  official_docs?: Record<string, string>;
+}
+
 export interface CodexAuthConfig {
   codex_header_defaults: {
     user_agent?: string;
@@ -102,6 +172,7 @@ export interface CodexAuthConfig {
     override_raw: CodexPayloadRule[];
     filter: CodexPayloadFilterRule[];
   };
+  guide?: CodexConfigGuide;
   notes?: Record<string, unknown>;
 }
 
