@@ -1778,7 +1778,22 @@
     },
     "accounts": {
       "title": "账号列表",
-      "description": "分页查看 Codex 认证文件的当前状态与配额恢复信息。"
+      "description": "分页查看 Codex 认证文件的当前状态与配额恢复信息。",
+      "select_filtered": "选择当前筛选",
+      "clear_selection": "清空选择",
+      "selected_files": "已选 {{count}} 个认证文件",
+      "batch_proxy": "批量代理",
+      "batch_proxy_title": "批量设置认证文件代理",
+      "batch_proxy_description": "对当前选中的 Codex 认证文件统一设置代理，或一次性清空旧的 proxy_url。",
+      "batch_proxy_mode": "操作类型",
+      "batch_proxy_set": "设置代理",
+      "batch_proxy_clear": "清空代理",
+      "batch_proxy_input_label": "代理 URL",
+      "batch_proxy_input_placeholder": "例如: socks5://user:pass@127.0.0.1:1080/",
+      "batch_proxy_submit": "保存代理设置",
+      "batch_proxy_no_files": "请先选择至少一个认证文件",
+      "batch_proxy_missing_proxy": "请输入代理 URL",
+      "batch_proxy_success": "批量代理完成：更新 {{updated}} 个，未变化 {{unchanged}} 个，失败 {{failed}} 个，跳过 {{skipped}} 个"
     },
     "usage": {
       "title": "用量汇总",
@@ -1819,7 +1834,8 @@
       "recovered_tokens": "已恢复 Tokens",
       "created_at": "创建时间",
       "event_type": "事件类型",
-      "reason": "原因"
+      "reason": "原因",
+      "select": "选择"
     },
     "detail_cards": {
       "account": "账号信息",

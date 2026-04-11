@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
-import { codexAuthApi } from '@/services/api';
+import { authFilesApi, codexAuthApi } from '@/services/api';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import type {
   CodexAuthConfig,
@@ -60,6 +60,42 @@ type DetailState = {
   snapshot: CodexAuthSnapshot | null;
   events: CodexAuthEvent[];
 };
+
+type SortDirection = 'asc' | 'desc';
+
+type SortState<K extends string> = {
+  key: K | null;
+  direction: SortDirection;
+};
+
+type AccountsSortKey =
+  | 'auth_index'
+  | 'account'
+  | 'file_name'
+  | 'status'
+  | 'quota'
+  | 'recover'
+  | 'requests'
+  | 'avg_total';
+
+type UsageSortKey =
+  | 'auth_index'
+  | 'account'
+  | 'requests'
+  | 'input_tokens'
+  | 'output_tokens'
+  | 'cached_tokens'
+  | 'total_tokens'
+  | 'recovered_tokens';
+
+type EventsSortKey =
+  | 'created_at'
+  | 'auth_index'
+  | 'event_type'
+  | 'reason'
+  | 'requests'
+  | 'total_tokens'
+  | 'recover';
 
 let localIdSeed = 0;
 
@@ -133,6 +169,65 @@ const paginate = <T,>(items: T[], page: number, pageSize: number) => {
   const start = (safePage - 1) * pageSize;
   return items.slice(start, start + pageSize);
 };
+
+const uniqueStrings = (values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+    )
+  );
+
+const compareText = (left: unknown, right: unknown) =>
+  String(left ?? '').trim().localeCompare(String(right ?? '').trim(), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
+
+const compareNumber = (left: unknown, right: unknown) => {
+  const leftNumber = typeof left === 'number' ? left : Number(left ?? 0);
+  const rightNumber = typeof right === 'number' ? right : Number(right ?? 0);
+  return leftNumber - rightNumber;
+};
+
+const compareDate = (left: unknown, right: unknown) => {
+  const leftTime = left ? new Date(String(left)).getTime() : 0;
+  const rightTime = right ? new Date(String(right)).getTime() : 0;
+  return leftTime - rightTime;
+};
+
+const applySortDirection = (comparison: number, direction: SortDirection) =>
+  direction === 'asc' ? comparison : -comparison;
+
+const nextSortState = <K extends string>(current: SortState<K>, key: K): SortState<K> =>
+  current.key === key
+    ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+    : { key, direction: 'asc' };
+
+const getAriaSort = (
+  active: boolean,
+  direction: SortDirection
+): 'none' | 'ascending' | 'descending' => {
+  if (!active) return 'none';
+  return direction === 'asc' ? 'ascending' : 'descending';
+};
+
+type SortButtonProps = {
+  label: string;
+  active: boolean;
+  direction: SortDirection;
+  onClick: () => void;
+};
+
+function SortButton({ label, active, direction, onClick }: SortButtonProps) {
+  return (
+    <button type="button" className={styles.sortButton} onClick={onClick}>
+      <span>{label}</span>
+      <span className={styles.sortIndicator}>{active ? (direction === 'asc' ? '▲' : '▼') : '↕'}</span>
+    </button>
+  );
+}
 
 const detectRuleValueType = (value: unknown): RuleValueType => {
   if (typeof value === 'number') return 'number';
@@ -493,13 +588,30 @@ export function CodexAuthPage() {
   const [accountsStatus, setAccountsStatus] = useState('all');
   const [accountsPage, setAccountsPage] = useState(1);
   const [accountsPageSize, setAccountsPageSize] = useState(10);
+  const [accountsSort, setAccountsSort] = useState<SortState<AccountsSortKey>>({
+    key: null,
+    direction: 'asc',
+  });
   const [usageSearch, setUsageSearch] = useState('');
   const [usagePage, setUsagePage] = useState(1);
   const [usagePageSize, setUsagePageSize] = useState(10);
+  const [usageSort, setUsageSort] = useState<SortState<UsageSortKey>>({
+    key: null,
+    direction: 'asc',
+  });
   const [eventsSearch, setEventsSearch] = useState('');
   const [eventsAuthIndex, setEventsAuthIndex] = useState('all');
   const [eventsPage, setEventsPage] = useState(1);
   const [eventsPageSize, setEventsPageSize] = useState(10);
+  const [eventsSort, setEventsSort] = useState<SortState<EventsSortKey>>({
+    key: null,
+    direction: 'asc',
+  });
+  const [selectedAccountFiles, setSelectedAccountFiles] = useState<Set<string>>(() => new Set());
+  const [batchProxyOpen, setBatchProxyOpen] = useState(false);
+  const [batchProxyMode, setBatchProxyMode] = useState<'set' | 'clear'>('set');
+  const [batchProxyValue, setBatchProxyValue] = useState('');
+  const [batchProxySaving, setBatchProxySaving] = useState(false);
   const [detail, setDetail] = useState<DetailState>({
     open: false,
     authIndex: '',
@@ -565,15 +677,15 @@ export function CodexAuthPage() {
 
   useEffect(() => {
     setAccountsPage(1);
-  }, [accountsPageSize, accountsSearch, accountsStatus]);
+  }, [accountsPageSize, accountsSearch, accountsStatus, accountsSort]);
 
   useEffect(() => {
     setUsagePage(1);
-  }, [usagePageSize, usageSearch]);
+  }, [usagePageSize, usageSearch, usageSort]);
 
   useEffect(() => {
     setEventsPage(1);
-  }, [eventsAuthIndex, eventsPageSize, eventsSearch]);
+  }, [eventsAuthIndex, eventsPageSize, eventsSearch, eventsSort]);
 
   const summary = useMemo(() => {
     const totalRequests = usage.reduce((sum, item) => sum + (item.request_count ?? 0), 0);
@@ -631,18 +743,248 @@ export function CodexAuthPage() {
     return events.filter((item) => collectSearchableText(item).includes(keyword));
   }, [events, eventsSearch]);
 
+  const sortedAccounts = useMemo(() => {
+    const list = [...filteredAccounts];
+    if (!accountsSort.key) return list;
+    list.sort((left, right) => {
+      switch (accountsSort.key) {
+        case 'auth_index':
+          return applySortDirection(compareText(left.auth_index, right.auth_index), accountsSort.direction);
+        case 'account':
+          return applySortDirection(
+            compareText(left.account || left.label, right.account || right.label),
+            accountsSort.direction
+          );
+        case 'file_name':
+          return applySortDirection(compareText(left.file_name, right.file_name), accountsSort.direction);
+        case 'status':
+          return applySortDirection(compareText(getStatusText(left), getStatusText(right)), accountsSort.direction);
+        case 'quota':
+          return applySortDirection(
+            compareText(left.quota_reason || left.quota_model, right.quota_reason || right.quota_model),
+            accountsSort.direction
+          );
+        case 'recover':
+          return applySortDirection(
+            compareDate(
+              left.next_recover_at || left.next_retry_after || left.next_refresh_after,
+              right.next_recover_at || right.next_retry_after || right.next_refresh_after
+            ),
+            accountsSort.direction
+          );
+        case 'requests':
+          return applySortDirection(
+            compareNumber(left.usage?.request_count, right.usage?.request_count),
+            accountsSort.direction
+          );
+        case 'avg_total':
+          return applySortDirection(
+            compareNumber(left.usage?.avg_total_tokens, right.usage?.avg_total_tokens),
+            accountsSort.direction
+          );
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [accountsSort, filteredAccounts]);
+
+  const sortedUsage = useMemo(() => {
+    const list = [...filteredUsage];
+    if (!usageSort.key) return list;
+    list.sort((left, right) => {
+      switch (usageSort.key) {
+        case 'auth_index':
+          return applySortDirection(compareText(left.auth_index, right.auth_index), usageSort.direction);
+        case 'account':
+          return applySortDirection(compareText(left.account, right.account), usageSort.direction);
+        case 'requests':
+          return applySortDirection(compareNumber(left.request_count, right.request_count), usageSort.direction);
+        case 'input_tokens':
+          return applySortDirection(compareNumber(left.input_tokens, right.input_tokens), usageSort.direction);
+        case 'output_tokens':
+          return applySortDirection(compareNumber(left.output_tokens, right.output_tokens), usageSort.direction);
+        case 'cached_tokens':
+          return applySortDirection(compareNumber(left.cached_tokens, right.cached_tokens), usageSort.direction);
+        case 'total_tokens':
+          return applySortDirection(compareNumber(left.total_tokens, right.total_tokens), usageSort.direction);
+        case 'recovered_tokens':
+          return applySortDirection(
+            compareNumber(left.recovered_tokens, right.recovered_tokens),
+            usageSort.direction
+          );
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [filteredUsage, usageSort]);
+
+  const sortedEvents = useMemo(() => {
+    const list = [...filteredEvents];
+    if (!eventsSort.key) return list;
+    list.sort((left, right) => {
+      switch (eventsSort.key) {
+        case 'created_at':
+          return applySortDirection(compareDate(left.created_at, right.created_at), eventsSort.direction);
+        case 'auth_index':
+          return applySortDirection(compareText(left.auth_index, right.auth_index), eventsSort.direction);
+        case 'event_type':
+          return applySortDirection(compareText(left.event_type, right.event_type), eventsSort.direction);
+        case 'reason':
+          return applySortDirection(
+            compareText(left.reason || left.status_message, right.reason || right.status_message),
+            eventsSort.direction
+          );
+        case 'requests':
+          return applySortDirection(compareNumber(left.request_count, right.request_count), eventsSort.direction);
+        case 'total_tokens':
+          return applySortDirection(compareNumber(left.total_tokens, right.total_tokens), eventsSort.direction);
+        case 'recover':
+          return applySortDirection(compareDate(left.recover_at, right.recover_at), eventsSort.direction);
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [eventsSort, filteredEvents]);
+
+  const filteredAccountFileNames = useMemo(
+    () => uniqueStrings(sortedAccounts.map((item) => item.file_name)),
+    [sortedAccounts]
+  );
+
+  const selectedAccountFileNames = useMemo(
+    () => Array.from(selectedAccountFiles).sort((left, right) => left.localeCompare(right)),
+    [selectedAccountFiles]
+  );
+
   const pagedAccounts = useMemo(
-    () => paginate(filteredAccounts, accountsPage, accountsPageSize),
-    [accountsPage, accountsPageSize, filteredAccounts]
+    () => paginate(sortedAccounts, accountsPage, accountsPageSize),
+    [accountsPage, accountsPageSize, sortedAccounts]
   );
   const pagedUsage = useMemo(
-    () => paginate(filteredUsage, usagePage, usagePageSize),
-    [filteredUsage, usagePage, usagePageSize]
+    () => paginate(sortedUsage, usagePage, usagePageSize),
+    [sortedUsage, usagePage, usagePageSize]
   );
   const pagedEvents = useMemo(
-    () => paginate(filteredEvents, eventsPage, eventsPageSize),
-    [eventsPage, eventsPageSize, filteredEvents]
+    () => paginate(sortedEvents, eventsPage, eventsPageSize),
+    [eventsPage, eventsPageSize, sortedEvents]
   );
+
+  const pagedAccountFileNames = useMemo(
+    () => uniqueStrings(pagedAccounts.map((item) => item.file_name)),
+    [pagedAccounts]
+  );
+
+  const allPagedAccountFilesSelected =
+    pagedAccountFileNames.length > 0 &&
+    pagedAccountFileNames.every((name) => selectedAccountFiles.has(name));
+  const somePagedAccountFilesSelected = pagedAccountFileNames.some((name) => selectedAccountFiles.has(name));
+
+  useEffect(() => {
+    const available = new Set(uniqueStrings(accounts.map((item) => item.file_name)));
+    setSelectedAccountFiles((current) => {
+      let changed = false;
+      const next = new Set<string>();
+      current.forEach((name) => {
+        if (available.has(name)) {
+          next.add(name);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [accounts]);
+
+  const toggleAccountFileSelection = useCallback((fileName: string) => {
+    const normalized = String(fileName ?? '').trim();
+    if (!normalized) return;
+    setSelectedAccountFiles((current) => {
+      const next = new Set(current);
+      if (next.has(normalized)) {
+        next.delete(normalized);
+      } else {
+        next.add(normalized);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectFilteredAccountFiles = useCallback(() => {
+    setSelectedAccountFiles(new Set(filteredAccountFileNames));
+  }, [filteredAccountFileNames]);
+
+  const clearSelectedAccountFiles = useCallback(() => {
+    setSelectedAccountFiles(new Set());
+  }, []);
+
+  const togglePagedAccountFiles = useCallback(() => {
+    setSelectedAccountFiles((current) => {
+      const next = new Set(current);
+      if (allPagedAccountFilesSelected) {
+        pagedAccountFileNames.forEach((name) => next.delete(name));
+      } else {
+        pagedAccountFileNames.forEach((name) => next.add(name));
+      }
+      return next;
+    });
+  }, [allPagedAccountFilesSelected, pagedAccountFileNames]);
+
+  const openBatchProxyModal = useCallback(() => {
+    if (selectedAccountFileNames.length === 0) {
+      showNotification(t('codex_management.accounts.batch_proxy_no_files'), 'warning');
+      return;
+    }
+    setBatchProxyOpen(true);
+  }, [selectedAccountFileNames.length, showNotification, t]);
+
+  const handleBatchProxySubmit = useCallback(async () => {
+    if (selectedAccountFileNames.length === 0) {
+      showNotification(t('codex_management.accounts.batch_proxy_no_files'), 'warning');
+      return;
+    }
+    if (batchProxyMode === 'set' && !batchProxyValue.trim()) {
+      showNotification(t('codex_management.accounts.batch_proxy_missing_proxy'), 'error');
+      return;
+    }
+
+    setBatchProxySaving(true);
+    try {
+      const response = await authFilesApi.patchProxyURLBatch({
+        names: selectedAccountFileNames,
+        proxyUrl: batchProxyMode === 'clear' ? '' : batchProxyValue.trim(),
+      });
+      showNotification(
+        t('codex_management.accounts.batch_proxy_success', {
+          updated: response.summary.updated,
+          unchanged: response.summary.unchanged,
+          failed: response.summary.failed,
+          skipped: response.summary.skipped,
+        }),
+        response.summary.failed > 0 ? 'warning' : 'success'
+      );
+      setBatchProxyOpen(false);
+      setBatchProxyValue('');
+      setBatchProxyMode('set');
+      clearSelectedAccountFiles();
+      await refreshAll(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('notification.save_failed');
+      showNotification(message, 'error');
+    } finally {
+      setBatchProxySaving(false);
+    }
+  }, [
+    batchProxyMode,
+    batchProxyValue,
+    clearSelectedAccountFiles,
+    refreshAll,
+    selectedAccountFileNames,
+    showNotification,
+    t,
+  ]);
 
   const openDetail = useCallback(
     async (authIndex: string) => {
@@ -788,6 +1130,30 @@ export function CodexAuthPage() {
               />
             </div>
           </div>
+          <div className={styles.toolbarActions}>
+            <span className={styles.selectionSummary}>
+              {t('codex_management.accounts.selected_files', { count: selectedAccountFileNames.length })}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={selectFilteredAccountFiles}
+              disabled={disableControls || filteredAccountFileNames.length === 0}
+            >
+              {t('codex_management.accounts.select_filtered')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearSelectedAccountFiles}
+              disabled={selectedAccountFileNames.length === 0}
+            >
+              {t('codex_management.accounts.clear_selection')}
+            </Button>
+            <Button size="sm" onClick={openBatchProxyModal} disabled={disableControls || selectedAccountFileNames.length === 0}>
+              {t('codex_management.accounts.batch_proxy')}
+            </Button>
+          </div>
 
           {filteredAccounts.length === 0 ? (
             <EmptyState
@@ -800,20 +1166,98 @@ export function CodexAuthPage() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th>{t('codex_management.table.auth_index')}</th>
-                      <th>{t('codex_management.table.account')}</th>
-                      <th>{t('codex_management.table.file')}</th>
-                      <th>{t('codex_management.table.status')}</th>
-                      <th>{t('codex_management.table.quota')}</th>
-                      <th>{t('codex_management.table.recover')}</th>
-                      <th>{t('codex_management.table.requests')}</th>
-                      <th>{t('codex_management.table.avg_total')}</th>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={allPagedAccountFilesSelected}
+                          ref={(input) => {
+                            if (input) {
+                              input.indeterminate = !allPagedAccountFilesSelected && somePagedAccountFilesSelected;
+                            }
+                          }}
+                          onChange={togglePagedAccountFiles}
+                          aria-label={t('codex_management.table.select')}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'auth_index', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.auth_index')}
+                          active={accountsSort.key === 'auth_index'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'auth_index'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'account', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.account')}
+                          active={accountsSort.key === 'account'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'account'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'file_name', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.file')}
+                          active={accountsSort.key === 'file_name'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'file_name'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'status', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.status')}
+                          active={accountsSort.key === 'status'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'status'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'quota', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.quota')}
+                          active={accountsSort.key === 'quota'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'quota'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'recover', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.recover')}
+                          active={accountsSort.key === 'recover'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'recover'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'requests', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.requests')}
+                          active={accountsSort.key === 'requests'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'requests'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(accountsSort.key === 'avg_total', accountsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.avg_total')}
+                          active={accountsSort.key === 'avg_total'}
+                          direction={accountsSort.direction}
+                          onClick={() => setAccountsSort((current) => nextSortState(current, 'avg_total'))}
+                        />
+                      </th>
                       <th>{t('codex_management.table.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pagedAccounts.map((item) => (
                       <tr key={String(item.auth_index ?? item.auth_id ?? `${item.account}-${item.file_name}`)}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={item.file_name ? selectedAccountFiles.has(String(item.file_name)) : false}
+                            onChange={() => toggleAccountFileSelection(String(item.file_name ?? ''))}
+                            disabled={!item.file_name}
+                            aria-label={`${t('codex_management.table.select')} ${item.file_name || item.account || ''}`}
+                          />
+                        </td>
                         <td className={styles.mono}>{item.auth_index || '-'}</td>
                         <td>
                           <div>{item.account || item.label || '-'}</div>
@@ -889,14 +1333,70 @@ export function CodexAuthPage() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th>{t('codex_management.table.auth_index')}</th>
-                      <th>{t('codex_management.table.account')}</th>
-                      <th>{t('codex_management.table.requests')}</th>
-                      <th>{t('codex_management.table.input_tokens')}</th>
-                      <th>{t('codex_management.table.output_tokens')}</th>
-                      <th>{t('codex_management.table.cached_tokens')}</th>
-                      <th>{t('codex_management.table.total_tokens')}</th>
-                      <th>{t('codex_management.table.recovered_tokens')}</th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'auth_index', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.auth_index')}
+                          active={usageSort.key === 'auth_index'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'auth_index'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'account', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.account')}
+                          active={usageSort.key === 'account'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'account'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'requests', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.requests')}
+                          active={usageSort.key === 'requests'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'requests'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'input_tokens', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.input_tokens')}
+                          active={usageSort.key === 'input_tokens'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'input_tokens'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'output_tokens', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.output_tokens')}
+                          active={usageSort.key === 'output_tokens'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'output_tokens'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'cached_tokens', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.cached_tokens')}
+                          active={usageSort.key === 'cached_tokens'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'cached_tokens'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'total_tokens', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.total_tokens')}
+                          active={usageSort.key === 'total_tokens'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'total_tokens'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(usageSort.key === 'recovered_tokens', usageSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.recovered_tokens')}
+                          active={usageSort.key === 'recovered_tokens'}
+                          direction={usageSort.direction}
+                          onClick={() => setUsageSort((current) => nextSortState(current, 'recovered_tokens'))}
+                        />
+                      </th>
                       <th>{t('codex_management.table.actions')}</th>
                     </tr>
                   </thead>
@@ -973,13 +1473,62 @@ export function CodexAuthPage() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th>{t('codex_management.table.created_at')}</th>
-                      <th>{t('codex_management.table.auth_index')}</th>
-                      <th>{t('codex_management.table.event_type')}</th>
-                      <th>{t('codex_management.table.reason')}</th>
-                      <th>{t('codex_management.table.requests')}</th>
-                      <th>{t('codex_management.table.total_tokens')}</th>
-                      <th>{t('codex_management.table.recover')}</th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'created_at', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.created_at')}
+                          active={eventsSort.key === 'created_at'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'created_at'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'auth_index', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.auth_index')}
+                          active={eventsSort.key === 'auth_index'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'auth_index'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'event_type', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.event_type')}
+                          active={eventsSort.key === 'event_type'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'event_type'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'reason', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.reason')}
+                          active={eventsSort.key === 'reason'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'reason'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'requests', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.requests')}
+                          active={eventsSort.key === 'requests'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'requests'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'total_tokens', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.total_tokens')}
+                          active={eventsSort.key === 'total_tokens'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'total_tokens'))}
+                        />
+                      </th>
+                      <th aria-sort={getAriaSort(eventsSort.key === 'recover', eventsSort.direction)}>
+                        <SortButton
+                          label={t('codex_management.table.recover')}
+                          active={eventsSort.key === 'recover'}
+                          direction={eventsSort.direction}
+                          onClick={() => setEventsSort((current) => nextSortState(current, 'recover'))}
+                        />
+                      </th>
                       <th>{t('codex_management.table.actions')}</th>
                     </tr>
                   </thead>
@@ -1281,6 +1830,75 @@ export function CodexAuthPage() {
           </div>
         </div>
       ) : null}
+
+      <Modal
+        open={batchProxyOpen}
+        onClose={() => {
+          if (batchProxySaving) return;
+          setBatchProxyOpen(false);
+          setBatchProxyMode('set');
+          setBatchProxyValue('');
+        }}
+        width={720}
+        closeDisabled={batchProxySaving}
+        title={t('codex_management.accounts.batch_proxy_title')}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setBatchProxyOpen(false);
+                setBatchProxyMode('set');
+                setBatchProxyValue('');
+              }}
+              disabled={batchProxySaving}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={() => void handleBatchProxySubmit()} loading={batchProxySaving}>
+              {t('codex_management.accounts.batch_proxy_submit')}
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.batchProxyContent}>
+          <p className={styles.batchProxyDescription}>{t('codex_management.accounts.batch_proxy_description')}</p>
+          <div className={styles.batchProxyControls}>
+            <div className={styles.toolbarField}>
+              <label className={styles.fieldLabel}>{t('codex_management.accounts.batch_proxy_mode')}</label>
+              <Select
+                value={batchProxyMode}
+                options={[
+                  { value: 'set', label: t('codex_management.accounts.batch_proxy_set') },
+                  { value: 'clear', label: t('codex_management.accounts.batch_proxy_clear') },
+                ]}
+                onChange={(value) => setBatchProxyMode(value as 'set' | 'clear')}
+              />
+            </div>
+            {batchProxyMode === 'set' ? (
+              <Input
+                label={t('codex_management.accounts.batch_proxy_input_label')}
+                value={batchProxyValue}
+                onChange={(event) => setBatchProxyValue(event.target.value)}
+                placeholder={t('codex_management.accounts.batch_proxy_input_placeholder')}
+                disabled={batchProxySaving}
+              />
+            ) : null}
+          </div>
+          <div className={styles.batchProxySelectedPanel}>
+            <div className={styles.batchProxySelectedHeader}>
+              <span>{t('codex_management.accounts.selected_files', { count: selectedAccountFileNames.length })}</span>
+            </div>
+            <div className={styles.batchProxySelectedList}>
+              {selectedAccountFileNames.map((name) => (
+                <span key={name} className={styles.batchProxyChip}>
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={detail.open}

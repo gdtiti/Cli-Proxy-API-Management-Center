@@ -1783,7 +1783,22 @@
     },
     "accounts": {
       "title": "Аккаунты",
-      "description": "Постраничный просмотр статуса и времени восстановления аккаунтов Codex."
+      "description": "Постраничный просмотр статуса и времени восстановления аккаунтов Codex.",
+      "select_filtered": "Выбрать отфильтрованные",
+      "clear_selection": "Снять выбор",
+      "selected_files": "Выбрано файлов auth: {{count}}",
+      "batch_proxy": "Пакетный proxy",
+      "batch_proxy_title": "Пакетное обновление proxy auth-файлов",
+      "batch_proxy_description": "Для выбранных файлов Codex можно разом задать proxy или очистить старое значение proxy_url.",
+      "batch_proxy_mode": "Действие",
+      "batch_proxy_set": "Установить proxy",
+      "batch_proxy_clear": "Очистить proxy",
+      "batch_proxy_input_label": "Proxy URL",
+      "batch_proxy_input_placeholder": "Например: socks5://user:pass@127.0.0.1:1080/",
+      "batch_proxy_submit": "Сохранить proxy",
+      "batch_proxy_no_files": "Сначала выберите хотя бы один auth-файл",
+      "batch_proxy_missing_proxy": "Введите proxy URL",
+      "batch_proxy_success": "Пакетный proxy завершён: обновлено {{updated}}, без изменений {{unchanged}}, ошибок {{failed}}, пропущено {{skipped}}"
     },
     "usage": {
       "title": "Usage",
@@ -1824,7 +1839,8 @@
       "recovered_tokens": "Recovered Tokens",
       "created_at": "Создано",
       "event_type": "Тип события",
-      "reason": "Причина"
+      "reason": "Причина",
+      "select": "Выбрать"
     },
     "detail_cards": {
       "account": "Аккаунт",

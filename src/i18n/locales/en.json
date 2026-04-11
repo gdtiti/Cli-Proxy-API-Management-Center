@@ -1778,7 +1778,22 @@
     },
     "accounts": {
       "title": "Accounts",
-      "description": "Browse Codex auth files with current status and recovery timing."
+      "description": "Browse Codex auth files with current status and recovery timing.",
+      "select_filtered": "Select filtered",
+      "clear_selection": "Clear selection",
+      "selected_files": "{{count}} auth files selected",
+      "batch_proxy": "Batch proxy",
+      "batch_proxy_title": "Batch update auth file proxy",
+      "batch_proxy_description": "Apply one proxy setting to the selected Codex auth files, or clear stale proxy_url values in one step.",
+      "batch_proxy_mode": "Action",
+      "batch_proxy_set": "Set proxy",
+      "batch_proxy_clear": "Clear proxy",
+      "batch_proxy_input_label": "Proxy URL",
+      "batch_proxy_input_placeholder": "Example: socks5://user:pass@127.0.0.1:1080/",
+      "batch_proxy_submit": "Save proxy settings",
+      "batch_proxy_no_files": "Select at least one auth file first",
+      "batch_proxy_missing_proxy": "Enter a proxy URL",
+      "batch_proxy_success": "Batch proxy finished: updated {{updated}}, unchanged {{unchanged}}, failed {{failed}}, skipped {{skipped}}"
     },
     "usage": {
       "title": "Usage",
@@ -1819,7 +1834,8 @@
       "recovered_tokens": "Recovered Tokens",
       "created_at": "Created At",
       "event_type": "Event Type",
-      "reason": "Reason"
+      "reason": "Reason",
+      "select": "Select"
     },
     "detail_cards": {
       "account": "Account",

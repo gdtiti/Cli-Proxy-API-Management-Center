@@ -18,6 +18,29 @@ export interface ReloadAuthFilesFromStoreResponse {
   removed: number;
   unchanged: number;
 }
+export interface AuthFilesProxyURLBatchSummary {
+  total: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface AuthFilesProxyURLBatchResult {
+  name: string;
+  status: string;
+  changed: boolean;
+  before: string;
+  after: string;
+  error?: string;
+}
+
+export interface AuthFilesProxyURLBatchResponse {
+  status: string;
+  dry_run: boolean;
+  summary: AuthFilesProxyURLBatchSummary;
+  results: AuthFilesProxyURLBatchResult[];
+}
 type AuthFileEntry = AuthFilesResponse['files'][number];
 
 export const AUTH_FILE_INVALID_JSON_OBJECT_ERROR = 'AUTH_FILE_INVALID_JSON_OBJECT';
@@ -334,6 +357,19 @@ export const authFilesApi = {
 
   saveJsonObject: (name: string, json: Record<string, unknown>) =>
     saveAuthFileText(name, JSON.stringify(json)),
+
+  patchProxyURLBatch: (payload: {
+    names: string[];
+    proxyUrl: string;
+    dryRun?: boolean;
+    stopOnError?: boolean;
+  }) =>
+    apiClient.patch<AuthFilesProxyURLBatchResponse>('/auth-files/proxy-url/batch', {
+      names: payload.names,
+      proxy_url: payload.proxyUrl,
+      dry_run: payload.dryRun ?? false,
+      stop_on_error: payload.stopOnError ?? false,
+    }),
 
   // OAuth 排除模型
   async getOauthExcludedModels(): Promise<Record<string, string[]>> {

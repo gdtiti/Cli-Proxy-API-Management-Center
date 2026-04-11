@@ -107,6 +107,20 @@
   }
 }
 
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
+}
+
+.selectionSummary {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-right: auto;
+}
+
 .toolbarField,
 .typeField,
 .valueField {
@@ -146,6 +160,33 @@
   tbody tr:hover {
     background: color-mix(in srgb, var(--primary-color) 4%, transparent);
   }
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary-color);
+  }
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
+.sortIndicator {
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 
 .mono {
@@ -208,6 +249,58 @@
 .paginationActions {
   display: flex;
   gap: $spacing-sm;
+}
+
+.batchProxyContent {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.batchProxyDescription {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.batchProxyControls {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: $spacing-md;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.batchProxySelectedPanel {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+}
+
+.batchProxySelectedHeader {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: $spacing-sm;
+}
+
+.batchProxySelectedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.batchProxyChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-primary));
+  color: var(--text-primary);
+  font-size: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
 }
 
 .configLayout {
