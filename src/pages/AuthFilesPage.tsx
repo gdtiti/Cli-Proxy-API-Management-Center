@@ -39,6 +39,10 @@ import {
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
+import {
+  AuthFilesBatchFieldsEditorModal,
+  type AuthFilesBatchFieldsEditorState,
+} from '@/features/authFiles/components/AuthFilesBatchFieldsEditorModal';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesPrefixProxyEditorModal } from '@/features/authFiles/components/AuthFilesPrefixProxyEditorModal';
 import { OAuthExcludedCard } from '@/features/authFiles/components/OAuthExcludedCard';
@@ -67,6 +71,44 @@ const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
 
+type BatchEditableField = 'prefix' | 'priority' | 'note' | 'headers';
+
+const createInitialBatchFieldsEditorState = (): AuthFilesBatchFieldsEditorState => ({
+  prefixEnabled: false,
+  prefix: '',
+  priorityEnabled: false,
+  priority: '',
+  noteEnabled: false,
+  note: '',
+  headersEnabled: false,
+  headersText: '',
+  saving: false,
+});
+
+const parseBatchHeadersInput = (rawText: string): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  lines.forEach((line) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex <= 0) {
+      throw new Error(`Invalid header line: ${line}`);
+    }
+
+    const name = line.slice(0, separatorIndex).trim();
+    if (!name) {
+      throw new Error(`Invalid header line: ${line}`);
+    }
+
+    headers[name] = line.slice(separatorIndex + 1).trim();
+  });
+
+  return headers;
+};
+
 export function AuthFilesPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -91,6 +133,10 @@ export function AuthFilesPage() {
   const [reloadingFromStore, setReloadingFromStore] = useState(false);
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
+  const [batchFieldsEditorOpen, setBatchFieldsEditorOpen] = useState(false);
+  const [batchFieldsEditor, setBatchFieldsEditor] = useState<AuthFilesBatchFieldsEditorState>(
+    createInitialBatchFieldsEditorState
+  );
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
   const previousSelectionCountRef = useRef(0);
@@ -522,6 +568,134 @@ export function AuthFilesPage() {
     },
     [showNotification, t]
   );
+
+  const closeBatchFieldsEditor = useCallback(() => {
+    if (batchFieldsEditor.saving) return;
+    setBatchFieldsEditorOpen(false);
+    setBatchFieldsEditor(createInitialBatchFieldsEditorState());
+  }, [batchFieldsEditor.saving]);
+
+  const openBatchFieldsEditor = useCallback(() => {
+    if (selectedNames.length === 0) {
+      showNotification(t('auth_files.batch_edit_no_files'), 'warning');
+      return;
+    }
+    setBatchFieldsEditor(createInitialBatchFieldsEditorState());
+    setBatchFieldsEditorOpen(true);
+  }, [selectedNames.length, showNotification, t]);
+
+  const handleBatchFieldsEditorToggle = useCallback((field: BatchEditableField, enabled: boolean) => {
+    setBatchFieldsEditor((current) => {
+      switch (field) {
+        case 'prefix':
+          return { ...current, prefixEnabled: enabled };
+        case 'priority':
+          return { ...current, priorityEnabled: enabled };
+        case 'note':
+          return { ...current, noteEnabled: enabled };
+        case 'headers':
+          return { ...current, headersEnabled: enabled };
+        default:
+          return current;
+      }
+    });
+  }, []);
+
+  const handleBatchFieldsEditorChange = useCallback((field: BatchEditableField, value: string) => {
+    setBatchFieldsEditor((current) => {
+      switch (field) {
+        case 'prefix':
+          return { ...current, prefix: value };
+        case 'priority':
+          return { ...current, priority: value };
+        case 'note':
+          return { ...current, note: value };
+        case 'headers':
+          return { ...current, headersText: value };
+        default:
+          return current;
+      }
+    });
+  }, []);
+
+  const handleBatchFieldsEditorSave = useCallback(async () => {
+    if (selectedNames.length === 0) {
+      showNotification(t('auth_files.batch_edit_no_files'), 'warning');
+      return;
+    }
+
+    const payload: Parameters<typeof authFilesApi.patchFieldsBatch>[0] = {
+      names: selectedNames,
+    };
+
+    if (batchFieldsEditor.prefixEnabled) {
+      payload.prefix = batchFieldsEditor.prefix;
+    }
+
+    if (batchFieldsEditor.priorityEnabled) {
+      const rawPriority = batchFieldsEditor.priority.trim();
+      if (!rawPriority) {
+        payload.priority = 0;
+      } else {
+        const parsedPriority = Number(rawPriority);
+        if (!Number.isInteger(parsedPriority)) {
+          showNotification(t('auth_files.batch_edit_priority_invalid'), 'error');
+          return;
+        }
+        payload.priority = parsedPriority;
+      }
+    }
+
+    if (batchFieldsEditor.noteEnabled) {
+      payload.note = batchFieldsEditor.note;
+    }
+
+    if (batchFieldsEditor.headersEnabled) {
+      try {
+        payload.headers = parseBatchHeadersInput(batchFieldsEditor.headersText);
+      } catch {
+        showNotification(t('auth_files.batch_edit_headers_invalid'), 'error');
+        return;
+      }
+      if (Object.keys(payload.headers).length === 0) {
+        showNotification(t('auth_files.batch_edit_headers_empty'), 'warning');
+        return;
+      }
+    }
+
+    const hasEditableField =
+      payload.prefix !== undefined ||
+      payload.priority !== undefined ||
+      payload.note !== undefined ||
+      payload.headers !== undefined;
+
+    if (!hasEditableField) {
+      showNotification(t('auth_files.batch_edit_no_fields'), 'warning');
+      return;
+    }
+
+    setBatchFieldsEditor((current) => ({ ...current, saving: true }));
+    try {
+      const response = await authFilesApi.patchFieldsBatch(payload);
+      showNotification(
+        t('auth_files.batch_edit_success', {
+          updated: response.summary.updated,
+          unchanged: response.summary.unchanged,
+          failed: response.summary.failed,
+          skipped: response.summary.skipped,
+        }),
+        response.summary.failed > 0 ? 'warning' : 'success'
+      );
+      await Promise.all([loadFiles(), refreshKeyStats()]);
+      deselectAll();
+      setBatchFieldsEditorOpen(false);
+      setBatchFieldsEditor(createInitialBatchFieldsEditorState());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('notification.save_failed');
+      showNotification(message, 'error');
+      setBatchFieldsEditor((current) => ({ ...current, saving: false }));
+    }
+  }, [batchFieldsEditor, deselectAll, loadFiles, refreshKeyStats, selectedNames, showNotification, t]);
 
   const openExcludedEditor = useCallback(
     (provider?: string) => {
@@ -1037,6 +1211,17 @@ export function AuthFilesPage() {
         onChange={handlePrefixProxyChange}
       />
 
+      <AuthFilesBatchFieldsEditorModal
+        open={batchFieldsEditorOpen}
+        disableControls={disableControls}
+        selectedNames={selectedNames}
+        state={batchFieldsEditor}
+        onClose={closeBatchFieldsEditor}
+        onToggleField={handleBatchFieldsEditorToggle}
+        onChangeField={handleBatchFieldsEditorChange}
+        onSubmit={() => void handleBatchFieldsEditorSave()}
+      />
+
       {batchActionBarVisible && typeof document !== 'undefined'
         ? createPortal(
             <div className={styles.batchActionContainer} ref={floatingBatchActionsRef}>
@@ -1074,6 +1259,13 @@ export function AuthFilesPage() {
                   </Button>
                 </div>
                 <div className={styles.batchActionRight}>
+                  <Button
+                    size="sm"
+                    onClick={openBatchFieldsEditor}
+                    disabled={disableControls || selectedNames.length === 0}
+                  >
+                    {t('auth_files.batch_edit_button')}
+                  </Button>
                   <Button
                     variant="secondary"
                     size="sm"

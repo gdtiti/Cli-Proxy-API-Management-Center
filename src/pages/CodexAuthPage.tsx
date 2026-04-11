@@ -6,6 +6,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
+import {
+  clampCodexAuthPage,
+  clampCodexAuthPageSize,
+  isCodexAuthTabKey,
+  normalizeStoredSortState,
+  readCodexAuthUiState,
+  writeCodexAuthUiState,
+} from '@/features/codexAuth/uiState';
 import { authFilesApi, codexAuthApi } from '@/services/api';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import type {
@@ -103,6 +111,38 @@ type EventsSortKey =
   | 'requests'
   | 'total_tokens'
   | 'recover';
+
+const ACCOUNTS_SORT_KEYS: AccountsSortKey[] = [
+  'auth_index',
+  'account',
+  'file_name',
+  'status',
+  'quota',
+  'recover',
+  'requests',
+  'avg_total',
+];
+
+const USAGE_SORT_KEYS: UsageSortKey[] = [
+  'auth_index',
+  'account',
+  'requests',
+  'input_tokens',
+  'output_tokens',
+  'cached_tokens',
+  'total_tokens',
+  'recovered_tokens',
+];
+
+const EVENTS_SORT_KEYS: EventsSortKey[] = [
+  'created_at',
+  'auth_index',
+  'event_type',
+  'reason',
+  'requests',
+  'total_tokens',
+  'recover',
+];
 
 let localIdSeed = 0;
 
@@ -812,8 +852,13 @@ export function CodexAuthPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
+  const persistedUiState = useMemo(() => readCodexAuthUiState(), []);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('accounts');
+  const [activeTab, setActiveTab] = useState<TabKey>(() =>
+    persistedUiState?.activeTab && isCodexAuthTabKey(persistedUiState.activeTab)
+      ? persistedUiState.activeTab
+      : 'accounts'
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState('');
@@ -823,29 +868,56 @@ export function CodexAuthPage() {
   const [events, setEvents] = useState<CodexAuthEvent[]>([]);
   const [configGuide, setConfigGuide] = useState<CodexConfigGuide | null>(null);
   const [configEditor, setConfigEditor] = useState<ConfigEditorState>(createEmptyConfigEditor);
-  const [accountsSearch, setAccountsSearch] = useState('');
-  const [accountsStatus, setAccountsStatus] = useState('all');
-  const [accountsPage, setAccountsPage] = useState(1);
-  const [accountsPageSize, setAccountsPageSize] = useState(10);
-  const [accountsSort, setAccountsSort] = useState<SortState<AccountsSortKey>>({
-    key: null,
-    direction: 'asc',
+  const [accountsSearch, setAccountsSearch] = useState(() => persistedUiState?.accountsSearch ?? '');
+  const [accountsStatus, setAccountsStatus] = useState(() => {
+    const value = persistedUiState?.accountsStatus;
+    return typeof value === 'string' && value.trim() ? value : 'all';
   });
-  const [usageSearch, setUsageSearch] = useState('');
-  const [usagePage, setUsagePage] = useState(1);
-  const [usagePageSize, setUsagePageSize] = useState(10);
-  const [usageSort, setUsageSort] = useState<SortState<UsageSortKey>>({
-    key: null,
-    direction: 'asc',
+  const [accountsPage, setAccountsPage] = useState(() =>
+    clampCodexAuthPage(persistedUiState?.accountsPage, 1)
+  );
+  const [accountsPageSize, setAccountsPageSize] = useState(() =>
+    clampCodexAuthPageSize(persistedUiState?.accountsPageSize, 10)
+  );
+  const [accountsSort, setAccountsSort] = useState<SortState<AccountsSortKey>>(
+    () =>
+      normalizeStoredSortState<AccountsSortKey>(persistedUiState?.accountsSort, ACCOUNTS_SORT_KEYS) ?? {
+        key: null,
+        direction: 'asc',
+      }
+  );
+  const [usageSearch, setUsageSearch] = useState(() => persistedUiState?.usageSearch ?? '');
+  const [usagePage, setUsagePage] = useState(() =>
+    clampCodexAuthPage(persistedUiState?.usagePage, 1)
+  );
+  const [usagePageSize, setUsagePageSize] = useState(() =>
+    clampCodexAuthPageSize(persistedUiState?.usagePageSize, 10)
+  );
+  const [usageSort, setUsageSort] = useState<SortState<UsageSortKey>>(
+    () =>
+      normalizeStoredSortState<UsageSortKey>(persistedUiState?.usageSort, USAGE_SORT_KEYS) ?? {
+        key: null,
+        direction: 'asc',
+      }
+  );
+  const [eventsSearch, setEventsSearch] = useState(() => persistedUiState?.eventsSearch ?? '');
+  const [eventsAuthIndex, setEventsAuthIndex] = useState(() => {
+    const value = persistedUiState?.eventsAuthIndex;
+    return typeof value === 'string' && value.trim() ? value : 'all';
   });
-  const [eventsSearch, setEventsSearch] = useState('');
-  const [eventsAuthIndex, setEventsAuthIndex] = useState('all');
-  const [eventsPage, setEventsPage] = useState(1);
-  const [eventsPageSize, setEventsPageSize] = useState(10);
-  const [eventsSort, setEventsSort] = useState<SortState<EventsSortKey>>({
-    key: null,
-    direction: 'asc',
-  });
+  const [eventsPage, setEventsPage] = useState(() =>
+    clampCodexAuthPage(persistedUiState?.eventsPage, 1)
+  );
+  const [eventsPageSize, setEventsPageSize] = useState(() =>
+    clampCodexAuthPageSize(persistedUiState?.eventsPageSize, 10)
+  );
+  const [eventsSort, setEventsSort] = useState<SortState<EventsSortKey>>(
+    () =>
+      normalizeStoredSortState<EventsSortKey>(persistedUiState?.eventsSort, EVENTS_SORT_KEYS) ?? {
+        key: null,
+        direction: 'asc',
+      }
+  );
   const [selectedAccountFiles, setSelectedAccountFiles] = useState<Set<string>>(() => new Set());
   const [batchProxyOpen, setBatchProxyOpen] = useState(false);
   const [batchProxyMode, setBatchProxyMode] = useState<'set' | 'clear'>('set');
@@ -926,6 +998,42 @@ export function CodexAuthPage() {
   useEffect(() => {
     setEventsPage(1);
   }, [eventsAuthIndex, eventsPageSize, eventsSearch, eventsSort]);
+
+  useEffect(() => {
+    writeCodexAuthUiState({
+      activeTab,
+      accountsSearch,
+      accountsStatus,
+      accountsPage,
+      accountsPageSize,
+      accountsSort,
+      usageSearch,
+      usagePage,
+      usagePageSize,
+      usageSort,
+      eventsSearch,
+      eventsAuthIndex,
+      eventsPage,
+      eventsPageSize,
+      eventsSort,
+    });
+  }, [
+    activeTab,
+    accountsPage,
+    accountsPageSize,
+    accountsSearch,
+    accountsSort,
+    accountsStatus,
+    eventsAuthIndex,
+    eventsPage,
+    eventsPageSize,
+    eventsSearch,
+    eventsSort,
+    usagePage,
+    usagePageSize,
+    usageSearch,
+    usageSort,
+  ]);
 
   const summary = useMemo(() => {
     const totalRequests = usage.reduce((sum, item) => sum + (item.request_count ?? 0), 0);

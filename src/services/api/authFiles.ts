@@ -41,6 +41,40 @@ export interface AuthFilesProxyURLBatchResponse {
   summary: AuthFilesProxyURLBatchSummary;
   results: AuthFilesProxyURLBatchResult[];
 }
+
+export interface AuthFilesFieldsBatchSummary {
+  total: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface AuthFilesFieldsBatchResult {
+  name: string;
+  status: string;
+  changed: boolean;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  error?: string;
+}
+
+export interface AuthFilesFieldsBatchResponse {
+  status: string;
+  dry_run: boolean;
+  summary: AuthFilesFieldsBatchSummary;
+  results: AuthFilesFieldsBatchResult[];
+}
+
+export interface AuthFilesFieldsBatchPayload {
+  names: string[];
+  prefix?: string;
+  headers?: Record<string, string>;
+  priority?: number;
+  note?: string;
+  dryRun?: boolean;
+  stopOnError?: boolean;
+}
 type AuthFileEntry = AuthFilesResponse['files'][number];
 
 export const AUTH_FILE_INVALID_JSON_OBJECT_ERROR = 'AUTH_FILE_INVALID_JSON_OBJECT';
@@ -370,6 +404,29 @@ export const authFilesApi = {
       dry_run: payload.dryRun ?? false,
       stop_on_error: payload.stopOnError ?? false,
     }),
+
+  patchFieldsBatch: (payload: AuthFilesFieldsBatchPayload) => {
+    const body: Record<string, unknown> = {
+      names: payload.names,
+      dry_run: payload.dryRun ?? false,
+      stop_on_error: payload.stopOnError ?? false,
+    };
+
+    if (payload.prefix !== undefined) {
+      body.prefix = payload.prefix;
+    }
+    if (payload.headers !== undefined) {
+      body.headers = payload.headers;
+    }
+    if (payload.priority !== undefined) {
+      body.priority = payload.priority;
+    }
+    if (payload.note !== undefined) {
+      body.note = payload.note;
+    }
+
+    return apiClient.patch<AuthFilesFieldsBatchResponse>('/auth-files/fields/batch', body);
+  },
 
   // OAuth 排除模型
   async getOauthExcludedModels(): Promise<Record<string, string[]>> {
