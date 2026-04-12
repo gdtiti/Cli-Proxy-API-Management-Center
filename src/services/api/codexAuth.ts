@@ -18,6 +18,34 @@ interface CodexUsageResponse {
 
 interface CodexEventsResponse {
   events?: CodexAuthEvent[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  sort_order?: string;
+  limit?: number;
+}
+
+export interface CodexEventsQuery {
+  authIndex?: string;
+  keyword?: string;
+  eventType?: string;
+  quotaExceeded?: boolean;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+}
+
+export interface CodexEventsResult {
+  items: CodexAuthEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  limit: number;
 }
 
 const normalizePayloadRules = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
@@ -32,15 +60,49 @@ export const codexAuthApi = {
     return apiClient.get<CodexAuthDetail>(`/codex-auth-quota/${encodeURIComponent(authIndex)}`);
   },
 
-  async getEvents(params?: { authIndex?: string; limit?: number }): Promise<CodexAuthEvent[]> {
+  async getEvents(params?: CodexEventsQuery): Promise<CodexEventsResult> {
     const query = new URLSearchParams();
-    if (params?.authIndex) query.set('auth_index', params.authIndex);
-    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.authIndex) {
+      query.set('auth_index', params.authIndex);
+    }
+    if (params?.keyword) {
+      query.set('keyword', params.keyword);
+    }
+    if (params?.eventType) {
+      query.set('event_type', params.eventType);
+    }
+    if (params?.quotaExceeded !== undefined) {
+      query.set('quota_exceeded', String(params.quotaExceeded));
+    }
+    if (params?.page) {
+      query.set('page', String(params.page));
+    }
+    if (params?.pageSize) {
+      query.set('page_size', String(params.pageSize));
+    }
+    if (params?.sortBy) {
+      query.set('sort_by', params.sortBy);
+    }
+    if (params?.sortOrder) {
+      query.set('sort_order', params.sortOrder);
+    }
+    if (params?.limit) {
+      query.set('limit', String(params.limit));
+    }
     const suffix = query.toString();
     const data = await apiClient.get<CodexEventsResponse>(
       `/codex-auth-events${suffix ? `?${suffix}` : ''}`
     );
-    return Array.isArray(data?.events) ? data.events : [];
+    const items = Array.isArray(data?.events) ? data.events : [];
+    return {
+      items,
+      total: typeof data?.total === 'number' ? data.total : items.length,
+      page: typeof data?.page === 'number' ? data.page : 1,
+      pageSize: typeof data?.page_size === 'number' ? data.page_size : items.length || 1,
+      sortBy: typeof data?.sort_by === 'string' ? data.sort_by : params?.sortBy || 'created_at',
+      sortOrder: (data?.sort_order === 'asc' ? 'asc' : 'desc'),
+      limit: typeof data?.limit === 'number' ? data.limit : params?.limit || 100,
+    };
   },
 
   async getUsage(): Promise<CodexUsageRollup[]> {
