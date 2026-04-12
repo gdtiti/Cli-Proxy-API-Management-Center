@@ -43,25 +43,19 @@ export function AiProvidersPage() {
   const [geminiKeys, setGeminiKeys] = useState<GeminiKeyConfig[]>(
     () => config?.geminiApiKeys || []
   );
-  const [ampcodeModalLoading, setAmpcodeModalLoading] = useState(false);
-  const [ampcodeLoaded, setAmpcodeLoaded] = useState(false);
-  const [ampcodeMappingsDirty, setAmpcodeMappingsDirty] = useState(false);
-  const [ampcodeModalError, setAmpcodeModalError] = useState('');
-  const [ampcodeSaving, setAmpcodeSaving] = useState(false);
-  const [openaiDiscoveryOpen, setOpenaiDiscoveryOpen] = useState(false);
-  const [openaiDiscoveryEndpoint, setOpenaiDiscoveryEndpoint] = useState('');
-  const [openaiDiscoveryModels, setOpenaiDiscoveryModels] = useState<ModelInfo[]>([]);
-  const [openaiDiscoveryLoading, setOpenaiDiscoveryLoading] = useState(false);
-  const [openaiDiscoveryError, setOpenaiDiscoveryError] = useState('');
-  const [openaiDiscoverySearch, setOpenaiDiscoverySearch] = useState('');
-  const [openaiDiscoverySelected, setOpenaiDiscoverySelected] = useState<Set<string>>(new Set());
-  const [openaiBulkKeysText, setOpenaiBulkKeysText] = useState('');
-  const [openaiTestModel, setOpenaiTestModel] = useState('');
-  const [openaiTestStatus, setOpenaiTestStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
-  >('idle');
-  const [openaiTestMessage, setOpenaiTestMessage] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [codexConfigs, setCodexConfigs] = useState<ProviderKeyConfig[]>(
+    () => config?.codexApiKeys || []
+  );
+  const [claudeConfigs, setClaudeConfigs] = useState<ProviderKeyConfig[]>(
+    () => config?.claudeApiKeys || []
+  );
+  const [vertexConfigs, setVertexConfigs] = useState<ProviderKeyConfig[]>(
+    () => config?.vertexApiKeys || []
+  );
+  const [openaiProviders, setOpenaiProviders] = useState<OpenAIProviderConfig[]>(
+    () => config?.openaiCompatibility || []
+  );
+
   const [configSwitchingKey, setConfigSwitchingKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -271,159 +265,22 @@ export function AiProvidersPage() {
     config?.openaiCompatibility,
   ]);
 
-  const closeModal = () => {
-    setModal(null);
-    setGeminiForm({
-      apiKey: '',
-      prefix: '',
-      baseUrl: '',
-      headers: {},
-      excludedModels: [],
-      excludedText: '',
-    });
-    setProviderForm({
-      apiKey: '',
-      prefix: '',
-      baseUrl: '',
-      proxyUrl: '',
-      headers: {},
-      models: [],
-      excludedModels: [],
-      modelEntries: [{ name: '', alias: '' }],
-      excludedText: '',
-    });
-    setOpenaiForm({
-      name: '',
-      prefix: '',
-      baseUrl: '',
-      headers: [],
-      apiKeyEntries: [buildApiKeyEntry()],
-      modelEntries: [{ name: '', alias: '' }],
-      testModel: undefined,
-    });
-    setAmpcodeForm(buildAmpcodeFormState(null));
-    setAmpcodeModalLoading(false);
-    setAmpcodeLoaded(false);
-    setAmpcodeMappingsDirty(false);
-    setAmpcodeModalError('');
-    setAmpcodeSaving(false);
-    setOpenaiDiscoveryOpen(false);
-    setOpenaiDiscoveryModels([]);
-    setOpenaiDiscoverySelected(new Set());
-    setOpenaiDiscoverySearch('');
-    setOpenaiDiscoveryError('');
-    setOpenaiDiscoveryEndpoint('');
-    setOpenaiBulkKeysText('');
-    setOpenaiTestModel('');
-    setOpenaiTestStatus('idle');
-    setOpenaiTestMessage('');
-  };
+  const openEditor = useCallback(
+    (path: string) => {
+      navigate(path, { state: { fromAiProviders: true } });
+    },
+    [navigate]
+  );
 
-  const openGeminiModal = (index: number | null) => {
-    if (index !== null) {
-      const entry = geminiKeys[index];
-      setGeminiForm({
-        ...entry,
-        excludedText: excludedModelsToText(entry?.excludedModels),
-      });
-    }
-    setModal({ type: 'gemini', index });
-  };
-
-  const openProviderModal = (type: 'codex' | 'claude', index: number | null) => {
-    const source = type === 'codex' ? codexConfigs : claudeConfigs;
-    if (index !== null) {
-      const entry = source[index];
-      setProviderForm({
-        ...entry,
-        modelEntries: modelsToEntries(entry?.models),
-        excludedText: excludedModelsToText(entry?.excludedModels),
-      });
-    }
-    setModal({ type, index });
-  };
-
-  const openAmpcodeModal = () => {
-    setAmpcodeModalLoading(true);
-    setAmpcodeLoaded(false);
-    setAmpcodeMappingsDirty(false);
-    setAmpcodeModalError('');
-    setAmpcodeForm(buildAmpcodeFormState(config?.ampcode ?? null));
-    setModal({ type: 'ampcode', index: null });
-
-    void (async () => {
-      try {
-        const ampcode = await ampcodeApi.getAmpcode();
-        setAmpcodeLoaded(true);
-        updateConfigValue('ampcode', ampcode);
-        clearCache('ampcode');
-        setAmpcodeForm(buildAmpcodeFormState(ampcode));
-      } catch (err: any) {
-        setAmpcodeModalError(err?.message || t('notification.refresh_failed'));
-      } finally {
-        setAmpcodeModalLoading(false);
-      }
-    })();
-  };
-
-  const openOpenaiModal = (index: number | null) => {
-    if (index !== null) {
-      const entry = openaiProviders[index];
-      const modelEntries = modelsToEntries(entry.models);
-      setOpenaiForm({
-        name: entry.name,
-        prefix: entry.prefix ?? '',
-        baseUrl: entry.baseUrl,
-        headers: headersToEntries(entry.headers),
-        testModel: entry.testModel,
-        modelEntries,
-        apiKeyEntries: entry.apiKeyEntries?.length ? entry.apiKeyEntries : [buildApiKeyEntry()],
-      });
-      const available = modelEntries.map((m) => m.name.trim()).filter(Boolean);
-      const initialModel =
-        entry.testModel && available.includes(entry.testModel)
-          ? entry.testModel
-          : available[0] || '';
-      setOpenaiTestModel(initialModel);
-    } else {
-      setOpenaiTestModel('');
-    }
-    setOpenaiBulkKeysText('');
-    setOpenaiTestStatus('idle');
-    setOpenaiTestMessage('');
-    setModal({ type: 'openai', index });
-  };
-
-  const closeOpenaiModelDiscovery = () => {
-    setOpenaiDiscoveryOpen(false);
-    setOpenaiDiscoveryModels([]);
-    setOpenaiDiscoverySelected(new Set());
-    setOpenaiDiscoverySearch('');
-    setOpenaiDiscoveryError('');
-  };
-
-  const fetchOpenaiModelDiscovery = async ({
-    allowFallback = true,
-  }: { allowFallback?: boolean } = {}) => {
-    const baseUrl = openaiForm.baseUrl.trim();
-    if (!baseUrl) return;
-
-    setOpenaiDiscoveryLoading(true);
-    setOpenaiDiscoveryError('');
-    try {
-      const headers = buildHeaderObject(openaiForm.headers);
-      const firstKey = openaiForm.apiKeyEntries
-        .find((entry) => entry.apiKey?.trim())
-        ?.apiKey?.trim();
-      const hasAuthHeader = Boolean(headers.Authorization || headers['authorization']);
-      const list = await modelsApi.fetchModelsViaApiCall(
-        baseUrl,
-        hasAuthHeader ? undefined : firstKey,
-        headers
-      );
-      setOpenaiDiscoveryModels(list);
-    } catch (err: any) {
-      if (allowFallback) {
+  const deleteGemini = async (index: number) => {
+    const entry = geminiKeys[index];
+    if (!entry) return;
+    showConfirmation({
+      title: t('ai_providers.gemini_delete_title', { defaultValue: 'Delete Gemini Key' }),
+      message: t('ai_providers.gemini_delete_confirm'),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
         try {
           await providersApi.deleteGeminiKey(entry.apiKey);
           const next = geminiKeys.filter((_, idx) => idx !== index);
@@ -546,386 +403,33 @@ export function AiProvidersPage() {
     }
   };
 
-  const saveProvider = async (type: 'codex' | 'claude') => {
-    const trimmedBaseUrl = (providerForm.baseUrl ?? '').trim();
-    const baseUrl = trimmedBaseUrl || undefined;
-    if (type === 'codex' && !baseUrl) {
-      showNotification(t('notification.codex_base_url_required'), 'error');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const source = type === 'codex' ? codexConfigs : claudeConfigs;
-
-      const payload: ProviderKeyConfig = {
-        apiKey: providerForm.apiKey.trim(),
-        prefix: providerForm.prefix?.trim() || undefined,
-        baseUrl,
-        proxyUrl: providerForm.proxyUrl?.trim() || undefined,
-        headers: buildHeaderObject(headersToEntries(providerForm.headers as any)),
-        models: entriesToModels(providerForm.modelEntries),
-        excludedModels: parseExcludedModels(providerForm.excludedText),
-      };
-
-      const nextList =
-        modal?.type === type && modal.index !== null
-          ? source.map((item, idx) => (idx === modal.index ? payload : item))
-          : [...source, payload];
-
-      if (type === 'codex') {
-        await providersApi.saveCodexConfigs(nextList);
-        setCodexConfigs(nextList);
-        updateConfigValue('codex-api-key', nextList);
-        clearCache('codex-api-key');
-        const message =
-          modal?.index !== null
-            ? t('notification.codex_config_updated')
-            : t('notification.codex_config_added');
-        showNotification(message, 'success');
-      } else {
-        await providersApi.saveClaudeConfigs(nextList);
-        setClaudeConfigs(nextList);
-        updateConfigValue('claude-api-key', nextList);
-        clearCache('claude-api-key');
-        const message =
-          modal?.index !== null
-            ? t('notification.claude_config_updated')
-            : t('notification.claude_config_added');
-        showNotification(message, 'success');
-      }
-
-      closeModal();
-    } catch (err: any) {
-      showNotification(`${t('notification.update_failed')}: ${err?.message || ''}`, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteProviderEntry = async (type: 'codex' | 'claude', apiKey: string) => {
-    if (!window.confirm(t(`ai_providers.${type}_delete_confirm` as any))) return;
-    try {
-      if (type === 'codex') {
-        await providersApi.deleteCodexConfig(apiKey);
-        const next = codexConfigs.filter((item) => item.apiKey !== apiKey);
-        setCodexConfigs(next);
-        updateConfigValue('codex-api-key', next);
-        clearCache('codex-api-key');
-        showNotification(t('notification.codex_config_deleted'), 'success');
-      } else {
-        await providersApi.deleteClaudeConfig(apiKey);
-        const next = claudeConfigs.filter((item) => item.apiKey !== apiKey);
-        setClaudeConfigs(next);
-        updateConfigValue('claude-api-key', next);
-        clearCache('claude-api-key');
-        showNotification(t('notification.claude_config_deleted'), 'success');
-      }
-    } catch (err: any) {
-      showNotification(`${t('notification.delete_failed')}: ${err?.message || ''}`, 'error');
-    }
-  };
-
-  const saveOpenai = async () => {
-    setSaving(true);
-    try {
-      const payload: OpenAIProviderConfig = {
-        name: openaiForm.name.trim(),
-        prefix: openaiForm.prefix?.trim() || undefined,
-        baseUrl: openaiForm.baseUrl.trim(),
-        headers: buildHeaderObject(openaiForm.headers),
-        apiKeyEntries: openaiForm.apiKeyEntries.map((entry) => ({
-          apiKey: entry.apiKey.trim(),
-          proxyUrl: entry.proxyUrl?.trim() || undefined,
-          headers: entry.headers,
-        })),
-      };
-      if (openaiForm.testModel) payload.testModel = openaiForm.testModel.trim();
-      const models = entriesToModels(openaiForm.modelEntries);
-      if (models.length) payload.models = models;
-
-      const nextList =
-        modal?.type === 'openai' && modal.index !== null
-          ? openaiProviders.map((item, idx) => (idx === modal.index ? payload : item))
-          : [...openaiProviders, payload];
-
-      await providersApi.saveOpenAIProviders(nextList);
-      setOpenaiProviders(nextList);
-      updateConfigValue('openai-compatibility', nextList);
-      clearCache('openai-compatibility');
-      const message =
-        modal?.index !== null
-          ? t('notification.openai_provider_updated')
-          : t('notification.openai_provider_added');
-      showNotification(message, 'success');
-      closeModal();
-    } catch (err: any) {
-      showNotification(`${t('notification.update_failed')}: ${err?.message || ''}`, 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteOpenai = async (name: string) => {
-    if (!window.confirm(t('ai_providers.openai_delete_confirm'))) return;
-    try {
-      await providersApi.deleteOpenAIProvider(name);
-      const next = openaiProviders.filter((item) => item.name !== name);
-      setOpenaiProviders(next);
-      updateConfigValue('openai-compatibility', next);
-      clearCache('openai-compatibility');
-      showNotification(t('notification.openai_provider_deleted'), 'success');
-    } catch (err: any) {
-      showNotification(`${t('notification.delete_failed')}: ${err?.message || ''}`, 'error');
-    }
-  };
-
-  const renderKeyEntries = (entries: ApiKeyEntry[]) => {
-    const list = entries.length ? entries : [buildApiKeyEntry()];
-    const updateEntry = (idx: number, field: keyof ApiKeyEntry, value: string) => {
-      const next = list.map((entry, i) => (i === idx ? { ...entry, [field]: value } : entry));
-      setOpenaiForm((prev) => ({ ...prev, apiKeyEntries: next }));
-    };
-
-    const removeEntry = (idx: number) => {
-      const next = list.filter((_, i) => i !== idx);
-      setOpenaiForm((prev) => ({
-        ...prev,
-        apiKeyEntries: next.length ? next : [buildApiKeyEntry()],
-      }));
-    };
-
-    const addEntry = () => {
-      setOpenaiForm((prev) => ({ ...prev, apiKeyEntries: [...list, buildApiKeyEntry()] }));
-    };
-
-    const importEntries = () => {
-      const lines = openaiBulkKeysText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-
-      if (!lines.length) {
-        showNotification(t('notification.openai_multi_input_required'), 'error');
-        return;
-      }
-
-      const existingEntries = list.filter((entry) => entry.apiKey?.trim() || entry.proxyUrl?.trim());
-      const seen = new Set(
-        existingEntries.map((entry) => entry.apiKey?.trim()).filter(Boolean) as string[]
-      );
-
-      let skipped = 0;
-      const appended: ApiKeyEntry[] = [];
-
-      lines.forEach((apiKey) => {
-        if (seen.has(apiKey)) {
-          skipped += 1;
-          return;
-        }
-        seen.add(apiKey);
-        appended.push(buildApiKeyEntry({ apiKey }));
-      });
-
-      const next = [...existingEntries, ...appended];
-      setOpenaiForm((prev) => ({
-        ...prev,
-        apiKeyEntries: next.length ? next : [buildApiKeyEntry()],
-      }));
-      setOpenaiBulkKeysText('');
-
-      showNotification(
-        t('notification.openai_multi_summary', {
-          success: appended.length,
-          skipped,
-          failed: 0,
-        }),
-        appended.length > 0 ? 'success' : 'info'
-      );
-    };
-
-    return (
-      <div className="stack">
-        <div className="form-group">
-          <label>{t('ai_providers.openai_bulk_input_label')}</label>
-          <div className="hint">{t('ai_providers.openai_bulk_input_hint')}</div>
-          <textarea
-            className="input"
-            rows={5}
-            value={openaiBulkKeysText}
-            placeholder={t('ai_providers.openai_bulk_input_placeholder')}
-            onChange={(e) => setOpenaiBulkKeysText(e.target.value)}
-            disabled={saving}
-          />
-          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="secondary" size="sm" onClick={importEntries} disabled={saving}>
-              {t('ai_providers.openai_bulk_add_btn')}
-            </Button>
-          </div>
-        </div>
-        {list.map((entry, index) => (
-          <div key={index} className="item-row">
-            <div className="item-meta">
-              <Input
-                label={`${t('common.api_key')} #${index + 1}`}
-                value={entry.apiKey}
-                onChange={(e) => updateEntry(index, 'apiKey', e.target.value)}
-              />
-              <Input
-                label={t('common.proxy_url')}
-                value={entry.proxyUrl ?? ''}
-                onChange={(e) => updateEntry(index, 'proxyUrl', e.target.value)}
-              />
-            </div>
-            <div className="item-actions">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removeEntry(index)}
-                disabled={list.length <= 1 || saving}
-              >
-                {t('common.delete')}
-              </Button>
-            </div>
-          </div>
-        ))}
-        <Button variant="secondary" size="sm" onClick={addEntry} disabled={saving}>
-          {t('ai_providers.openai_keys_add_btn')}
-        </Button>
-      </div>
-    );
-  };
-
-  // 预计算所有 apiKey 的状态栏数据（避免每次渲染重复计算）
-  const statusBarCache = useMemo(() => {
-    const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
-
-    // 收集所有需要计算的 apiKey
-    const allApiKeys = new Set<string>();
-    geminiKeys.forEach((k) => k.apiKey && allApiKeys.add(k.apiKey));
-    codexConfigs.forEach((k) => k.apiKey && allApiKeys.add(k.apiKey));
-    claudeConfigs.forEach((k) => k.apiKey && allApiKeys.add(k.apiKey));
-    openaiProviders.forEach((p) => {
-      (p.apiKeyEntries || []).forEach((e) => e.apiKey && allApiKeys.add(e.apiKey));
-    });
-
-    // 预计算每个 apiKey 的状态数据
-    allApiKeys.forEach((apiKey) => {
-      cache.set(apiKey, calculateStatusBarData(usageDetails, apiKey));
-    });
-
-    return cache;
-  }, [usageDetails, geminiKeys, codexConfigs, claudeConfigs, openaiProviders]);
-
-  // 预计算 OpenAI 提供商的汇总状态栏数据
-  const openaiStatusBarCache = useMemo(() => {
-    const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
-
-    openaiProviders.forEach((provider) => {
-      const allKeys = (provider.apiKeyEntries || []).map((e) => e.apiKey).filter(Boolean);
-      const filteredDetails = usageDetails.filter((detail) => allKeys.includes(detail.source));
-      cache.set(provider.name, calculateStatusBarData(filteredDetails));
-    });
-
-    return cache;
-  }, [usageDetails, openaiProviders]);
-
-  // 渲染状态监测栏
-  const renderStatusBar = (apiKey: string) => {
-    const statusData = statusBarCache.get(apiKey) || calculateStatusBarData([], apiKey);
-    const hasData = statusData.totalSuccess + statusData.totalFailure > 0;
-    const rateClass = !hasData
-      ? ''
-      : statusData.successRate >= 90
-        ? styles.statusRateHigh
-        : statusData.successRate >= 50
-          ? styles.statusRateMedium
-          : styles.statusRateLow;
-
-    return (
-      <div className={styles.statusBar}>
-        <div className={styles.statusBlocks}>
-          {statusData.blocks.map((state, idx) => {
-            const blockClass =
-              state === 'success'
-                ? styles.statusBlockSuccess
-                : state === 'failure'
-                  ? styles.statusBlockFailure
-                  : state === 'mixed'
-                    ? styles.statusBlockMixed
-                    : styles.statusBlockIdle;
-            return <div key={idx} className={`${styles.statusBlock} ${blockClass}`} />;
-          })}
-        </div>
-        <span className={`${styles.statusRate} ${rateClass}`}>
-          {hasData ? `${statusData.successRate.toFixed(1)}%` : '--'}
-        </span>
-      </div>
-    );
-  };
-
-  // 渲染 OpenAI 提供商的状态栏（汇总多个 apiKey）
-  const renderOpenAIStatusBar = (providerName: string) => {
-    const statusData = openaiStatusBarCache.get(providerName) || calculateStatusBarData([]);
-    const hasData = statusData.totalSuccess + statusData.totalFailure > 0;
-    const rateClass = !hasData
-      ? ''
-      : statusData.successRate >= 90
-        ? styles.statusRateHigh
-        : statusData.successRate >= 50
-          ? styles.statusRateMedium
-          : styles.statusRateLow;
-
-    return (
-      <div className={styles.statusBar}>
-        <div className={styles.statusBlocks}>
-          {statusData.blocks.map((state, idx) => {
-            const blockClass =
-              state === 'success'
-                ? styles.statusBlockSuccess
-                : state === 'failure'
-                  ? styles.statusBlockFailure
-                  : state === 'mixed'
-                    ? styles.statusBlockMixed
-                    : styles.statusBlockIdle;
-            return <div key={idx} className={`${styles.statusBlock} ${blockClass}`} />;
-          })}
-        </div>
-        <span className={`${styles.statusRate} ${rateClass}`}>
-          {hasData ? `${statusData.successRate.toFixed(1)}%` : '--'}
-        </span>
-      </div>
-    );
-  };
-
-  const renderList = <T,>(
-    items: T[],
-    keyField: (item: T) => string,
-    renderContent: (item: T, index: number) => ReactNode,
-    onEdit: (index: number) => void,
-    onDelete: (item: T) => void,
-    addLabel: string,
-    emptyTitle: string,
-    emptyDescription: string,
-    deleteLabel?: string,
-    options?: {
-      getRowDisabled?: (item: T, index: number) => boolean;
-      renderExtraActions?: (item: T, index: number) => ReactNode;
-    }
-  ) => {
-    if (loading) {
-      return <div className="hint">{t('common.loading')}</div>;
-    }
-
-    if (!items.length) {
-      return (
-        <EmptyState
-          title={emptyTitle}
-          description={emptyDescription}
-          action={
-            <Button onClick={() => onEdit(-1)} disabled={disableControls}>
-              {addLabel}
-            </Button>
+  const deleteProviderEntry = async (type: 'codex' | 'claude', index: number) => {
+    const source = type === 'codex' ? codexConfigs : claudeConfigs;
+    const entry = source[index];
+    if (!entry) return;
+    showConfirmation({
+      title: t(`ai_providers.${type}_delete_title`, {
+        defaultValue: `Delete ${type === 'codex' ? 'Codex' : 'Claude'} Config`,
+      }),
+      message: t(`ai_providers.${type}_delete_confirm`),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        try {
+          if (type === 'codex') {
+            await providersApi.deleteCodexConfig(entry.apiKey);
+            const next = codexConfigs.filter((_, idx) => idx !== index);
+            setCodexConfigs(next);
+            updateConfigValue('codex-api-key', next);
+            clearCache('codex-api-key');
+            showNotification(t('notification.codex_config_deleted'), 'success');
+          } else {
+            await providersApi.deleteClaudeConfig(entry.apiKey);
+            const next = claudeConfigs.filter((_, idx) => idx !== index);
+            setClaudeConfigs(next);
+            updateConfigValue('claude-api-key', next);
+            clearCache('claude-api-key');
+            showNotification(t('notification.claude_config_deleted'), 'success');
           }
         } catch (err: unknown) {
           const message = getErrorMessage(err);
