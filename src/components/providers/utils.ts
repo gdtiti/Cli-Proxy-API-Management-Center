@@ -29,6 +29,16 @@ export const parseTextList = (text: string): string[] =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+export const parseBatchApiKeys = (text: string): string[] =>
+  Array.from(
+    new Set(
+      String(text ?? '')
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+
 export const parseExcludedModels = parseTextList;
 
 export const excludedModelsToText = (models?: string[]) =>
@@ -85,7 +95,7 @@ export const buildClaudeMessagesEndpoint = (baseUrl: string): string => {
   return `${trimmed}/v1/messages`;
 };
 
-// 根据 source (apiKey) 获取统计数据 - 与旧版逻辑一致
+// Resolve usage stats by source (apiKey), matching the legacy behavior.
 export const getStatsBySource = (
   apiKey: string,
   keyStats: KeyStats,
@@ -109,7 +119,7 @@ export const getStatsBySource = (
   return { success, failure };
 };
 
-// 对于 OpenAI 提供商，汇总所有 apiKeyEntries 的统计 - 与旧版逻辑一致
+// Aggregate usage stats for all OpenAI apiKeyEntries, matching the legacy behavior.
 export const getOpenAIProviderStats = (
   apiKeyEntries: ApiKeyEntry[] | undefined,
   keyStats: KeyStats,

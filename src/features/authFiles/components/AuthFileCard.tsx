@@ -59,6 +59,18 @@ const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
   return provider as QuotaProviderType;
 };
 
+const hasPersistedQuotaDetails = (file: AuthFileItem) =>
+  [
+    file.quota_level,
+    file.quota_reason,
+    file.quota_checked,
+    file.quota_exceeded,
+    file.expires_at,
+    file.updated_at,
+    file.next_retry_after,
+    file.next_recover_at,
+  ].some((value) => value !== undefined && value !== null && String(value).trim() !== '');
+
 export function AuthFileCard(props: AuthFileCardProps) {
   const { t } = useTranslation();
   const {
@@ -88,25 +100,27 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const typeLabel = getTypeLabel(t, file.type || 'unknown');
   const providerIcon = getAuthFileIcon(file.type || 'unknown', resolvedTheme);
 
-  const quotaType =
-    quotaFilterType && resolveQuotaType(file) === quotaFilterType ? quotaFilterType : null;
+  const quotaType = resolveQuotaType(file);
+  const highlightedQuotaType =
+    quotaFilterType && quotaType === quotaFilterType ? quotaFilterType : null;
 
-  const showQuotaLayout = Boolean(quotaType) && !isRuntimeOnly && !compact;
+  const showQuotaLayout =
+    !isRuntimeOnly && !compact && (Boolean(quotaType) || hasPersistedQuotaDetails(file));
 
   const providerCardClass =
-    quotaType === 'antigravity'
+    highlightedQuotaType === 'antigravity'
       ? styles.antigravityCard
-      : quotaType === 'claude'
+      : highlightedQuotaType === 'claude'
         ? styles.claudeCard
-        : quotaType === 'codex'
+        : highlightedQuotaType === 'codex'
           ? styles.codexCard
-          : quotaType === 'kiro'
+          : highlightedQuotaType === 'kiro'
             ? styles.kiroCard
-            : quotaType === 'gemini-cli'
+            : highlightedQuotaType === 'gemini-cli'
               ? styles.geminiCliCard
-              : quotaType === 'kimi'
-              ? styles.kimiCard
-              : '';
+              : highlightedQuotaType === 'kimi'
+                ? styles.kimiCard
+                : '';
 
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndexKey = normalizeAuthIndex(rawAuthIndex);
@@ -119,7 +133,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
   const noteValue = typeof file.note === 'string' ? file.note.trim() : '';
   const stateLabel = isRuntimeOnly
-    ? t('auth_files.type_virtual') || '虚拟认证文件'
+    ? t('auth_files.type_virtual', { defaultValue: 'Virtual auth file' })
     : file.disabled
       ? t('auth_files.health_status_disabled')
       : hasStatusWarning
@@ -259,7 +273,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
                   size="sm"
                   onClick={() => onShowModels(file)}
                   className={`${styles.primaryActionButton} ${styles.modelsActionButton}`}
-                  title={t('auth_files.models_button', { defaultValue: '模型' })}
+                  title={t('auth_files.models_button', { defaultValue: 'Models' })}
                   disabled={disableControls}
                 >
                   <>
@@ -267,7 +281,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
                       <IconModelCluster className={styles.actionIcon} size={16} />
                     </span>
                     <span className={styles.actionButtonLabel}>
-                      {t('auth_files.models_button', { defaultValue: '模型' })}
+                      {t('auth_files.models_button', { defaultValue: 'Models' })}
                     </span>
                   </>
                 </Button>

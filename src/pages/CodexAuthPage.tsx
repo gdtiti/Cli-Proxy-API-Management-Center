@@ -17,6 +17,7 @@ import {
 import { authFilesApi, codexAuthApi } from '@/services/api';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import type {
+  AuthFileItem,
   CodexAuthConfig,
   CodexAuthConfigPayload,
   CodexConfigGuide,
@@ -258,6 +259,28 @@ const uniqueStrings = (values: Array<string | null | undefined>) =>
         .filter(Boolean)
     )
   );
+
+const filterCodexAccountsByAuthFiles = (
+  accounts: CodexAuthSnapshot[],
+  authFiles: AuthFileItem[]
+) => {
+  const existingFileNames = new Set(
+    authFiles.map((item) => String(item.name ?? '').trim()).filter(Boolean)
+  );
+  const existingAuthIndexes = new Set(
+    authFiles
+      .map((item) => String(item.auth_index ?? item.authIndex ?? '').trim())
+      .filter(Boolean)
+  );
+
+  return accounts.filter((item) => {
+    const fileName = String(item.file_name ?? '').trim();
+    const authIndex = String(item.auth_index ?? '').trim();
+    if (fileName && existingFileNames.has(fileName)) return true;
+    if (authIndex && existingAuthIndexes.has(authIndex)) return true;
+    return false;
+  });
+};
 
 const compareText = (left: unknown, right: unknown) =>
   String(left ?? '').trim().localeCompare(String(right ?? '').trim(), undefined, {
@@ -940,8 +963,11 @@ export function CodexAuthPage() {
   }, []);
 
   const loadAccounts = useCallback(async () => {
-    const response = await codexAuthApi.getQuota();
-    setAccounts(response);
+    const [response, authFilesResponse] = await Promise.all([
+      codexAuthApi.getQuota(),
+      authFilesApi.list(),
+    ]);
+    setAccounts(filterCodexAccountsByAuthFiles(response, authFilesResponse?.files ?? []));
   }, []);
 
   const loadUsage = useCallback(async () => {

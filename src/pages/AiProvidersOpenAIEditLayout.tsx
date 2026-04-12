@@ -14,7 +14,7 @@ import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputList
 import type { ApiKeyEntry, OpenAIProviderConfig } from '@/types';
 import type { ModelInfo } from '@/utils/models';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
-import { buildApiKeyEntry } from '@/components/providers/utils';
+import { buildApiKeyEntry, parseBatchApiKeys } from '@/components/providers/utils';
 import type { ModelEntry, OpenAIFormState } from '@/components/providers/types';
 import type { KeyTestStatus } from '@/stores/useOpenAIEditDraftStore';
 
@@ -54,6 +54,7 @@ const buildEmptyForm = (): OpenAIFormState => ({
   apiKeyEntries: [buildApiKeyEntry()],
   modelEntries: [{ name: '', alias: '' }],
   testModel: undefined,
+  batchApiKeysText: '',
 });
 
 const parseIndexParam = (value: string | undefined) => {
@@ -121,6 +122,7 @@ const buildOpenAISignature = (form: OpenAIFormState, testModel: string) =>
     apiKeyEntries: normalizeApiKeyEntries(form.apiKeyEntries),
     models: normalizeModelEntries(form.modelEntries),
     testModel: String(testModel ?? '').trim(),
+    batchApiKeysText: String(form.batchApiKeysText ?? ''),
   });
 
 export function AiProvidersOpenAIEditLayout() {
@@ -417,11 +419,21 @@ export function AiProvidersOpenAIEditLayout() {
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         headers: buildHeaderObject(form.headers),
-        apiKeyEntries: form.apiKeyEntries.map((entry: ApiKeyEntry) => ({
-          apiKey: entry.apiKey.trim(),
-          proxyUrl: entry.proxyUrl?.trim() || undefined,
-          headers: entry.headers,
-        })),
+        apiKeyEntries: [
+          ...form.apiKeyEntries.map((entry: ApiKeyEntry) => ({
+            apiKey: entry.apiKey.trim(),
+            proxyUrl: entry.proxyUrl?.trim() || undefined,
+            headers: entry.headers,
+          })),
+          ...parseBatchApiKeys(form.batchApiKeysText ?? '').map((apiKey) => ({
+            apiKey,
+            proxyUrl: undefined,
+            headers: undefined,
+          })),
+        ].filter((entry, index, list) => {
+          if (!entry.apiKey) return false;
+          return list.findIndex((item) => item.apiKey === entry.apiKey) === index;
+        }),
       };
       if (form.priority !== undefined && Number.isFinite(form.priority)) {
         payload.priority = Math.trunc(form.priority);
@@ -445,7 +457,7 @@ export function AiProvidersOpenAIEditLayout() {
           syncedProviders = latest as OpenAIProviderConfig[];
         }
       } catch {
-        // 保存成功后刷新失败时，回退到本地计算结果，避免页面数据为空或回退
+        // Fall back to the locally computed list when the post-save refresh fails.
       }
 
       setProviders(syncedProviders);

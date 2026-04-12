@@ -13,7 +13,11 @@ import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
 import { useNotificationStore } from '@/stores';
 import { buildHeaderObject } from '@/utils/headers';
-import { buildClaudeMessagesEndpoint, parseTextList } from '@/components/providers/utils';
+import {
+  buildClaudeMessagesEndpoint,
+  parseBatchApiKeys,
+  parseTextList,
+} from '@/components/providers/utils';
 import type { ClaudeEditOutletContext } from './AiProvidersClaudeEditLayout';
 import styles from './AiProvidersPage.module.scss';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
@@ -309,6 +313,33 @@ export function AiProvidersClaudeEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
               disabled={saving || disableControls || isTesting}
             />
+            {!hasIndexParam ? (
+              <div className={styles.batchKeySection}>
+                <label className={styles.batchKeyLabel}>
+                  {t('ai_providers.batch_api_keys_label')}
+                </label>
+                <textarea
+                  className={`input ${styles.batchKeyTextarea}`}
+                  rows={5}
+                  placeholder={t('ai_providers.batch_api_keys_placeholder')}
+                  value={form.batchApiKeysText ?? ''}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, batchApiKeysText: e.target.value }))
+                  }
+                  disabled={saving || disableControls || isTesting}
+                />
+                <div className={styles.batchKeyMeta}>
+                  <span className={styles.batchKeyHint}>
+                    {t('ai_providers.batch_api_keys_hint')}
+                  </span>
+                  <span className={styles.batchKeyCount}>
+                    {t('ai_providers.batch_api_keys_count', {
+                      count: parseBatchApiKeys(form.batchApiKeysText ?? '').length,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : null}
             <Input
               label={t('ai_providers.priority_label')}
               hint={t('ai_providers.priority_hint')}

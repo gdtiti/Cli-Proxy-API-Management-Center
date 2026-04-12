@@ -54,10 +54,16 @@ import { useAuthFilesPrefixProxyEditor } from '@/features/authFiles/hooks/useAut
 import { useAuthFilesStats } from '@/features/authFiles/hooks/useAuthFilesStats';
 import { useAuthFilesStatusBarCache } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import {
+  isAuthFilesExpiryFilter,
+  isAuthFilesQuotaFilter,
   isAuthFilesSortMode,
+  isAuthFilesStatusFilter,
   readAuthFilesUiState,
   writeAuthFilesUiState,
+  type AuthFilesExpiryFilter,
+  type AuthFilesQuotaFilter,
   type AuthFilesSortMode,
+  type AuthFilesStatusFilter,
 } from '@/features/authFiles/uiState';
 import { authFilesApi } from '@/services/api/authFiles';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
@@ -70,6 +76,15 @@ const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
 const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
+const EXPIRY_SOON_MS = 7 * 24 * 60 * 60 * 1000;
+const QUOTA_LEVEL_RANK = {
+  unchecked: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+  full: 4,
+} as const;
+type DerivedQuotaLevel = keyof typeof QUOTA_LEVEL_RANK;
 
 type BatchEditableField = 'prefix' | 'priority' | 'note' | 'headers';
 
@@ -109,6 +124,107 @@ const parseBatchHeadersInput = (rawText: string): Record<string, string> => {
   return headers;
 };
 
+const toTrimmedString = (value: unknown) => String(value ?? '').trim();
+
+const parseBoolean = (value: unknown): boolean | null => {
+  if (typeof value === 'boolean') return value;
+  const normalized = toTrimmedString(value).toLowerCase();
+  if (!normalized) return null;
+  if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+  return null;
+};
+
+const getTimestamp = (value: unknown): number | null => {
+  const normalized = toTrimmedString(value);
+  if (!normalized) return null;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.getTime();
+};
+
+const isQuotaChecked = (file: AuthFileItem) => {
+  const checked = parseBoolean(file.quota_checked);
+  if (checked !== null) return checked;
+  return Boolean(
+    toTrimmedString(file.quota_level) ||
+      toTrimmedString(file.quota_reason) ||
+      toTrimmedString(file.updated_at) ||
+      toTrimmedString(file.next_retry_after) ||
+      toTrimmedString(file.next_recover_at) ||
+      parseBoolean(file.quota_exceeded)
+  );
+};
+
+const getQuotaLevel = (file: AuthFileItem): DerivedQuotaLevel => {
+  if (!isQuotaChecked(file)) return 'unchecked';
+  const normalized = toTrimmedString(file.quota_level).toLowerCase();
+  if (['max', 'maximum', 'full', 'available'].includes(normalized)) return 'full';
+  if (normalized === 'high') return 'high';
+  if (['medium', 'mid'].includes(normalized)) return 'medium';
+  if (
+    ['low', 'limited', 'warning', 'critical', 'exceeded', 'empty', 'none'].includes(normalized)
+  ) {
+    return 'low';
+  }
+  return parseBoolean(file.quota_exceeded) ? 'low' : 'medium';
+};
+
+const getExpiryTimestamp = (file: AuthFileItem) => getTimestamp(file.expires_at);
+
+const getCooldownTimestamp = (file: AuthFileItem) =>
+  getTimestamp(file.next_retry_after ?? file.next_recover_at);
+
+const matchesStatusFilter = (file: AuthFileItem, statusFilter: AuthFilesStatusFilter) => {
+  if (statusFilter === 'all') return true;
+  return statusFilter === 'disabled' ? Boolean(file.disabled) : !file.disabled;
+};
+
+const matchesQuotaFilter = (file: AuthFileItem, quotaFilter: AuthFilesQuotaFilter) => {
+  if (quotaFilter === 'all') return true;
+  return getQuotaLevel(file) === quotaFilter;
+};
+
+const matchesExpiryFilter = (
+  file: AuthFileItem,
+  expiryFilter: AuthFilesExpiryFilter,
+  now: number
+) => {
+  if (expiryFilter === 'all') return true;
+  const expiresAt = getExpiryTimestamp(file);
+  if (expiryFilter === 'has_value') return expiresAt !== null;
+  if (expiryFilter === 'no_value') return expiresAt === null;
+  if (expiresAt === null) return false;
+  if (expiryFilter === 'expired') return expiresAt <= now;
+  return expiresAt > now && expiresAt - now <= EXPIRY_SOON_MS;
+};
+
+const matchesSearch = (file: AuthFileItem, term: string) => {
+  if (!term) return true;
+  return [
+    file.name,
+    file.type,
+    file.provider,
+    file.account,
+    file.email,
+    file.label,
+    file.alias,
+    file.prefix,
+    file.auth_index,
+    file.authIndex,
+    file.status,
+    file.status_message,
+    file.statusMessage,
+  ].some((value) => toTrimmedString(value).toLowerCase().includes(term));
+};
+
+const compareOptionalNumber = (left: number | null, right: number | null) => {
+  if (left === null && right === null) return 0;
+  if (left === null) return 1;
+  if (right === null) return -1;
+  return left - right;
+};
+
 export function AuthFilesPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -124,6 +240,9 @@ export function AuthFilesPage() {
   const [compactMode, setCompactMode] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<AuthFilesStatusFilter>('all');
+  const [quotaFilter, setQuotaFilter] = useState<AuthFilesQuotaFilter>('all');
+  const [expiryFilter, setExpiryFilter] = useState<AuthFilesExpiryFilter>('all');
   const [pageSizeByMode, setPageSizeByMode] = useState({
     regular: DEFAULT_REGULAR_PAGE_SIZE,
     compact: DEFAULT_COMPACT_PAGE_SIZE,
@@ -264,6 +383,15 @@ export function AuthFilesPage() {
     if (isAuthFilesSortMode(persisted.sortMode)) {
       setSortMode(persisted.sortMode);
     }
+    if (isAuthFilesStatusFilter(persisted.statusFilter)) {
+      setStatusFilter(persisted.statusFilter);
+    }
+    if (isAuthFilesQuotaFilter(persisted.quotaFilter)) {
+      setQuotaFilter(persisted.quotaFilter);
+    }
+    if (isAuthFilesExpiryFilter(persisted.expiryFilter)) {
+      setExpiryFilter(persisted.expiryFilter);
+    }
   }, []);
 
   useEffect(() => {
@@ -277,8 +405,23 @@ export function AuthFilesPage() {
       regularPageSize: pageSizeByMode.regular,
       compactPageSize: pageSizeByMode.compact,
       sortMode,
+      statusFilter,
+      quotaFilter,
+      expiryFilter,
     });
-  }, [filter, problemOnly, compactMode, search, page, pageSize, pageSizeByMode, sortMode]);
+  }, [
+    compactMode,
+    expiryFilter,
+    filter,
+    page,
+    pageSize,
+    pageSizeByMode,
+    problemOnly,
+    quotaFilter,
+    search,
+    sortMode,
+    statusFilter,
+  ]);
 
   useEffect(() => {
     setPageSizeInput(String(pageSize));
@@ -334,9 +477,8 @@ export function AuthFilesPage() {
       if (!isAuthFilesSortMode(value) || value === sortMode) return;
       setSortMode(value);
       setPage(1);
-      void loadFiles().catch(() => {});
     },
-    [loadFiles, sortMode]
+    [sortMode]
   );
 
   const handleHeaderRefresh = useCallback(async () => {
@@ -409,6 +551,41 @@ export function AuthFilesPage() {
       { value: 'default', label: t('auth_files.sort_default') },
       { value: 'az', label: t('auth_files.sort_az') },
       { value: 'priority', label: t('auth_files.sort_priority') },
+      { value: 'quota', label: t('auth_files.sort_quota') },
+      { value: 'expires_at', label: t('auth_files.sort_expires_at') },
+      { value: 'cooldown', label: t('auth_files.sort_cooldown') },
+    ],
+    [t]
+  );
+
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: t('auth_files.status_filter_all') },
+      { value: 'enabled', label: t('auth_files.status_filter_enabled') },
+      { value: 'disabled', label: t('auth_files.status_filter_disabled') },
+    ],
+    [t]
+  );
+
+  const quotaFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: t('auth_files.quota_filter_all') },
+      { value: 'unchecked', label: t('auth_files.quota_filter_unchecked') },
+      { value: 'low', label: t('auth_files.quota_filter_low') },
+      { value: 'medium', label: t('auth_files.quota_filter_medium') },
+      { value: 'high', label: t('auth_files.quota_filter_high') },
+      { value: 'full', label: t('auth_files.quota_filter_full') },
+    ],
+    [t]
+  );
+
+  const expiryFilterOptions = useMemo(
+    () => [
+      { value: 'all', label: t('auth_files.expiry_filter_all') },
+      { value: 'expired', label: t('auth_files.expiry_filter_expired') },
+      { value: 'expiring_soon', label: t('auth_files.expiry_filter_expiring_soon') },
+      { value: 'has_value', label: t('auth_files.expiry_filter_has_value') },
+      { value: 'no_value', label: t('auth_files.expiry_filter_no_value') },
     ],
     [t]
   );
@@ -428,17 +605,19 @@ export function AuthFilesPage() {
   const activeFilterIcon = getAuthFileIcon(String(filter), resolvedTheme);
 
   const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const now = Date.now();
     return filesMatchingProblemFilter.filter((item) => {
       const matchType = filter === 'all' || item.type === filter;
-      const term = search.trim().toLowerCase();
-      const matchSearch =
-        !term ||
-        item.name.toLowerCase().includes(term) ||
-        (item.type || '').toString().toLowerCase().includes(term) ||
-        (item.provider || '').toString().toLowerCase().includes(term);
-      return matchType && matchSearch;
+      return (
+        matchType &&
+        matchesStatusFilter(item, statusFilter) &&
+        matchesQuotaFilter(item, quotaFilter) &&
+        matchesExpiryFilter(item, expiryFilter, now) &&
+        matchesSearch(item, term)
+      );
     });
-  }, [filesMatchingProblemFilter, filter, search]);
+  }, [expiryFilter, filesMatchingProblemFilter, filter, quotaFilter, search, statusFilter]);
 
   const downloadableFilteredFiles = useMemo(
     () => filtered.filter((file) => !isRuntimeOnlyAuthFile(file)),
@@ -450,7 +629,13 @@ export function AuthFilesPage() {
     [files]
   );
 
-  const hasActiveFilter = filter !== 'all' || problemOnly || Boolean(search.trim());
+  const hasActiveFilter =
+    filter !== 'all' ||
+    problemOnly ||
+    statusFilter !== 'all' ||
+    quotaFilter !== 'all' ||
+    expiryFilter !== 'all' ||
+    Boolean(search.trim());
 
   const batchDownloadArchiveName = useMemo(() => {
     const segments = ['auth-files'];
@@ -475,31 +660,34 @@ export function AuthFilesPage() {
     (targetFiles: AuthFileItem[], archiveName: string) => {
       const count = targetFiles.length;
 
-      // 大数量导出在浏览器中很容易触发资源限制（尤其是需要逐个下载再打包 ZIP 的实现）。
-      // 对“全部导出”这种场景给出明确提醒，避免用户只看到 net::ERR_INSUFFICIENT_RESOURCES 却不知道原因。
+      // Large exports can easily hit browser resource limits, especially when each file
+      // must be downloaded first and then packed into a ZIP archive in memory.
+      // Surface an explicit warning for the full-export path so the user sees the cause.
       const CONFIRM_THRESHOLD = 2000;
       if (count >= CONFIRM_THRESHOLD) {
         showConfirmation({
-          title: t('auth_files.batch_download_large_title', { defaultValue: '文件数量过多' }),
+          title: t('auth_files.batch_download_large_title', { defaultValue: 'Too many files' }),
           message: (
             <div style={{ display: 'grid', gap: 8 }}>
               <div>
                 {t('auth_files.batch_download_large_message', {
                   count,
                   defaultValue:
-                    '当前将尝试打包下载 {{count}} 个认证文件。文件数量过多时，浏览器可能触发资源限制导致下载失败。',
+                    'This export will try to download and zip {{count}} auth files. Very large exports may hit browser resource limits and fail.',
                 })}
               </div>
               <div style={{ opacity: 0.85 }}>
                 {t('auth_files.batch_download_large_hint', {
                   defaultValue:
-                    '建议优先按类型标签筛选后导出；如需全量导出，请使用本仓库的本地脚本导出到目录再处理。',
+                    'Filter by provider before exporting when possible. For full exports, prefer a local script that writes files to a directory first.',
                 })}
               </div>
             </div>
           ),
           variant: 'secondary',
-          confirmText: t('auth_files.batch_download_large_confirm', { defaultValue: '仍然继续下载' }),
+          confirmText: t('auth_files.batch_download_large_confirm', {
+            defaultValue: 'Continue download',
+          }),
           cancelText: t('common.cancel'),
           onConfirm: async () => {
             await handleBatchDownload(targetFiles, { archiveName });
@@ -528,7 +716,27 @@ export function AuthFilesPage() {
       copy.sort((a, b) => {
         const pa = parsePriorityValue(a.priority ?? a['priority']) ?? 0;
         const pb = parsePriorityValue(b.priority ?? b['priority']) ?? 0;
-        return pb - pa; // 高优先级排前面
+        return pb - pa;
+      });
+    } else if (sortMode === 'quota') {
+      copy.sort((a, b) => {
+        const quotaCompare = QUOTA_LEVEL_RANK[getQuotaLevel(b)] - QUOTA_LEVEL_RANK[getQuotaLevel(a)];
+        if (quotaCompare !== 0) return quotaCompare;
+        const cooldownCompare = compareOptionalNumber(getCooldownTimestamp(a), getCooldownTimestamp(b));
+        if (cooldownCompare !== 0) return cooldownCompare;
+        return a.name.localeCompare(b.name);
+      });
+    } else if (sortMode === 'expires_at') {
+      copy.sort((a, b) => {
+        const expiresCompare = compareOptionalNumber(getExpiryTimestamp(a), getExpiryTimestamp(b));
+        if (expiresCompare !== 0) return expiresCompare;
+        return a.name.localeCompare(b.name);
+      });
+    } else if (sortMode === 'cooldown') {
+      copy.sort((a, b) => {
+        const cooldownCompare = compareOptionalNumber(getCooldownTimestamp(a), getCooldownTimestamp(b));
+        if (cooldownCompare !== 0) return cooldownCompare;
+        return a.name.localeCompare(b.name);
       });
     }
     return copy;
@@ -956,7 +1164,7 @@ export function AuthFilesPage() {
               loading={batchDownloading}
             >
               {t('auth_files.batch_download_all_button', {
-                defaultValue: '下载全部',
+                defaultValue: 'Download all',
               })}
             </Button>
             {hasActiveFilter ? (
@@ -974,7 +1182,7 @@ export function AuthFilesPage() {
                 loading={batchDownloading}
               >
                 {t('auth_files.batch_download_button', {
-                  defaultValue: '下载当前筛选',
+                  defaultValue: 'Download filtered',
                 })}
               </Button>
             ) : null}
@@ -1058,6 +1266,51 @@ export function AuthFilesPage() {
                     options={sortOptions}
                     onChange={handleSortModeChange}
                     ariaLabel={t('auth_files.sort_label')}
+                    fullWidth
+                  />
+                </div>
+                <div className={styles.filterItem}>
+                  <label>{t('auth_files.status_filter_label')}</label>
+                  <Select
+                    className={styles.sortSelect}
+                    value={statusFilter}
+                    options={statusFilterOptions}
+                    onChange={(value) => {
+                      if (!isAuthFilesStatusFilter(value)) return;
+                      setStatusFilter(value);
+                      setPage(1);
+                    }}
+                    ariaLabel={t('auth_files.status_filter_label')}
+                    fullWidth
+                  />
+                </div>
+                <div className={styles.filterItem}>
+                  <label>{t('auth_files.quota_filter_label')}</label>
+                  <Select
+                    className={styles.sortSelect}
+                    value={quotaFilter}
+                    options={quotaFilterOptions}
+                    onChange={(value) => {
+                      if (!isAuthFilesQuotaFilter(value)) return;
+                      setQuotaFilter(value);
+                      setPage(1);
+                    }}
+                    ariaLabel={t('auth_files.quota_filter_label')}
+                    fullWidth
+                  />
+                </div>
+                <div className={styles.filterItem}>
+                  <label>{t('auth_files.expiry_filter_label')}</label>
+                  <Select
+                    className={styles.sortSelect}
+                    value={expiryFilter}
+                    options={expiryFilterOptions}
+                    onChange={(value) => {
+                      if (!isAuthFilesExpiryFilter(value)) return;
+                      setExpiryFilter(value);
+                      setPage(1);
+                    }}
+                    ariaLabel={t('auth_files.expiry_filter_label')}
                     fullWidth
                   />
                 </div>

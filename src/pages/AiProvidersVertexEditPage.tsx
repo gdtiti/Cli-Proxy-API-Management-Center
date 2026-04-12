@@ -13,10 +13,15 @@ import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { ProviderKeyConfig } from '@/types';
-import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
+import {
+  excludedModelsToText,
+  parseBatchApiKeys,
+  parseExcludedModels,
+} from '@/components/providers/utils';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import type { VertexFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
+import styles from './AiProvidersPage.module.scss';
 
 type LocationState = { fromAiProviders?: boolean } | null;
 
@@ -30,6 +35,7 @@ const buildEmptyForm = (): VertexFormState => ({
   excludedModels: [],
   modelEntries: [{ name: '', alias: '' }],
   excludedText: '',
+  batchApiKeysText: '',
 });
 
 const parseIndexParam = (value: string | undefined) => {
@@ -60,6 +66,7 @@ const buildVertexSignature = (form: VertexFormState) =>
     headers: normalizeHeaderEntries(form.headers),
     models: normalizeModelEntries(form.modelEntries),
     excludedModels: parseExcludedModels(form.excludedText ?? ''),
+    batchApiKeysText: String(form.batchApiKeysText ?? ''),
   });
 
 export function AiProvidersVertexEditPage() {
@@ -223,10 +230,20 @@ export function AiProvidersVertexEditPage() {
         excludedModels: parseExcludedModels(form.excludedText),
       };
 
+      const batchKeys =
+        editIndex === null ? parseBatchApiKeys(form.batchApiKeysText ?? '') : [];
+      const allKeys = Array.from(
+        new Set([payload.apiKey, ...batchKeys].map((item) => item.trim()).filter(Boolean))
+      );
+      const payloads =
+        editIndex === null && allKeys.length > 1
+          ? allKeys.map((apiKey) => ({ ...payload, apiKey }))
+          : [payload];
+
       const nextList =
         editIndex !== null
           ? configs.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...configs, payload];
+          : [...configs, ...payloads];
 
       await providersApi.saveVertexConfigs(nextList);
       updateConfigValue('vertex-api-key', nextList);
@@ -307,6 +324,33 @@ export function AiProvidersVertexEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
               disabled={disableControls || saving}
             />
+            {editIndex === null ? (
+              <div className={styles.batchKeySection}>
+                <label className={styles.batchKeyLabel}>
+                  {t('ai_providers.batch_api_keys_label')}
+                </label>
+                <textarea
+                  className={`input ${styles.batchKeyTextarea}`}
+                  rows={5}
+                  placeholder={t('ai_providers.batch_api_keys_placeholder')}
+                  value={form.batchApiKeysText ?? ''}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, batchApiKeysText: e.target.value }))
+                  }
+                  disabled={disableControls || saving}
+                />
+                <div className={styles.batchKeyMeta}>
+                  <span className={styles.batchKeyHint}>
+                    {t('ai_providers.batch_api_keys_hint')}
+                  </span>
+                  <span className={styles.batchKeyCount}>
+                    {t('ai_providers.batch_api_keys_count', {
+                      count: parseBatchApiKeys(form.batchApiKeysText ?? '').length,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : null}
             <Input
               label={t('ai_providers.prefix_label')}
               placeholder={t('ai_providers.prefix_placeholder')}

@@ -16,6 +16,7 @@ export interface OpenAIFormState {
   testModel?: string;
   modelEntries: ModelEntry[];
   apiKeyEntries: ApiKeyEntry[];
+  batchApiKeysText?: string;
 }
 
 export interface AmpcodeUpstreamApiKeyEntry {
@@ -35,18 +36,21 @@ export type GeminiFormState = Omit<GeminiKeyConfig, 'headers' | 'models'> & {
   headers: HeaderEntry[];
   modelEntries: ModelEntry[];
   excludedText: string;
+  batchApiKeysText?: string;
 };
 
 export type ProviderFormState = Omit<ProviderKeyConfig, 'headers'> & {
   headers: HeaderEntry[];
   modelEntries: ModelEntry[];
   excludedText: string;
+  batchApiKeysText?: string;
 };
 
 export type VertexFormState = Omit<ProviderKeyConfig, 'headers'> & {
   headers: HeaderEntry[];
   modelEntries: ModelEntry[];
   excludedText: string;
+  batchApiKeysText?: string;
 };
 
 export interface ProviderSectionProps<TConfig> {

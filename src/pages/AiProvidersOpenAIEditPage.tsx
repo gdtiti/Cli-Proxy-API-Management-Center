@@ -13,7 +13,11 @@ import { useNotificationStore } from '@/stores';
 import { apiCallApi, getApiCallErrorMessage } from '@/services/api';
 import type { ApiKeyEntry } from '@/types';
 import { buildHeaderObject } from '@/utils/headers';
-import { buildApiKeyEntry, buildOpenAIChatCompletionsEndpoint } from '@/components/providers/utils';
+import {
+  buildApiKeyEntry,
+  buildOpenAIChatCompletionsEndpoint,
+  parseBatchApiKeys,
+} from '@/components/providers/utils';
 import type { OpenAIEditOutletContext } from './AiProvidersOpenAIEditLayout';
 import type { KeyTestStatus } from '@/stores/useOpenAIEditDraftStore';
 import styles from './AiProvidersPage.module.scss';
@@ -430,7 +434,7 @@ export function AiProvidersOpenAIEditPage() {
           </Button>
         </div>
         <div className={styles.keyTableShell}>
-          {/* 表头 */}
+          {/* Header */}
           <div className={styles.keyTableHeader}>
             <div className={styles.keyTableColIndex}>#</div>
             <div className={styles.keyTableColStatus}>{t('common.status')}</div>
@@ -439,17 +443,17 @@ export function AiProvidersOpenAIEditPage() {
             <div className={styles.keyTableColAction}>{t('common.action')}</div>
           </div>
 
-          {/* 数据行 */}
+          {/* Rows */}
           {list.map((entry, index) => {
             const keyStatus = keyTestStatuses[index]?.status ?? 'idle';
             const canTestKey = Boolean(entry.apiKey?.trim()) && hasConfiguredModels;
 
             return (
               <div key={index} className={styles.keyTableRow}>
-                {/* 序号 */}
+                {/* Index */}
                 <div className={styles.keyTableColIndex}>{index + 1}</div>
 
-                {/* 状态指示灯 */}
+                {/* Status */}
                 <div
                   className={styles.keyTableColStatus}
                   title={keyTestStatuses[index]?.message || ''}
@@ -457,7 +461,7 @@ export function AiProvidersOpenAIEditPage() {
                   <StatusIcon status={keyStatus} />
                 </div>
 
-                {/* Key 输入框 */}
+                {/* API key input */}
                 <div className={styles.keyTableColKey}>
                   <input
                     type="text"
@@ -469,7 +473,7 @@ export function AiProvidersOpenAIEditPage() {
                   />
                 </div>
 
-                {/* Proxy 输入框 */}
+                {/* Proxy input */}
                 <div className={styles.keyTableColProxy}>
                   <input
                     type="text"
@@ -481,7 +485,7 @@ export function AiProvidersOpenAIEditPage() {
                   />
                 </div>
 
-                {/* 操作按钮 */}
+                {/* Actions */}
                 <div className={styles.keyTableColAction}>
                   <Button
                     variant="secondary"
@@ -596,9 +600,9 @@ export function AiProvidersOpenAIEditPage() {
               disabled={saving || disableControls || isTestingKeys}
             />
 
-            {/* 模型配置区域 - 统一布局 */}
+            {/* Model configuration */}
             <div className={styles.modelConfigSection}>
-              {/* 标题行 */}
+              {/* Title row */}
               <div className={styles.modelConfigHeader}>
                 <label className={styles.modelConfigTitle}>
                   {hasIndexParam
@@ -630,10 +634,10 @@ export function AiProvidersOpenAIEditPage() {
                 </div>
               </div>
 
-              {/* 提示文本 */}
+              {/* Hint */}
               <div className={styles.sectionHint}>{t('ai_providers.openai_models_hint')}</div>
 
-              {/* 模型列表 */}
+              {/* Model list */}
               <ModelInputList
                 entries={form.modelEntries}
                 onChange={(entries) => setForm((prev) => ({ ...prev, modelEntries: entries }))}
@@ -649,7 +653,7 @@ export function AiProvidersOpenAIEditPage() {
                 removeButtonAriaLabel={t('common.delete')}
               />
 
-              {/* 测试区域 */}
+              {/* Test panel */}
               <div className={styles.modelTestPanel}>
                 <div className={styles.modelTestMeta}>
                   <label className={styles.modelTestLabel}>
@@ -722,6 +726,31 @@ export function AiProvidersOpenAIEditPage() {
                   {t('ai_providers.openai_add_modal_keys_label')}
                 </label>
                 <span className={styles.keyEntriesHint}>{t('ai_providers.openai_keys_hint')}</span>
+              </div>
+              <div className={styles.batchKeySection}>
+                <label className={styles.batchKeyLabel}>
+                  {t('ai_providers.batch_api_keys_label')}
+                </label>
+                <textarea
+                  className={`input ${styles.batchKeyTextarea}`}
+                  rows={5}
+                  placeholder={t('ai_providers.batch_api_keys_placeholder')}
+                  value={form.batchApiKeysText ?? ''}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, batchApiKeysText: e.target.value }))
+                  }
+                  disabled={saving || disableControls || isTestingKeys}
+                />
+                <div className={styles.batchKeyMeta}>
+                  <span className={styles.batchKeyHint}>
+                    {t('ai_providers.batch_api_keys_hint')}
+                  </span>
+                  <span className={styles.batchKeyCount}>
+                    {t('ai_providers.batch_api_keys_count', {
+                      count: parseBatchApiKeys(form.batchApiKeysText ?? '').length,
+                    })}
+                  </span>
+                </div>
               </div>
               {renderKeyEntries(form.apiKeyEntries)}
             </div>

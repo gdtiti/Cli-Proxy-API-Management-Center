@@ -16,7 +16,11 @@ import type { GeminiKeyConfig } from '@/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import type { ModelInfo } from '@/utils/models';
 import { entriesToModels, modelsToEntries } from '@/components/ui/modelInputListUtils';
-import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
+import {
+  excludedModelsToText,
+  parseBatchApiKeys,
+  parseExcludedModels,
+} from '@/components/providers/utils';
 import type { GeminiFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 import styles from './AiProvidersPage.module.scss';
@@ -33,6 +37,7 @@ const buildEmptyForm = (): GeminiFormState => ({
   modelEntries: [{ name: '', alias: '' }],
   excludedModels: [],
   excludedText: '',
+  batchApiKeysText: '',
 });
 
 const parseIndexParam = (value: string | undefined) => {
@@ -72,6 +77,7 @@ const buildGeminiSignature = (form: GeminiFormState) =>
     headers: normalizeHeaderEntries(form.headers),
     models: normalizeModelEntries(form.modelEntries),
     excludedModels: parseExcludedModels(form.excludedText ?? ''),
+    batchApiKeysText: String(form.batchApiKeysText ?? ''),
   });
 
 export function AiProvidersGeminiEditPage() {
@@ -378,10 +384,20 @@ export function AiProvidersGeminiEditPage() {
         excludedModels: parseExcludedModels(form.excludedText),
       };
 
+      const batchKeys =
+        editIndex === null ? parseBatchApiKeys(form.batchApiKeysText ?? '') : [];
+      const allKeys = Array.from(
+        new Set([payload.apiKey, ...batchKeys].map((item) => item.trim()).filter(Boolean))
+      );
+      const payloads =
+        editIndex === null && allKeys.length > 1
+          ? allKeys.map((apiKey) => ({ ...payload, apiKey }))
+          : [payload];
+
       const nextList =
         editIndex !== null
           ? configs.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...configs, payload];
+          : [...configs, ...payloads];
 
       await providersApi.saveGeminiKeys(nextList);
       updateConfigValue('gemini-api-key', nextList);
@@ -466,6 +482,33 @@ export function AiProvidersGeminiEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
               disabled={disableControls || saving}
             />
+            {editIndex === null ? (
+              <div className={styles.batchKeySection}>
+                <label className={styles.batchKeyLabel}>
+                  {t('ai_providers.batch_api_keys_label')}
+                </label>
+                <textarea
+                  className={`input ${styles.batchKeyTextarea}`}
+                  rows={5}
+                  placeholder={t('ai_providers.batch_api_keys_placeholder')}
+                  value={form.batchApiKeysText ?? ''}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, batchApiKeysText: e.target.value }))
+                  }
+                  disabled={disableControls || saving}
+                />
+                <div className={styles.batchKeyMeta}>
+                  <span className={styles.batchKeyHint}>
+                    {t('ai_providers.batch_api_keys_hint')}
+                  </span>
+                  <span className={styles.batchKeyCount}>
+                    {t('ai_providers.batch_api_keys_count', {
+                      count: parseBatchApiKeys(form.batchApiKeysText ?? '').length,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : null}
             <Input
               label={t('ai_providers.priority_label')}
               hint={t('ai_providers.priority_hint')}

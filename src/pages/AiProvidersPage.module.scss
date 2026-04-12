@@ -108,7 +108,7 @@
   }
 }
 
-// 成功失败次数统计样式
+// Success and failure counter styles
 .cardStats {
   display: flex;
   flex-wrap: wrap;
@@ -144,7 +144,7 @@
   border-color: var(--failure-badge-border);
 }
 
-// 字段行样式：标签 + 值
+// Field row styles: label + value
 .fieldRow {
   display: flex;
   flex-wrap: wrap;
@@ -169,7 +169,7 @@
   font-family: 'Monaco', 'Menlo', 'Consolas', 'Ubuntu Mono', monospace;
 }
 
-// 自定义请求头徽章
+// Custom header badges
 .headerBadgeList {
   display: flex;
   flex-wrap: wrap;
@@ -194,7 +194,7 @@
   }
 }
 
-// 模型标签容器
+// Model badge container
 .modelTagList {
   display: flex;
   flex-wrap: wrap;
@@ -214,7 +214,7 @@
   flex-shrink: 0;
 }
 
-// 单个模型标签
+// Single model badge
 .modelTag {
   display: inline-flex;
   align-items: center;
@@ -247,7 +247,7 @@
   }
 }
 
-// 排除模型标签（警告色）
+// Excluded model badge (warning color)
 .excludedModelTag {
   background: var(--warning-bg, #fef3c7);
   border-color: var(--warning-border, #fbbf24);
@@ -258,7 +258,7 @@
   }
 }
 
-// 排除模型区块
+// Excluded model section
 .excludedModelsSection {
   margin-top: 8px;
 }
@@ -270,7 +270,7 @@
   margin-bottom: 4px;
 }
 
-// API密钥条目列表（二级卡片）
+// API key entry list (secondary card)
 .apiKeyEntriesSection {
   margin-top: 10px;
 }
@@ -361,7 +361,7 @@
   color: var(--failure-badge-text);
 }
 
-// OpenAI 模型发现（二级界面）
+// OpenAI model discovery (secondary screen)
 .modelDiscoveryList {
   display: flex;
   flex-direction: column;
@@ -433,7 +433,7 @@
   }
 }
 
-// 状态监测栏
+// Status monitoring bar
 .statusBar {
   display: flex;
   align-items: center;
@@ -493,7 +493,7 @@
   pointer-events: none;
   color: var(--text-primary);
 
-  // 小箭头
+// Small arrow
   &::after {
     content: '';
     position: absolute;
@@ -515,7 +515,7 @@
   }
 }
 
-// 防止左右溢出
+// Prevent horizontal overflow
 .statusTooltipLeft {
   left: 0;
   transform: translateX(0);
@@ -840,6 +840,46 @@
   gap: $spacing-sm;
 }
 
+.batchKeySection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: $radius-md;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+}
+
+.batchKeyLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.batchKeyTextarea {
+  min-height: 112px;
+  resize: vertical;
+}
+
+.batchKeyMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.batchKeyHint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.batchKeyCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
 .keyEntriesToolbar {
   display: flex;
   align-items: center;
@@ -859,7 +899,7 @@
   border-radius: $radius-md;
 }
 
-// 表头
+// Table header
 .keyTableHeader {
   display: grid;
   grid-template-columns: 46px 56px minmax(220px, 1.4fr) minmax(200px, 1.1fr) 180px;
@@ -878,7 +918,7 @@
   text-align: center;
 }
 
-// 数据行
+// Data row
 .keyTableRow {
   display: grid;
   grid-template-columns: 46px 56px minmax(220px, 1.4fr) minmax(200px, 1.1fr) 180px;
@@ -899,7 +939,7 @@
   }
 }
 
-// 列定义
+// Column definitions
 .keyTableColIndex {
   display: flex;
   align-items: center;
@@ -987,7 +1027,7 @@
   }
 }
 
-// 暗色主题适配
+// Dark theme adjustments
 :global([data-theme='dark']) {
   .headerBadge {
     background: rgba($primary-color, 0.14);

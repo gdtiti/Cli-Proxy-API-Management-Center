@@ -14,7 +14,11 @@ import type { ProviderKeyConfig } from '@/types';
 import type { ModelInfo } from '@/utils/models';
 import type { ModelEntry, ProviderFormState } from '@/components/providers/types';
 import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
-import { excludedModelsToText, parseExcludedModels } from '@/components/providers/utils';
+import {
+  excludedModelsToText,
+  parseBatchApiKeys,
+  parseExcludedModels,
+} from '@/components/providers/utils';
 import { modelsToEntries } from '@/components/ui/modelInputListUtils';
 
 type LocationState = { fromAiProviders?: boolean } | null;
@@ -54,6 +58,7 @@ const buildEmptyForm = (): ProviderFormState => ({
   excludedModels: [],
   modelEntries: [{ name: '', alias: '' }],
   excludedText: '',
+  batchApiKeysText: '',
 });
 
 const parseIndexParam = (value: string | undefined) => {
@@ -111,6 +116,7 @@ const buildClaudeSignature = (form: ProviderFormState) =>
     models: normalizeClaudeModelEntries(form.modelEntries),
     excludedModels: parseExcludedModels(form.excludedText ?? ''),
     cloak: normalizeCloakConfig(form.cloak),
+    batchApiKeysText: String(form.batchApiKeysText ?? ''),
   });
 
 export function AiProvidersClaudeEditLayout() {
@@ -384,10 +390,20 @@ export function AiProvidersClaudeEditLayout() {
         cloak: form.cloak,
       };
 
+      const batchKeys =
+        editIndex === null ? parseBatchApiKeys(form.batchApiKeysText ?? '') : [];
+      const allKeys = Array.from(
+        new Set([payload.apiKey, ...batchKeys].map((item) => item.trim()).filter(Boolean))
+      );
+      const payloads =
+        editIndex === null && allKeys.length > 1
+          ? allKeys.map((apiKey) => ({ ...payload, apiKey }))
+          : [payload];
+
       const nextList =
         editIndex !== null
           ? configs.map((item, idx) => (idx === editIndex ? payload : item))
-          : [...configs, payload];
+          : [...configs, ...payloads];
 
       await providersApi.saveClaudeConfigs(nextList);
       setConfigs(nextList);
