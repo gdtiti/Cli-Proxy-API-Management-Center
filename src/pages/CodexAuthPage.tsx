@@ -105,6 +105,14 @@ export function CodexAuthPage() {
   const [detailSnapshot, setDetailSnapshot] = useState<CodexAuthSnapshot | null>(null);
   const [detailEvents, setDetailEvents] = useState<CodexAuthEvent[]>([]);
   const [eventsAuthIndex, setEventsAuthIndex] = useState('');
+  const [eventsKeyword, setEventsKeyword] = useState('');
+  const [eventsEventType, setEventsEventType] = useState('');
+  const [eventsQuotaExceeded, setEventsQuotaExceeded] = useState<'all' | 'yes' | 'no'>('all');
+  const [eventsPage, setEventsPage] = useState(1);
+  const [eventsPageSize, setEventsPageSize] = useState(10);
+  const [eventsTotal, setEventsTotal] = useState(0);
+  const [eventsSortBy, setEventsSortBy] = useState('created_at');
+  const [eventsSortOrder, setEventsSortOrder] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -127,10 +135,34 @@ export function CodexAuthPage() {
     setUsage(data);
   }, []);
 
-  const loadEvents = useCallback(async (authIndex?: string) => {
-    const data = await codexAuthApi.getEvents({ authIndex, limit: 100 });
-    setEvents(data);
-  }, []);
+  const loadEvents = useCallback(async () => {
+    const data = await codexAuthApi.getEvents({
+      authIndex: eventsAuthIndex || undefined,
+      keyword: eventsKeyword.trim() || undefined,
+      eventType: eventsEventType || undefined,
+      quotaExceeded:
+        eventsQuotaExceeded === 'all' ? undefined : eventsQuotaExceeded === 'yes',
+      page: eventsPage,
+      pageSize: eventsPageSize,
+      sortBy: eventsSortBy,
+      sortOrder: eventsSortOrder,
+    });
+    setEvents(data.items);
+    setEventsTotal(data.total);
+    setEventsPage(data.page);
+    setEventsPageSize(data.pageSize);
+    setEventsSortBy(data.sortBy);
+    setEventsSortOrder(data.sortOrder);
+  }, [
+    eventsAuthIndex,
+    eventsEventType,
+    eventsKeyword,
+    eventsPage,
+    eventsPageSize,
+    eventsQuotaExceeded,
+    eventsSortBy,
+    eventsSortOrder,
+  ]);
 
   const loadDetail = useCallback(
     async (authIndex: string) => {
@@ -168,7 +200,7 @@ export function CodexAuthPage() {
           loadConfig(),
           loadAccounts(),
           loadUsage(),
-          loadEvents(eventsAuthIndex || undefined),
+          loadEvents(),
         ]);
         if (selectedAuthIndex) {
           await loadDetail(selectedAuthIndex);
@@ -186,12 +218,18 @@ export function CodexAuthPage() {
         }
       }
     },
-    [eventsAuthIndex, loadAccounts, loadConfig, loadDetail, loadEvents, loadUsage, selectedAuthIndex, showNotification, t]
+    [loadAccounts, loadConfig, loadDetail, loadEvents, loadUsage, selectedAuthIndex, showNotification, t]
   );
 
   useEffect(() => {
     void refreshAll({ silent: true });
   }, [refreshAll]);
+
+  useEffect(() => {
+    if (!loading) {
+      void loadEvents();
+    }
+  }, [eventsAuthIndex, eventsEventType, eventsKeyword, eventsPage, eventsPageSize, eventsQuotaExceeded, eventsSortBy, eventsSortOrder, loadEvents, loading]);
 
   const stats = useMemo(() => {
     const totalRequests = usage.reduce((sum, item) => sum + (item.request_count ?? 0), 0);
@@ -235,6 +273,23 @@ export function CodexAuthPage() {
     }
   };
 
+  const configNotes = useMemo(
+    () =>
+      Object.entries(configForm.notes || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    [configForm.notes]
+  );
+
+  const eventTypeOptions = useMemo(() => {
+    const values = new Set<string>();
+    [...events, ...detailEvents].forEach((item) => {
+      if (item.event_type) {
+        values.add(item.event_type);
+      }
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [detailEvents, events]);
+
+  const eventsTotalPages = Math.max(1, Math.ceil(eventsTotal / Math.max(eventsPageSize, 1)));
   const detailJson = useMemo(
     () =>
       JSON.stringify(
@@ -247,12 +302,8 @@ export function CodexAuthPage() {
       ),
     [detailEvents, detailSnapshot]
   );
-
-  const configNotes = useMemo(
-    () =>
-      Object.entries(configForm.notes || {}).filter(([, value]) => value !== undefined && value !== null && value !== ''),
-    [configForm.notes]
-  );
+  const detailUsage = detailSnapshot?.usage;
+  const detailRecentEvents = useMemo(() => detailEvents.slice(0, 10), [detailEvents]);
 
   return (
     <div className={styles.page}>
@@ -478,13 +529,21 @@ export function CodexAuthPage() {
           title={t('codex_management.events_title')}
           extra={
             <div className={styles.inlineControls}>
+              <Input
+                value={eventsKeyword}
+                onChange={(event) => {
+                  setEventsKeyword(event.target.value);
+                  setEventsPage(1);
+                }}
+                placeholder={t('codex_management.events_keyword_placeholder')}
+              />
               <select
                 className={styles.select}
                 value={eventsAuthIndex}
                 onChange={(event) => {
                   const nextValue = event.target.value;
                   setEventsAuthIndex(nextValue);
-                  void loadEvents(nextValue || undefined);
+                  setEventsPage(1);
                 }}
               >
                 <option value="">{t('codex_management.all_accounts')}</option>
@@ -496,7 +555,72 @@ export function CodexAuthPage() {
                     </option>
                   ))}
               </select>
-              <Button size="sm" variant="secondary" onClick={() => void loadEvents(eventsAuthIndex || undefined)}>
+              <select
+                className={styles.select}
+                value={eventsEventType}
+                onChange={(event) => {
+                  setEventsEventType(event.target.value);
+                  setEventsPage(1);
+                }}
+              >
+                <option value="">{t('codex_management.events_all_types')}</option>
+                {eventTypeOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={styles.select}
+                value={eventsQuotaExceeded}
+                onChange={(event) => {
+                  setEventsQuotaExceeded(event.target.value as 'all' | 'yes' | 'no');
+                  setEventsPage(1);
+                }}
+              >
+                <option value="all">{t('codex_management.events_quota_all')}</option>
+                <option value="yes">{t('codex_management.events_quota_yes')}</option>
+                <option value="no">{t('codex_management.events_quota_no')}</option>
+              </select>
+              <select
+                className={styles.select}
+                value={eventsSortBy}
+                onChange={(event) => {
+                  setEventsSortBy(event.target.value);
+                  setEventsPage(1);
+                }}
+              >
+                <option value="created_at">{t('codex_management.events_sort_created_at')}</option>
+                <option value="auth_index">{t('codex_management.columns.auth_index')}</option>
+                <option value="event_type">{t('codex_management.columns.event_type')}</option>
+                <option value="recover_at">{t('codex_management.columns.recover')}</option>
+                <option value="request_count">{t('codex_management.columns.requests')}</option>
+                <option value="total_tokens">{t('codex_management.columns.total_tokens')}</option>
+              </select>
+              <select
+                className={styles.select}
+                value={eventsSortOrder}
+                onChange={(event) => {
+                  setEventsSortOrder(event.target.value as 'asc' | 'desc');
+                  setEventsPage(1);
+                }}
+              >
+                <option value="desc">{t('codex_management.events_sort_desc')}</option>
+                <option value="asc">{t('codex_management.events_sort_asc')}</option>
+              </select>
+              <select
+                className={styles.select}
+                value={eventsPageSize}
+                onChange={(event) => {
+                  setEventsPageSize(Number(event.target.value) || 10);
+                  setEventsPage(1);
+                }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              <Button size="sm" variant="secondary" onClick={() => void loadEvents()}>
                 {t('common.refresh')}
               </Button>
             </div>
@@ -537,6 +661,31 @@ export function CodexAuthPage() {
               </table>
             </div>
           )}
+          <div className={styles.pagination}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setEventsPage((current) => Math.max(1, current - 1))}
+              disabled={eventsPage <= 1}
+            >
+              {t('auth_files.pagination_prev')}
+            </Button>
+            <div className={styles.pageMeta}>
+              {t('codex_management.events_pagination', {
+                page: eventsPage,
+                totalPages: eventsTotalPages,
+                total: eventsTotal,
+              })}
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setEventsPage((current) => Math.min(eventsTotalPages, current + 1))}
+              disabled={eventsPage >= eventsTotalPages}
+            >
+              {t('auth_files.pagination_next')}
+            </Button>
+          </div>
         </Card>
       </div>
 
@@ -553,7 +702,170 @@ export function CodexAuthPage() {
         {detailLoading ? (
           <div className={styles.placeholder}>{t('common.loading')}</div>
         ) : detailSnapshot ? (
-          <pre className={styles.jsonBlock}>{detailJson}</pre>
+          <div className={styles.detailGrid}>
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_basic')}</h3>
+              <div className={styles.kvGrid}>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.auth_index')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.auth_index || '-'}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.account')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.account || '-'}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.file')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.file_name || '-'}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_account_type')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.account_type || detailSnapshot.label || '-'}</div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_status_title')}</h3>
+              <div className={styles.kvGrid}>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.status')}</div>
+                  <div className={styles.kvValue}>
+                    {t(`codex_management.status.${getStatusText(detailSnapshot)}`, {
+                      defaultValue: detailSnapshot.status_message || detailSnapshot.status || t('codex_management.status.unknown'),
+                    })}
+                  </div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_status_message')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.status_message || detailSnapshot.last_error_message || '-'}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_disabled')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.disabled ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' })}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_unavailable')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.unavailable ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' })}</div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_quota_title')}</h3>
+              <div className={styles.kvGrid}>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_quota_exceeded')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.quota_exceeded ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' })}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.quota')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.quota_reason || '-'}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_quota_model')}</div>
+                  <div className={styles.kvValue}>{detailSnapshot.quota_model || '-'}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.recover')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailSnapshot.next_recover_at)}</div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_usage_title')}</h3>
+              <div className={styles.kvGrid}>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.requests')}</div>
+                  <div className={styles.kvValue}>{formatNumber(detailUsage?.request_count)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.input_tokens')}</div>
+                  <div className={styles.kvValue}>{formatNumber(detailUsage?.input_tokens)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.output_tokens')}</div>
+                  <div className={styles.kvValue}>{formatNumber(detailUsage?.output_tokens)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.total_tokens')}</div>
+                  <div className={styles.kvValue}>{formatNumber(detailUsage?.total_tokens)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.columns.avg_total')}</div>
+                  <div className={styles.kvValue}>{formatAvg(detailUsage?.avg_total_tokens)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_last_requested_at')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailUsage?.last_requested_at)}</div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_time_title')}</h3>
+              <div className={styles.kvGrid}>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_expires_at')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailSnapshot.expires_at)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_last_refreshed_at')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailSnapshot.last_refreshed_at)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_next_refresh_after')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailSnapshot.next_refresh_after)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_next_retry_after')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailSnapshot.next_retry_after)}</div>
+                </div>
+                <div className={styles.kvItem}>
+                  <div className={styles.kvLabel}>{t('codex_management.detail_updated_at')}</div>
+                  <div className={styles.kvValue}>{formatDateTime(detailSnapshot.updated_at)}</div>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_recent_events')}</h3>
+              {detailRecentEvents.length === 0 ? (
+                <div className={styles.placeholder}>{t('codex_management.empty_events')}</div>
+              ) : (
+                <div className={styles.tableWrapper}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>{t('codex_management.columns.created_at')}</th>
+                        <th>{t('codex_management.columns.event_type')}</th>
+                        <th>{t('codex_management.columns.reason')}</th>
+                        <th>{t('codex_management.columns.requests')}</th>
+                        <th>{t('codex_management.columns.total_tokens')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailRecentEvents.map((item) => (
+                        <tr key={item.id || `${item.auth_index}-${item.created_at}-${item.event_type}`}>
+                          <td>{formatDateTime(item.created_at)}</td>
+                          <td>{item.event_type || '-'}</td>
+                          <td>{item.reason || item.status_message || item.last_error || '-'}</td>
+                          <td>{formatNumber(item.request_count)}</td>
+                          <td>{formatNumber(item.total_tokens)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <section className={styles.detailSection}>
+              <h3>{t('codex_management.detail_raw')}</h3>
+              <pre className={styles.jsonBlock}>{detailJson}</pre>
+            </section>
+          </div>
         ) : (
           <EmptyState title={t('codex_management.empty_detail')} />
         )}

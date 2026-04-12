@@ -267,6 +267,7 @@ export function AiProvidersPage() {
   const [openaiDiscoveryError, setOpenaiDiscoveryError] = useState('');
   const [openaiDiscoverySearch, setOpenaiDiscoverySearch] = useState('');
   const [openaiDiscoverySelected, setOpenaiDiscoverySelected] = useState<Set<string>>(new Set());
+  const [openaiBulkKeysText, setOpenaiBulkKeysText] = useState('');
   const [openaiTestModel, setOpenaiTestModel] = useState('');
   const [openaiTestStatus, setOpenaiTestStatus] = useState<
     'idle' | 'loading' | 'success' | 'error'
@@ -396,6 +397,7 @@ export function AiProvidersPage() {
     setOpenaiDiscoverySearch('');
     setOpenaiDiscoveryError('');
     setOpenaiDiscoveryEndpoint('');
+    setOpenaiBulkKeysText('');
     setOpenaiTestModel('');
     setOpenaiTestStatus('idle');
     setOpenaiTestMessage('');
@@ -470,6 +472,7 @@ export function AiProvidersPage() {
     } else {
       setOpenaiTestModel('');
     }
+    setOpenaiBulkKeysText('');
     setOpenaiTestStatus('idle');
     setOpenaiTestMessage('');
     setModal({ type: 'openai', index });
@@ -1078,8 +1081,70 @@ export function AiProvidersPage() {
       setOpenaiForm((prev) => ({ ...prev, apiKeyEntries: [...list, buildApiKeyEntry()] }));
     };
 
+    const importEntries = () => {
+      const lines = openaiBulkKeysText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (!lines.length) {
+        showNotification(t('notification.openai_multi_input_required'), 'error');
+        return;
+      }
+
+      const existingEntries = list.filter((entry) => entry.apiKey?.trim() || entry.proxyUrl?.trim());
+      const seen = new Set(
+        existingEntries.map((entry) => entry.apiKey?.trim()).filter(Boolean) as string[]
+      );
+
+      let skipped = 0;
+      const appended: ApiKeyEntry[] = [];
+
+      lines.forEach((apiKey) => {
+        if (seen.has(apiKey)) {
+          skipped += 1;
+          return;
+        }
+        seen.add(apiKey);
+        appended.push(buildApiKeyEntry({ apiKey }));
+      });
+
+      const next = [...existingEntries, ...appended];
+      setOpenaiForm((prev) => ({
+        ...prev,
+        apiKeyEntries: next.length ? next : [buildApiKeyEntry()],
+      }));
+      setOpenaiBulkKeysText('');
+
+      showNotification(
+        t('notification.openai_multi_summary', {
+          success: appended.length,
+          skipped,
+          failed: 0,
+        }),
+        appended.length > 0 ? 'success' : 'info'
+      );
+    };
+
     return (
       <div className="stack">
+        <div className="form-group">
+          <label>{t('ai_providers.openai_bulk_input_label')}</label>
+          <div className="hint">{t('ai_providers.openai_bulk_input_hint')}</div>
+          <textarea
+            className="input"
+            rows={5}
+            value={openaiBulkKeysText}
+            placeholder={t('ai_providers.openai_bulk_input_placeholder')}
+            onChange={(e) => setOpenaiBulkKeysText(e.target.value)}
+            disabled={saving}
+          />
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" size="sm" onClick={importEntries} disabled={saving}>
+              {t('ai_providers.openai_bulk_add_btn')}
+            </Button>
+          </div>
+        </div>
         {list.map((entry, index) => (
           <div key={index} className="item-row">
             <div className="item-meta">

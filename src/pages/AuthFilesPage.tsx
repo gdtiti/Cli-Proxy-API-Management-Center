@@ -9,9 +9,9 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconBot, IconDownload, IconInfo, IconTrash2 } from '@/components/ui/icons';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
-import { authFilesApi, usageApi } from '@/services/api';
+import { apiCallApi, authFilesApi, getApiCallErrorMessage, usageApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
-import type { AuthFileItem } from '@/types';
+import type { AuthFileItem, CodexQuotaWindow, GeminiCliQuotaBucketState } from '@/types';
 import type { KeyStats, KeyStatBucket, UsageDetail } from '@/utils/usage';
 import { collectUsageDetails, calculateStatusBarData } from '@/utils/usage';
 import { formatFileSize } from '@/utils/format';
@@ -141,6 +141,317 @@ function resolveAuthFileStats(
   return defaultStats;
 }
 
+type StateFilterValue = 'all' | 'normal' | 'disabled';
+type QuotaFilterValue = 'all' | 'unchecked' | 'low' | 'medium' | 'high' | 'full';
+type ExpiryFilterValue = 'all' | 'expired' | 'valid';
+type HasExpiryFilterValue = 'all' | 'yes' | 'no';
+type SortFieldValue = 'name' | 'modified' | 'state' | 'quota_level' | 'expires_at' | 'next_retry_after';
+type SortOrderValue = 'asc' | 'desc';
+
+interface CodexUsageWindow {
+  used_percent?: number | string;
+  usedPercent?: number | string;
+  reset_after_seconds?: number | string;
+  resetAfterSeconds?: number | string;
+  reset_at?: number | string;
+  resetAt?: number | string;
+}
+
+interface CodexRateLimitInfo {
+  allowed?: boolean;
+  limit_reached?: boolean;
+  limitReached?: boolean;
+  primary_window?: CodexUsageWindow | null;
+  primaryWindow?: CodexUsageWindow | null;
+  secondary_window?: CodexUsageWindow | null;
+  secondaryWindow?: CodexUsageWindow | null;
+}
+
+interface CodexUsagePayload {
+  plan_type?: string;
+  planType?: string;
+  rate_limit?: CodexRateLimitInfo | null;
+  rateLimit?: CodexRateLimitInfo | null;
+  code_review_rate_limit?: CodexRateLimitInfo | null;
+  codeReviewRateLimit?: CodexRateLimitInfo | null;
+}
+
+interface GeminiCliQuotaBucket {
+  modelId?: string;
+  model_id?: string;
+  tokenType?: string;
+  token_type?: string;
+  remainingFraction?: number | string;
+  remaining_fraction?: number | string;
+  remainingAmount?: number | string;
+  remaining_amount?: number | string;
+  resetTime?: string;
+  reset_time?: string;
+}
+
+interface GeminiCliQuotaPayload {
+  buckets?: GeminiCliQuotaBucket[];
+}
+
+const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+const GEMINI_CLI_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
+
+const CODEX_REQUEST_HEADERS = {
+  Authorization: 'Bearer $TOKEN$',
+  'Content-Type': 'application/json',
+  'User-Agent': 'codex_cli_rs/0.76.0 (Debian 13.0.0; x86_64) WindowsTerminal'
+};
+
+const GEMINI_CLI_REQUEST_HEADERS = {
+  Authorization: 'Bearer $TOKEN$',
+  'Content-Type': 'application/json'
+};
+
+const createStatusError = (message: string, status?: number) => {
+  const error = new Error(message) as Error & { status?: number };
+  if (status !== undefined) {
+    error.status = status;
+  }
+  return error;
+};
+
+function normalizeStringValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toString();
+  }
+  return null;
+}
+
+function normalizeNumberValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeQuotaFraction(value: unknown): number | null {
+  const normalized = normalizeNumberValue(value);
+  if (normalized !== null) return normalized;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.endsWith('%')) {
+      const parsed = Number(trimmed.slice(0, -1));
+      return Number.isFinite(parsed) ? parsed / 100 : null;
+    }
+  }
+  return null;
+}
+
+function parseCodexUsagePayload(payload: unknown): CodexUsagePayload | null {
+  if (payload === undefined || payload === null) return null;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed) as CodexUsagePayload;
+    } catch {
+      return null;
+    }
+  }
+  return typeof payload === 'object' ? (payload as CodexUsagePayload) : null;
+}
+
+function parseGeminiCliQuotaPayload(payload: unknown): GeminiCliQuotaPayload | null {
+  if (payload === undefined || payload === null) return null;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed) as GeminiCliQuotaPayload;
+    } catch {
+      return null;
+    }
+  }
+  return typeof payload === 'object' ? (payload as GeminiCliQuotaPayload) : null;
+}
+
+function decodeBase64UrlPayload(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const normalized = trimmed.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return window.atob(padded);
+  } catch {
+    return null;
+  }
+}
+
+function parseIdTokenPayload(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value !== 'string') return null;
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+  }
+  const segments = value.split('.');
+  if (segments.length < 2) return null;
+  const decoded = decodeBase64UrlPayload(segments[1]);
+  if (!decoded) return null;
+  try {
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function extractCodexChatgptAccountId(value: unknown): string | null {
+  const payload = parseIdTokenPayload(value);
+  return payload ? normalizeStringValue(payload.chatgpt_account_id ?? payload.chatgptAccountId) : null;
+}
+
+function resolveCodexChatgptAccountId(file: AuthFileItem): string | null {
+  const metadata = file && typeof file.metadata === 'object' && file.metadata !== null
+    ? (file.metadata as Record<string, unknown>)
+    : null;
+  const attributes = file && typeof file.attributes === 'object' && file.attributes !== null
+    ? (file.attributes as Record<string, unknown>)
+    : null;
+
+  const candidates = [file.id_token, metadata?.id_token, attributes?.id_token];
+  for (const candidate of candidates) {
+    const id = extractCodexChatgptAccountId(candidate);
+    if (id) return id;
+  }
+  return null;
+}
+
+function resolveCodexPlanType(file: AuthFileItem): string | null {
+  const metadata = file && typeof file.metadata === 'object' && file.metadata !== null
+    ? (file.metadata as Record<string, unknown>)
+    : null;
+  const attributes = file && typeof file.attributes === 'object' && file.attributes !== null
+    ? (file.attributes as Record<string, unknown>)
+    : null;
+  return normalizeStringValue(
+    file.plan_type ??
+      file.planType ??
+      metadata?.plan_type ??
+      metadata?.planType ??
+      attributes?.plan_type ??
+      attributes?.planType
+  )?.toLowerCase() ?? null;
+}
+
+function extractGeminiCliProjectId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const matches = Array.from(value.matchAll(/\(([^()]+)\)/g));
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1]?.[1]?.trim() || null;
+}
+
+function resolveGeminiCliProjectId(file: AuthFileItem): string | null {
+  const metadata = file && typeof file.metadata === 'object' && file.metadata !== null
+    ? (file.metadata as Record<string, unknown>)
+    : null;
+  const attributes = file && typeof file.attributes === 'object' && file.attributes !== null
+    ? (file.attributes as Record<string, unknown>)
+    : null;
+
+  const candidates = [file.account, metadata?.account, attributes?.account];
+  for (const candidate of candidates) {
+    const projectId = extractGeminiCliProjectId(candidate);
+    if (projectId) return projectId;
+  }
+  return null;
+}
+
+function formatQuotaResetLabel(window: CodexUsageWindow | null | undefined): string {
+  if (!window) return '-';
+  const resetAfter = normalizeNumberValue(window.reset_after_seconds ?? window.resetAfterSeconds);
+  if (resetAfter !== null && resetAfter >= 0) {
+    if (resetAfter < 60) return `${Math.round(resetAfter)}s`;
+    if (resetAfter < 3600) return `${Math.ceil(resetAfter / 60)}m`;
+    if (resetAfter < 86400) return `${Math.ceil(resetAfter / 3600)}h`;
+    return `${Math.ceil(resetAfter / 86400)}d`;
+  }
+  const resetAt = normalizeNumberValue(window.reset_at ?? window.resetAt);
+  if (resetAt !== null) {
+    const time = resetAt > 1e12 ? resetAt : resetAt * 1000;
+    const date = new Date(time);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString();
+    }
+  }
+  return '-';
+}
+
+function buildCodexQuotaWindows(payload: CodexUsagePayload, t: ReturnType<typeof useTranslation>['t']): CodexQuotaWindow[] {
+  const rateLimit = payload.rate_limit ?? payload.rateLimit ?? undefined;
+  const codeReviewLimit = payload.code_review_rate_limit ?? payload.codeReviewRateLimit ?? undefined;
+  const windows: CodexQuotaWindow[] = [];
+  const addWindow = (id: string, label: string, window?: CodexUsageWindow | null, limitReached?: boolean, allowed?: boolean) => {
+    if (!window) return;
+    const usedPercentRaw = normalizeNumberValue(window.used_percent ?? window.usedPercent);
+    const resetLabel = formatQuotaResetLabel(window);
+    const usedPercent = usedPercentRaw ?? ((limitReached || allowed === false) && resetLabel !== '-' ? 100 : null);
+    windows.push({ id, label, usedPercent, resetLabel });
+  };
+
+  addWindow(
+    'primary',
+    t('codex_quota.primary_window'),
+    rateLimit?.primary_window ?? rateLimit?.primaryWindow,
+    rateLimit?.limit_reached ?? rateLimit?.limitReached,
+    rateLimit?.allowed
+  );
+  addWindow(
+    'secondary',
+    t('codex_quota.secondary_window'),
+    rateLimit?.secondary_window ?? rateLimit?.secondaryWindow,
+    rateLimit?.limit_reached ?? rateLimit?.limitReached,
+    rateLimit?.allowed
+  );
+  addWindow(
+    'code-review',
+    t('codex_quota.code_review_window'),
+    codeReviewLimit?.primary_window ?? codeReviewLimit?.primaryWindow,
+    codeReviewLimit?.limit_reached ?? codeReviewLimit?.limitReached,
+    codeReviewLimit?.allowed
+  );
+  return windows;
+}
+
+function buildGeminiCliQuotaBuckets(payload: GeminiCliQuotaPayload): GeminiCliQuotaBucketState[] {
+  const buckets = Array.isArray(payload.buckets) ? payload.buckets : [];
+  return buckets
+    .map<GeminiCliQuotaBucketState | null>((bucket, index) => {
+      const modelId = normalizeStringValue(bucket.modelId ?? bucket.model_id);
+      if (!modelId) return null;
+      const tokenType = normalizeStringValue(bucket.tokenType ?? bucket.token_type);
+      const remainingFractionRaw = normalizeQuotaFraction(bucket.remainingFraction ?? bucket.remaining_fraction);
+      const remainingAmount = normalizeNumberValue(bucket.remainingAmount ?? bucket.remaining_amount);
+      const resetTime = normalizeStringValue(bucket.resetTime ?? bucket.reset_time) ?? undefined;
+      const fallbackFraction = remainingAmount !== null ? (remainingAmount <= 0 ? 0 : null) : (resetTime ? 0 : null);
+      return {
+        id: `${modelId}-${tokenType || 'default'}-${index}`,
+        label: modelId,
+        remainingFraction: remainingFractionRaw ?? fallbackFraction,
+        remainingAmount,
+        resetTime,
+        tokenType,
+        modelIds: [modelId],
+      } satisfies GeminiCliQuotaBucketState;
+    })
+    .filter((item): item is GeminiCliQuotaBucketState => item !== null);
+}
+
 export function AuthFilesPage() {
   const { t } = useTranslation();
   const { showNotification } = useNotificationStore();
@@ -152,6 +463,12 @@ export function AuthFilesPage() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
+  const [stateFilter, setStateFilter] = useState<StateFilterValue>('all');
+  const [quotaFilter, setQuotaFilter] = useState<QuotaFilterValue>('all');
+  const [expiryFilter, setExpiryFilter] = useState<ExpiryFilterValue>('all');
+  const [hasExpiryFilter, setHasExpiryFilter] = useState<HasExpiryFilterValue>('all');
+  const [sortBy, setSortBy] = useState<SortFieldValue>('modified');
+  const [sortOrder, setSortOrder] = useState<SortOrderValue>('desc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(9);
   const [uploading, setUploading] = useState(false);
@@ -163,6 +480,11 @@ export function AuthFilesPage() {
   // 详情弹窗相关
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
+  const [quotaRefreshing, setQuotaRefreshing] = useState(false);
+  const [liveQuotaError, setLiveQuotaError] = useState('');
+  const [liveCodexPlanType, setLiveCodexPlanType] = useState<string | null>(null);
+  const [liveCodexQuota, setLiveCodexQuota] = useState<CodexQuotaWindow[]>([]);
+  const [liveGeminiCliQuota, setLiveGeminiCliQuota] = useState<GeminiCliQuotaBucketState[]>([]);
 
   // 模型列表弹窗相关
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
@@ -185,24 +507,50 @@ export function AuthFilesPage() {
 
   const disableControls = connectionStatus !== 'connected';
 
-  // 格式化修改时间
-  const formatModified = (item: AuthFileItem): string => {
-    const raw = item['modtime'] ?? item.modified;
-    if (!raw) return '-';
-    const asNumber = Number(raw);
+  const formatDateTime = useCallback((value: unknown): string => {
+    if (value === undefined || value === null || value === '') return '-';
+    const asNumber = Number(value);
     const date =
       Number.isFinite(asNumber) && !Number.isNaN(asNumber)
         ? new Date(asNumber < 1e12 ? asNumber * 1000 : asNumber)
-        : new Date(String(raw));
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
-  };
+        : new Date(String(value));
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+  }, []);
+
+  const toDate = useCallback((value: unknown): Date | null => {
+    if (value === undefined || value === null || value === '') return null;
+    const asNumber = Number(value);
+    const date =
+      Number.isFinite(asNumber) && !Number.isNaN(asNumber)
+        ? new Date(asNumber < 1e12 ? asNumber * 1000 : asNumber)
+        : new Date(String(value));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }, []);
+
+  const formatModified = useCallback((item: AuthFileItem): string => {
+    const raw = item['modtime'] ?? item.modified ?? item.updated_at;
+    return formatDateTime(raw);
+  }, [formatDateTime]);
+
+  const hasExpiry = useCallback((item: AuthFileItem): boolean => Boolean(toDate(item.expires_at)), [toDate]);
+  const isExpired = useCallback((item: AuthFileItem): boolean => {
+    const expiryDate = toDate(item.expires_at);
+    return Boolean(expiryDate && expiryDate.getTime() <= Date.now());
+  }, [toDate]);
 
   // 加载文件列表
   const loadFiles = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await authFilesApi.list();
+      const data = await authFilesApi.list({
+        state: stateFilter !== 'all' ? stateFilter : undefined,
+        quota_level: quotaFilter !== 'all' ? quotaFilter : undefined,
+        expired: expiryFilter === 'all' ? undefined : expiryFilter === 'expired',
+        has_expiry: hasExpiryFilter === 'all' ? undefined : hasExpiryFilter === 'yes',
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      });
       setFiles(data?.files || []);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : t('notification.refresh_failed');
@@ -210,7 +558,7 @@ export function AuthFilesPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [expiryFilter, hasExpiryFilter, quotaFilter, sortBy, sortOrder, stateFilter, t]);
 
   // 加载 key 统计和 usage 明细（API 层已有60秒超时）
   const loadKeyStats = useCallback(async () => {
@@ -263,6 +611,10 @@ export function AuthFilesPage() {
     loadKeyStats();
     loadExcluded();
   }, [loadFiles, loadKeyStats, loadExcluded]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search, stateFilter, quotaFilter, expiryFilter, hasExpiryFilter, sortBy, sortOrder]);
 
   // 定时刷新状态数据（每240秒）
   useInterval(loadKeyStats, 240_000);
@@ -326,7 +678,13 @@ export function AuthFilesPage() {
         !term ||
         item.name.toLowerCase().includes(term) ||
         (item.type || '').toString().toLowerCase().includes(term) ||
-        (item.provider || '').toString().toLowerCase().includes(term);
+        (item.provider || '').toString().toLowerCase().includes(term) ||
+        (item.account || '').toString().toLowerCase().includes(term) ||
+        (item.email || '').toString().toLowerCase().includes(term) ||
+        (item.prefix || '').toString().toLowerCase().includes(term) ||
+        (item.status || '').toString().toLowerCase().includes(term) ||
+        (item.status_message || '').toString().toLowerCase().includes(term) ||
+        (item.quota_reason || '').toString().toLowerCase().includes(term);
       return matchType && matchSearch;
     });
   }, [files, filter, search]);
@@ -506,6 +864,10 @@ export function AuthFilesPage() {
   // 显示详情弹窗
   const showDetails = (file: AuthFileItem) => {
     setSelectedFile(file);
+    setLiveQuotaError('');
+    setLiveCodexPlanType(null);
+    setLiveCodexQuota([]);
+    setLiveGeminiCliQuota([]);
     setDetailModalOpen(true);
   };
 
@@ -560,6 +922,221 @@ export function AuthFilesPage() {
     const set = TYPE_COLORS[type] || TYPE_COLORS.unknown;
     return resolvedTheme === 'dark' && set.dark ? set.dark : set.light;
   };
+
+  const getStateLabel = useCallback((item: AuthFileItem): string => {
+    const state = String(item.state || '').toLowerCase();
+    if (state === 'disabled' || item.disabled) return t('auth_files.state_disabled');
+    if (state === 'normal' || state === 'enabled' || state === 'ready' || state === '') return t('auth_files.state_normal');
+    return item.state || t('auth_files.state_unknown');
+  }, [t]);
+
+  const getStateTone = useCallback((item: AuthFileItem): 'success' | 'error' | 'warning' => {
+    const state = String(item.state || '').toLowerCase();
+    if (state === 'disabled' || item.disabled) return 'error';
+    if (state === 'normal' || state === 'enabled' || state === 'ready' || state === '') return 'success';
+    return 'warning';
+  }, []);
+
+  const getQuotaLevelLabel = useCallback((level: unknown): string => {
+    const normalized = String(level || 'unchecked').toLowerCase();
+    return t(`auth_files.quota_level_${normalized}`, { defaultValue: normalized });
+  }, [t]);
+
+  const getQuotaTone = useCallback((level: unknown): 'success' | 'warning' | 'error' => {
+    const normalized = String(level || 'unchecked').toLowerCase();
+    if (normalized === 'full' || normalized === 'low') return 'error';
+    if (normalized === 'medium' || normalized === 'unchecked') return 'warning';
+    return 'success';
+  }, []);
+
+  const canRefreshQuota = useCallback((item: AuthFileItem | null): boolean => {
+    if (!item) return false;
+    const authIndex = normalizeAuthIndexValue(item.auth_index ?? item.authIndex);
+    if (!authIndex) return false;
+    const provider = String(item.type || item.provider || '').toLowerCase();
+    return provider === 'codex' || provider === 'gemini-cli';
+  }, []);
+
+  const refreshSelectedQuota = useCallback(async () => {
+    if (!selectedFile) return;
+    const authIndex = normalizeAuthIndexValue(selectedFile.auth_index ?? selectedFile.authIndex);
+    if (!authIndex) {
+      showNotification(t('auth_files.refresh_quota_missing_auth_index'), 'error');
+      return;
+    }
+
+    setQuotaRefreshing(true);
+    setLiveQuotaError('');
+    setLiveCodexPlanType(null);
+    setLiveCodexQuota([]);
+    setLiveGeminiCliQuota([]);
+
+    try {
+      const provider = String(selectedFile.type || selectedFile.provider || '').toLowerCase();
+      if (provider === 'codex') {
+        const accountId = resolveCodexChatgptAccountId(selectedFile);
+        if (!accountId) {
+          throw new Error(t('codex_quota.missing_account_id'));
+        }
+        const result = await apiCallApi.request({
+          authIndex,
+          method: 'GET',
+          url: CODEX_USAGE_URL,
+          header: {
+            ...CODEX_REQUEST_HEADERS,
+            'Chatgpt-Account-Id': accountId,
+          },
+        });
+        if (result.statusCode < 200 || result.statusCode >= 300) {
+          throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+        }
+        const payload = parseCodexUsagePayload(result.body ?? result.bodyText);
+        if (!payload) {
+          throw new Error(t('codex_quota.empty_windows'));
+        }
+        setLiveCodexPlanType(normalizeStringValue(payload.plan_type ?? payload.planType) ?? resolveCodexPlanType(selectedFile));
+        setLiveCodexQuota(buildCodexQuotaWindows(payload, t));
+      } else if (provider === 'gemini-cli') {
+        const projectId = resolveGeminiCliProjectId(selectedFile);
+        if (!projectId) {
+          throw new Error(t('gemini_cli_quota.missing_project_id'));
+        }
+        const result = await apiCallApi.request({
+          authIndex,
+          method: 'POST',
+          url: GEMINI_CLI_QUOTA_URL,
+          header: { ...GEMINI_CLI_REQUEST_HEADERS },
+          data: JSON.stringify({ project: projectId }),
+        });
+        if (result.statusCode < 200 || result.statusCode >= 300) {
+          throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
+        }
+        const payload = parseGeminiCliQuotaPayload(result.body ?? result.bodyText);
+        setLiveGeminiCliQuota(payload ? buildGeminiCliQuotaBuckets(payload) : []);
+      }
+      showNotification(t('notification.data_refreshed'), 'success');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('notification.refresh_failed');
+      setLiveQuotaError(message);
+      showNotification(message, 'error');
+    } finally {
+      setQuotaRefreshing(false);
+    }
+  }, [selectedFile, showNotification, t]);
+
+  const renderCodexLiveQuota = useCallback(() => {
+    if (!selectedFile || String(selectedFile.type || selectedFile.provider || '').toLowerCase() !== 'codex') {
+      return null;
+    }
+    const planLabel = liveCodexPlanType
+      ? t(`codex_quota.plan_${liveCodexPlanType.toLowerCase()}`, {
+          defaultValue: liveCodexPlanType,
+        })
+      : null;
+    const isFreePlan = liveCodexPlanType?.toLowerCase() === 'free';
+
+    return (
+      <div className={styles.quotaSection}>
+        <div className={styles.detailItem}>
+          <span className={styles.detailLabel}>{t('codex_quota.plan_label')}</span>
+          <span className={styles.detailValue}>{planLabel || '-'}</span>
+        </div>
+        {isFreePlan ? (
+          <div className={styles.quotaWarning}>{t('codex_quota.no_access')}</div>
+        ) : liveCodexQuota.length === 0 ? (
+          <div className={styles.quotaMessage}>{t('codex_quota.empty_windows')}</div>
+        ) : (
+          liveCodexQuota.map((window) => {
+            const used = window.usedPercent;
+            const clampedUsed = used === null ? null : Math.max(0, Math.min(100, used));
+            const remaining = clampedUsed === null ? null : Math.max(0, Math.min(100, 100 - clampedUsed));
+            const percentLabel = remaining === null ? '--' : `${Math.round(remaining)}%`;
+            const quotaBarClass =
+              remaining === null
+                ? styles.quotaBarFillMedium
+                : remaining >= 80
+                  ? styles.quotaBarFillHigh
+                  : remaining >= 50
+                    ? styles.quotaBarFillMedium
+                    : styles.quotaBarFillLow;
+
+            return (
+              <div key={window.id} className={styles.quotaRow}>
+                <div className={styles.quotaRowHeader}>
+                  <span className={styles.quotaModel}>{window.label}</span>
+                  <div className={styles.quotaMeta}>
+                    <span className={styles.quotaPercent}>{percentLabel}</span>
+                    <span className={styles.quotaReset}>{window.resetLabel}</span>
+                  </div>
+                </div>
+                <div className={styles.quotaBar}>
+                  <div
+                    className={`${styles.quotaBarFill} ${quotaBarClass}`}
+                    style={{ width: `${Math.round(remaining ?? 0)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  }, [liveCodexPlanType, liveCodexQuota, selectedFile, t]);
+
+  const renderGeminiCliLiveQuota = useCallback(() => {
+    if (!selectedFile || String(selectedFile.type || selectedFile.provider || '').toLowerCase() !== 'gemini-cli') {
+      return null;
+    }
+
+    return (
+      <div className={styles.quotaSection}>
+        {liveGeminiCliQuota.length === 0 ? (
+          <div className={styles.quotaMessage}>{t('gemini_cli_quota.empty_buckets')}</div>
+        ) : (
+          liveGeminiCliQuota.map((bucket) => {
+            const fraction = bucket.remainingFraction;
+            const clamped = fraction === null ? null : Math.max(0, Math.min(1, fraction));
+            const percent = clamped === null ? null : Math.round(clamped * 100);
+            const percentLabel = percent === null ? '--' : `${percent}%`;
+            const remainingAmountLabel =
+              bucket.remainingAmount === null || bucket.remainingAmount === undefined
+                ? null
+                : t('gemini_cli_quota.remaining_amount', {
+                    count: bucket.remainingAmount,
+                  });
+            const resetLabel = formatDateTime(bucket.resetTime);
+            const quotaBarClass =
+              percent === null
+                ? styles.quotaBarFillMedium
+                : percent >= 60
+                  ? styles.quotaBarFillHigh
+                  : percent >= 20
+                    ? styles.quotaBarFillMedium
+                    : styles.quotaBarFillLow;
+
+            return (
+              <div key={bucket.id} className={styles.quotaRow}>
+                <div className={styles.quotaRowHeader}>
+                  <span className={styles.quotaModel}>{bucket.label}</span>
+                  <div className={styles.quotaMeta}>
+                    <span className={styles.quotaPercent}>{percentLabel}</span>
+                    {remainingAmountLabel && <span className={styles.quotaAmount}>{remainingAmountLabel}</span>}
+                    <span className={styles.quotaReset}>{resetLabel}</span>
+                  </div>
+                </div>
+                <div className={styles.quotaBar}>
+                  <div
+                    className={`${styles.quotaBarFill} ${quotaBarClass}`}
+                    style={{ width: `${percent ?? 0}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  }, [formatDateTime, liveGeminiCliQuota, selectedFile, t]);
 
   // OAuth 排除相关方法
   const openExcludedModal = (provider?: string) => {
@@ -708,21 +1285,35 @@ export function AuthFilesPage() {
     const fileStats = resolveAuthFileStats(item, keyStats);
     const isRuntimeOnly = isRuntimeOnlyAuthFile(item);
     const typeColor = getTypeColor(item.type || 'unknown');
+    const authIndex = normalizeAuthIndexValue(item.auth_index ?? item.authIndex);
+    const provider = item.provider || item.type || '-';
+    const expired = isExpired(item);
+    const expiryText = formatDateTime(item.expires_at);
+    const retryText = formatDateTime(item.next_retry_after);
+    const recoverText = formatDateTime(item.next_recover_at);
+    const quotaReason = item.quota_reason || item.status_message || item.status || '-';
 
     return (
       <div key={item.name} className={styles.fileCard}>
         <div className={styles.cardHeader}>
-          <span
-            className={styles.typeBadge}
-            style={{
-              backgroundColor: typeColor.bg,
-              color: typeColor.text,
-              ...(typeColor.border ? { border: typeColor.border } : {})
-            }}
-          >
-            {getTypeLabel(item.type || 'unknown')}
-          </span>
-          <span className={styles.fileName}>{item.name}</span>
+          <div className={styles.cardHeaderMain}>
+            <span
+              className={styles.typeBadge}
+              style={{
+                backgroundColor: typeColor.bg,
+                color: typeColor.text,
+                ...(typeColor.border ? { border: typeColor.border } : {})
+              }}
+            >
+              {getTypeLabel(item.type || 'unknown')}
+            </span>
+            <span className={styles.fileName}>{item.name}</span>
+          </div>
+          <div className={styles.badgeRow}>
+            <span className={`status-badge ${getStateTone(item)}`}>{getStateLabel(item)}</span>
+            <span className={`status-badge ${getQuotaTone(item.quota_level)}`}>{getQuotaLevelLabel(item.quota_level)}</span>
+            {expired && <span className="status-badge error">{t('auth_files.expired_badge')}</span>}
+          </div>
         </div>
 
         <div className={styles.cardMeta}>
@@ -741,6 +1332,35 @@ export function AuthFilesPage() {
 
         {/* 状态监测栏 */}
         {renderStatusBar(item)}
+
+        <div className={styles.detailList}>
+          <div className={styles.detailItem}>
+            <span className={styles.detailLabel}>{t('auth_files.provider_label')}</span>
+            <span className={styles.detailValue}>{provider}</span>
+          </div>
+          <div className={styles.detailItem}>
+            <span className={styles.detailLabel}>{t('auth_files.auth_index_label')}</span>
+            <span className={styles.detailValue}>{authIndex || '-'}</span>
+          </div>
+          <div className={styles.detailItem}>
+            <span className={styles.detailLabel}>{t('auth_files.account_label')}</span>
+            <span className={styles.detailValue}>{item.account || item.email || '-'}</span>
+          </div>
+          <div className={styles.detailItem}>
+            <span className={styles.detailLabel}>{t('auth_files.quota_reason_label')}</span>
+            <span className={styles.detailValue}>{quotaReason}</span>
+          </div>
+          <div className={styles.detailItem}>
+            <span className={styles.detailLabel}>{t('auth_files.expires_at_label')}</span>
+            <span className={styles.detailValue}>{hasExpiry(item) ? expiryText : t('auth_files.no_expiry')}</span>
+          </div>
+          <div className={styles.detailItem}>
+            <span className={styles.detailLabel}>{t('auth_files.cooldown_label')}</span>
+            <span className={styles.detailValue}>
+              {recoverText !== '-' ? recoverText : retryText !== '-' ? retryText : '-'}
+            </span>
+          </div>
+        </div>
 
         <div className={styles.cardActions}>
           {isRuntimeOnly ? (
@@ -852,6 +1472,59 @@ export function AuthFilesPage() {
                 }}
                 placeholder={t('auth_files.search_placeholder')}
               />
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.state_label')}</label>
+              <select className={styles.pageSizeSelect} value={stateFilter} onChange={(e) => setStateFilter(e.target.value as StateFilterValue)}>
+                <option value="all">{t('auth_files.state_all')}</option>
+                <option value="normal">{t('auth_files.state_normal')}</option>
+                <option value="disabled">{t('auth_files.state_disabled')}</option>
+              </select>
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.quota_filter_label')}</label>
+              <select className={styles.pageSizeSelect} value={quotaFilter} onChange={(e) => setQuotaFilter(e.target.value as QuotaFilterValue)}>
+                <option value="all">{t('auth_files.filter_all')}</option>
+                <option value="unchecked">{t('auth_files.quota_level_unchecked')}</option>
+                <option value="low">{t('auth_files.quota_level_low')}</option>
+                <option value="medium">{t('auth_files.quota_level_medium')}</option>
+                <option value="high">{t('auth_files.quota_level_high')}</option>
+                <option value="full">{t('auth_files.quota_level_full')}</option>
+              </select>
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.expiry_filter_label')}</label>
+              <select className={styles.pageSizeSelect} value={expiryFilter} onChange={(e) => setExpiryFilter(e.target.value as ExpiryFilterValue)}>
+                <option value="all">{t('auth_files.expiry_all')}</option>
+                <option value="expired">{t('auth_files.expiry_expired')}</option>
+                <option value="valid">{t('auth_files.expiry_valid')}</option>
+              </select>
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.has_expiry_label')}</label>
+              <select className={styles.pageSizeSelect} value={hasExpiryFilter} onChange={(e) => setHasExpiryFilter(e.target.value as HasExpiryFilterValue)}>
+                <option value="all">{t('auth_files.filter_all')}</option>
+                <option value="yes">{t('auth_files.has_expiry_yes')}</option>
+                <option value="no">{t('auth_files.has_expiry_no')}</option>
+              </select>
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.sort_by_label')}</label>
+              <select className={styles.pageSizeSelect} value={sortBy} onChange={(e) => setSortBy(e.target.value as SortFieldValue)}>
+                <option value="name">{t('auth_files.sort_name')}</option>
+                <option value="modified">{t('auth_files.sort_modified')}</option>
+                <option value="state">{t('auth_files.sort_state')}</option>
+                <option value="quota_level">{t('auth_files.sort_quota_level')}</option>
+                <option value="expires_at">{t('auth_files.sort_expires_at')}</option>
+                <option value="next_retry_after">{t('auth_files.sort_next_retry_after')}</option>
+              </select>
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.sort_order_label')}</label>
+              <select className={styles.pageSizeSelect} value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrderValue)}>
+                <option value="desc">{t('auth_files.sort_order_desc')}</option>
+                <option value="asc">{t('auth_files.sort_order_asc')}</option>
+              </select>
             </div>
             <div className={styles.filterItem}>
               <label>{t('auth_files.page_size_label')}</label>
@@ -973,6 +1646,14 @@ export function AuthFilesPage() {
         title={selectedFile?.name || t('auth_files.title_section')}
         footer={
           <>
+            <Button
+              variant="secondary"
+              onClick={() => void refreshSelectedQuota()}
+              loading={quotaRefreshing}
+              disabled={!canRefreshQuota(selectedFile) || quotaRefreshing}
+            >
+              {t('auth_files.refresh_quota')}
+            </Button>
             <Button variant="secondary" onClick={() => setDetailModalOpen(false)}>
               {t('common.close')}
             </Button>
@@ -993,7 +1674,130 @@ export function AuthFilesPage() {
       >
         {selectedFile && (
           <div className={styles.detailContent}>
-            <pre className={styles.jsonContent}>{JSON.stringify(selectedFile, null, 2)}</pre>
+            <div className={styles.detailSections}>
+              <section className={styles.detailSection}>
+                <h3>{t('auth_files.detail_basic')}</h3>
+                <div className={styles.detailGrid}>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.provider_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.provider || selectedFile.type || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.auth_index_label')}</span>
+                    <span className={styles.detailValue}>{normalizeAuthIndexValue(selectedFile.auth_index ?? selectedFile.authIndex) || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.account_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.account || selectedFile.label || selectedFile.alias || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.email_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.email || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.prefix_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.prefix || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.proxy_url_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.proxy_url || '-'}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className={styles.detailSection}>
+                <h3>{t('auth_files.detail_status')}</h3>
+                <div className={styles.detailGrid}>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.state_label')}</span>
+                    <span className={styles.detailValue}>{getStateLabel(selectedFile)}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.status_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.status || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.status_message_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.status_message || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.base_url_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.base_url || '-'}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className={styles.detailSection}>
+                <h3>{t('auth_files.detail_quota')}</h3>
+                <div className={styles.detailGrid}>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.quota_filter_label')}</span>
+                    <span className={styles.detailValue}>{getQuotaLevelLabel(selectedFile.quota_level)}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.quota_checked_label')}</span>
+                    <span className={styles.detailValue}>
+                      {selectedFile.quota_checked === undefined ? '-' : selectedFile.quota_checked ? t('auth_files.boolean_yes') : t('auth_files.boolean_no')}
+                    </span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.quota_exceeded_label')}</span>
+                    <span className={styles.detailValue}>
+                      {selectedFile.quota_exceeded === undefined ? '-' : selectedFile.quota_exceeded ? t('auth_files.boolean_yes') : t('auth_files.boolean_no')}
+                    </span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.quota_backoff_level_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.quota_backoff_level || '-'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.quota_reason_label')}</span>
+                    <span className={styles.detailValue}>{selectedFile.quota_reason || '-'}</span>
+                  </div>
+                </div>
+                {canRefreshQuota(selectedFile) && (
+                  <div className={styles.refreshHint}>{t('auth_files.refresh_quota_hint')}</div>
+                )}
+                {liveQuotaError && <div className={styles.quotaError}>{liveQuotaError}</div>}
+                {renderCodexLiveQuota()}
+                {renderGeminiCliLiveQuota()}
+              </section>
+
+              <section className={styles.detailSection}>
+                <h3>{t('auth_files.detail_time')}</h3>
+                <div className={styles.detailGrid}>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.file_modified')}</span>
+                    <span className={styles.detailValue}>{formatModified(selectedFile)}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.last_refresh_label')}</span>
+                    <span className={styles.detailValue}>{formatDateTime(selectedFile.last_refresh)}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.expires_at_label')}</span>
+                    <span className={styles.detailValue}>{hasExpiry(selectedFile) ? formatDateTime(selectedFile.expires_at) : t('auth_files.no_expiry')}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.next_retry_after_label')}</span>
+                    <span className={styles.detailValue}>{formatDateTime(selectedFile.next_retry_after)}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.next_recover_at_label')}</span>
+                    <span className={styles.detailValue}>{formatDateTime(selectedFile.next_recover_at)}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>{t('auth_files.updated_at_label')}</span>
+                    <span className={styles.detailValue}>{formatDateTime(selectedFile.updated_at)}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className={styles.detailSection}>
+                <h3>{t('auth_files.detail_raw')}</h3>
+                <pre className={styles.jsonContent}>{JSON.stringify(selectedFile, null, 2)}</pre>
+              </section>
+            </div>
           </div>
         )}
       </Modal>

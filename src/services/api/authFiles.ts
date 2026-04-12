@@ -3,10 +3,10 @@
  */
 
 import { apiClient } from './client';
-import type { AuthFilesResponse } from '@/types/authFile';
+import type { AuthFilesListParams, AuthFilesResponse } from '@/types/authFile';
 
 export const authFilesApi = {
-  list: () => apiClient.get<AuthFilesResponse>('/auth-files'),
+  list: (params?: AuthFilesListParams) => apiClient.get<AuthFilesResponse>('/auth-files', { params }),
 
   upload: (file: File) => {
     const formData = new FormData();

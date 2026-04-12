@@ -31,12 +31,4 @@ const getStoredLanguage = (): Language | null => {
   }
 };
 
-const getBrowserLanguage = (): Language => {
-  if (typeof navigator === 'undefined') {
-    return 'zh-CN';
-  }
-  const raw = navigator.languages?.[0] || navigator.language || 'zh-CN';
-  return raw.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
-};
-
-export const getInitialLanguage = (): Language => getStoredLanguage() ?? getBrowserLanguage();
+export const getInitialLanguage = (): Language => getStoredLanguage() ?? 'zh-CN';
