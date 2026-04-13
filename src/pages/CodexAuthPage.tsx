@@ -260,10 +260,95 @@ const uniqueStrings = (values: Array<string | null | undefined>) =>
     )
   );
 
+type AuthFileLookup = {
+  byFileName: Map<string, AuthFileItem>;
+  byAuthIndex: Map<string, AuthFileItem>;
+};
+
+const createAuthFileLookup = (authFiles: AuthFileItem[]): AuthFileLookup => {
+  const byFileName = new Map<string, AuthFileItem>();
+  const byAuthIndex = new Map<string, AuthFileItem>();
+
+  authFiles.forEach((item) => {
+    const fileName = String(item.name ?? '').trim();
+    if (fileName) {
+      byFileName.set(fileName, item);
+    }
+
+    const authIndex = String(item.auth_index ?? item.authIndex ?? '').trim();
+    if (authIndex) {
+      byAuthIndex.set(authIndex, item);
+    }
+  });
+
+  return { byFileName, byAuthIndex };
+};
+
+const findMatchingAuthFile = (
+  snapshot: Pick<CodexAuthSnapshot, 'auth_index' | 'file_name'> | null | undefined,
+  lookup: AuthFileLookup
+) => {
+  if (!snapshot) return null;
+
+  const authIndex = String(snapshot.auth_index ?? '').trim();
+  if (authIndex && lookup.byAuthIndex.has(authIndex)) {
+    return lookup.byAuthIndex.get(authIndex) ?? null;
+  }
+
+  const fileName = String(snapshot.file_name ?? '').trim();
+  if (fileName && lookup.byFileName.has(fileName)) {
+    return lookup.byFileName.get(fileName) ?? null;
+  }
+
+  return null;
+};
+
+const mergeCodexSnapshotWithAuthFile = (
+  snapshot: CodexAuthSnapshot | null | undefined,
+  authFile: AuthFileItem | null | undefined
+): CodexAuthSnapshot | null => {
+  if (!snapshot && !authFile) return null;
+
+  return {
+    ...(authFile ?? {}),
+    ...(snapshot ?? {}),
+    auth_index: String(snapshot?.auth_index ?? authFile?.auth_index ?? authFile?.authIndex ?? '').trim() || undefined,
+    file_name: String(snapshot?.file_name ?? authFile?.name ?? '').trim() || undefined,
+    provider: snapshot?.provider ?? authFile?.provider ?? authFile?.type,
+    label: snapshot?.label ?? authFile?.label,
+    account_type: snapshot?.account_type,
+    account: snapshot?.account ?? authFile?.account,
+    email: snapshot?.email ?? authFile?.email,
+    prefix: snapshot?.prefix ?? authFile?.prefix,
+    proxy_url: snapshot?.proxy_url ?? (String(authFile?.proxy_url ?? '').trim() || undefined),
+    base_url: snapshot?.base_url ?? (String(authFile?.base_url ?? '').trim() || undefined),
+    expires_at: snapshot?.expires_at ?? (String(authFile?.expires_at ?? '').trim() || undefined),
+    status: snapshot?.status ?? authFile?.status ?? authFile?.state,
+    state: snapshot?.state ?? authFile?.state,
+    status_message: snapshot?.status_message ?? authFile?.status_message ?? authFile?.statusMessage,
+    last_error_message: snapshot?.last_error_message,
+    disabled: snapshot?.disabled ?? authFile?.disabled,
+    unavailable: snapshot?.unavailable ?? authFile?.unavailable ?? undefined,
+    quota_checked: snapshot?.quota_checked ?? authFile?.quota_checked ?? null,
+    quota_level: snapshot?.quota_level ?? authFile?.quota_level,
+    quota_exceeded: snapshot?.quota_exceeded ?? authFile?.quota_exceeded ?? undefined,
+    quota_reason: snapshot?.quota_reason ?? authFile?.quota_reason,
+    quota_model: snapshot?.quota_model,
+    quota_backoff_level: snapshot?.quota_backoff_level ?? authFile?.quota_backoff_level ?? null,
+    next_recover_at: snapshot?.next_recover_at ?? (String(authFile?.next_recover_at ?? '').trim() || undefined),
+    last_refreshed_at: snapshot?.last_refreshed_at,
+    next_refresh_after: snapshot?.next_refresh_after,
+    next_retry_after: snapshot?.next_retry_after ?? (String(authFile?.next_retry_after ?? '').trim() || undefined),
+    updated_at: snapshot?.updated_at ?? (String(authFile?.updated_at ?? '').trim() || undefined),
+    usage: snapshot?.usage,
+  };
+};
+
 const filterCodexAccountsByAuthFiles = (
   accounts: CodexAuthSnapshot[],
   authFiles: AuthFileItem[]
 ) => {
+  const lookup = createAuthFileLookup(authFiles);
   const existingFileNames = new Set(
     authFiles.map((item) => String(item.name ?? '').trim()).filter(Boolean)
   );
@@ -279,7 +364,7 @@ const filterCodexAccountsByAuthFiles = (
     if (fileName && existingFileNames.has(fileName)) return true;
     if (authIndex && existingAuthIndexes.has(authIndex)) return true;
     return false;
-  });
+  }).map((item) => mergeCodexSnapshotWithAuthFile(item, findMatchingAuthFile(item, lookup)) ?? item);
 };
 
 const compareText = (left: unknown, right: unknown) =>
@@ -520,6 +605,22 @@ const getStatusText = (item: CodexAuthSnapshot) => {
   if (item.disabled) return 'disabled';
   if (item.unavailable) return 'unavailable';
   return item.status || 'unknown';
+};
+
+const getQuotaLevelText = (item: CodexAuthSnapshot, t: ReturnType<typeof useTranslation>['t']) => {
+  const level = String(item.quota_level ?? '').trim().toLowerCase();
+  if (!level) return '-';
+  if (['full', 'max', 'maximum', 'available'].includes(level)) return t('auth_files.quota_level_full');
+  if (level === 'high') return t('auth_files.quota_level_high');
+  if (['medium', 'mid'].includes(level)) return t('auth_files.quota_level_medium');
+  if (['low', 'limited', 'warning', 'critical', 'exceeded', 'empty', 'none'].includes(level)) {
+    return t('auth_files.quota_level_low');
+  }
+  return item.quota_level ?? '-';
+};
+
+const getQuotaSummary = (item: CodexAuthSnapshot, t: ReturnType<typeof useTranslation>['t']) => {
+  return item.quota_reason || item.quota_model || getQuotaLevelText(item, t);
 };
 
 const collectSearchableText = (value: unknown): string => {
@@ -886,6 +987,7 @@ export function CodexAuthPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
+  const [authFilesLookup, setAuthFilesLookup] = useState<AuthFileLookup>(() => createAuthFileLookup([]));
   const [accounts, setAccounts] = useState<CodexAuthSnapshot[]>([]);
   const [usage, setUsage] = useState<CodexUsageRollup[]>([]);
   const [events, setEvents] = useState<CodexAuthEvent[]>([]);
@@ -967,7 +1069,9 @@ export function CodexAuthPage() {
       codexAuthApi.getQuota(),
       authFilesApi.list(),
     ]);
-    setAccounts(filterCodexAccountsByAuthFiles(response, authFilesResponse?.files ?? []));
+    const authFiles = authFilesResponse?.files ?? [];
+    setAuthFilesLookup(createAuthFileLookup(authFiles));
+    setAccounts(filterCodexAccountsByAuthFiles(response, authFiles));
   }, []);
 
   const loadUsage = useCallback(async () => {
@@ -1398,11 +1502,15 @@ export function CodexAuthPage() {
       });
       try {
         const response: CodexAuthDetail = await codexAuthApi.getQuotaDetail(authIndex);
+        const matchedAuthFile = findMatchingAuthFile(
+          response.snapshot ?? { auth_index: authIndex, file_name: '' },
+          authFilesLookup
+        );
         setDetail({
           open: true,
           authIndex,
           loading: false,
-          snapshot: response.snapshot ?? null,
+          snapshot: mergeCodexSnapshotWithAuthFile(response.snapshot, matchedAuthFile),
           events: Array.isArray(response.events) ? response.events : [],
         });
       } catch (error) {
@@ -1411,7 +1519,7 @@ export function CodexAuthPage() {
         showNotification(message, 'error');
       }
     },
-    [showNotification, t]
+    [authFilesLookup, showNotification, t]
   );
 
   const updateRuleCollection = useCallback(
@@ -1688,7 +1796,12 @@ export function CodexAuthPage() {
                           {item.status_message ? <div className={styles.subtle}>{item.status_message}</div> : null}
                         </td>
                         <td>
-                          <div>{item.quota_reason || item.quota_model || '-'}</div>
+                          <div>{getQuotaSummary(item, t)}</div>
+                          {item.quota_level ? (
+                            <div className={styles.subtle}>
+                              {t('auth_files.quota_level_label')}：{getQuotaLevelText(item, t)}
+                            </div>
+                          ) : null}
                           {item.last_error_message ? <div className={styles.subtle}>{item.last_error_message}</div> : null}
                         </td>
                         <td>{formatDateTime(item.next_recover_at || item.next_retry_after || item.next_refresh_after)}</td>
@@ -2282,6 +2395,10 @@ export function CodexAuthPage() {
               <Card title={t('codex_management.detail_cards.account')}>
                 <div className={styles.detailList}>
                   <div>
+                    <span>{t('codex_management.table.auth_index')}</span>
+                    <strong>{detail.snapshot.auth_index || '-'}</strong>
+                  </div>
+                  <div>
                     <span>{t('codex_management.table.account')}</span>
                     <strong>{detail.snapshot.account || detail.snapshot.label || '-'}</strong>
                   </div>
@@ -2293,17 +2410,55 @@ export function CodexAuthPage() {
                     <span>{t('codex_management.table.status')}</span>
                     <strong>{getStatusText(detail.snapshot)}</strong>
                   </div>
+                  <div>
+                    <span>{t('auth_files.quota_expires_at_label')}</span>
+                    <strong>{formatDateTime(detail.snapshot.expires_at)}</strong>
+                  </div>
+                  <div>
+                    <span>{t('ai_providers.prefix_label')}</span>
+                    <strong>{detail.snapshot.prefix || '-'}</strong>
+                  </div>
                 </div>
               </Card>
               <Card title={t('codex_management.detail_cards.quota')}>
                 <div className={styles.detailList}>
                   <div>
                     <span>{t('codex_management.table.quota')}</span>
-                    <strong>{detail.snapshot.quota_reason || detail.snapshot.quota_model || '-'}</strong>
+                    <strong>{getQuotaSummary(detail.snapshot, t)}</strong>
+                  </div>
+                  <div>
+                    <span>{t('auth_files.quota_level_label')}</span>
+                    <strong>{getQuotaLevelText(detail.snapshot, t)}</strong>
+                  </div>
+                  <div>
+                    <span>{t('auth_files.quota_checked_label')}</span>
+                    <strong>
+                      {detail.snapshot.quota_checked === true
+                        ? t('auth_files.quota_checked_yes')
+                        : detail.snapshot.quota_checked === false
+                          ? t('auth_files.quota_checked_no')
+                          : '-'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>{t('auth_files.quota_exceeded_label')}</span>
+                    <strong>
+                      {detail.snapshot.quota_exceeded === true
+                        ? t('auth_files.quota_checked_yes')
+                        : detail.snapshot.quota_exceeded === false
+                          ? t('auth_files.quota_checked_no')
+                          : '-'}
+                    </strong>
                   </div>
                   <div>
                     <span>{t('codex_management.table.recover')}</span>
-                    <strong>{formatDateTime(detail.snapshot.next_recover_at || detail.snapshot.next_retry_after)}</strong>
+                    <strong>
+                      {formatDateTime(
+                        detail.snapshot.next_recover_at ||
+                          detail.snapshot.next_retry_after ||
+                          detail.snapshot.next_refresh_after
+                      )}
+                    </strong>
                   </div>
                   <div>
                     <span>{t('codex_management.detail_cards.last_refresh')}</span>
