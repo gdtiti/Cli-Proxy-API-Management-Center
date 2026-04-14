@@ -481,13 +481,22 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       const nextState: Record<string, TState> = {};
       filteredFiles.forEach((file) => {
         const cached = prev[file.name];
+        const initialState = config.buildInitialState?.(file, t) ?? null;
+        if (cached && !config.shouldReplaceWithInitialState?.(cached, file)) {
+          nextState[file.name] = cached;
+          return;
+        }
+        if (initialState) {
+          nextState[file.name] = initialState;
+          return;
+        }
         if (cached) {
           nextState[file.name] = cached;
         }
       });
       return nextState;
     });
-  }, [filteredFiles, loading, setQuota]);
+  }, [config, filteredFiles, loading, setQuota, t]);
 
   const titleNode = (
     <div className={styles.titleWrapper}>
@@ -564,6 +573,22 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 
       if (config.type === 'codex') {
         const successState = state as unknown as CodexQuotaState;
+        if (successState.source === 'persisted' && successState.windows.length === 0) {
+          const holder = ensureRow(
+            'codex:persisted',
+            t('codex_quota.persisted_summary_row', { defaultValue: '已持久化配额快照' })
+          );
+          if (successState.resetLabel && successState.resetLabel !== '-') {
+            pushUnique(holder.row.resetLabels, [successState.resetLabel]);
+          }
+
+          if (!holder.credentialSet.has(file.name)) {
+            holder.credentialSet.add(file.name);
+            holder.row.credentialCount += 1;
+          }
+          return;
+        }
+
         successState.windows.forEach((window) => {
           const id = `codex:${window.id}`;
           const holder = ensureRow(id, window.label);
@@ -635,7 +660,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
         } as QuotaSummaryItem;
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [config.type, filteredFiles, quota]);
+  }, [config.type, filteredFiles, quota, t]);
 
   const summaryStats = useMemo(() => {
     const credentialsWithQuota = filteredFiles.filter(

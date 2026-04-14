@@ -637,6 +637,77 @@ const collectSearchableText = (value: unknown): string => {
   return '';
 };
 
+type TranslateFn = ReturnType<typeof useTranslation>['t'];
+
+const getRuleValueTypeLabel = (value: RuleValueType | string, t: TranslateFn): string => {
+  switch (value) {
+    case 'string':
+      return t('codex_management.config.value_type_string', { defaultValue: '字符串' });
+    case 'number':
+      return t('codex_management.config.value_type_number', { defaultValue: '数字' });
+    case 'boolean':
+      return t('codex_management.config.value_type_boolean', { defaultValue: '布尔值' });
+    case 'json':
+      return t('codex_management.config.value_type_json', { defaultValue: 'JSON' });
+    case 'raw_json':
+      return t('codex_management.config.value_type_raw_json', { defaultValue: '原始 JSON' });
+    default:
+      return value;
+  }
+};
+
+const getCodexGuideDocLabel = (key: string, t: TranslateFn): string => {
+  switch (key) {
+    case 'background':
+      return t('codex_management.config.doc_background', { defaultValue: '后台模式文档' });
+    case 'models':
+      return t('codex_management.config.doc_models', { defaultValue: '模型文档' });
+    case 'priority':
+      return t('codex_management.config.doc_priority', { defaultValue: '优先处理文档' });
+    case 'reasoning':
+      return t('codex_management.config.doc_reasoning', { defaultValue: '推理指南' });
+    case 'safety':
+      return t('codex_management.config.doc_safety', { defaultValue: '安全检查文档' });
+    case 'text_generation':
+      return t('codex_management.config.doc_text_generation', { defaultValue: '文本生成文档' });
+    case 'responses_api':
+      return t('codex_management.config.doc_responses_api', { defaultValue: 'Responses API 文档' });
+    default:
+      return key;
+  }
+};
+
+const getCodexNoteLabel = (key: string, t: TranslateFn): string => {
+  switch (key) {
+    case 'custom_params':
+      return t('codex_management.config.note_custom_params', { defaultValue: '自定义参数' });
+    case 'long_context_behavior':
+      return t('codex_management.config.note_long_context_behavior', { defaultValue: '长上下文行为' });
+    case 'one_million_context':
+      return t('codex_management.config.note_one_million_context', { defaultValue: '1M 上下文说明' });
+    case 'one_million_context_config':
+      return t('codex_management.config.note_one_million_context_config', { defaultValue: '1M 上下文配置建议' });
+    case 'recovered_tokens_available':
+      return t('codex_management.config.note_recovered_tokens_available', { defaultValue: '是否提供恢复 Token' });
+    default:
+      return key;
+  }
+};
+
+const getCodexNoteValue = (key: string, value: unknown, t: TranslateFn): string => {
+  if (typeof value === 'boolean') {
+    if (key === 'recovered_tokens_available') {
+      return value
+        ? t('codex_management.config.note_value_available', { defaultValue: '可用' })
+        : t('codex_management.config.note_value_unavailable', { defaultValue: '不可用' });
+    }
+    return value
+      ? t('codex_management.config.boolean_true', { defaultValue: '是' })
+      : t('codex_management.config.boolean_false', { defaultValue: '否' });
+  }
+  return collectSearchableText(value) || '-';
+};
+
 interface PaginationProps {
   page: number;
   total: number;
@@ -645,6 +716,7 @@ interface PaginationProps {
 }
 
 function PaginationBar({ page, total, pageSize, onPageChange }: PaginationProps) {
+  const { t } = useTranslation();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -654,7 +726,7 @@ function PaginationBar({ page, total, pageSize, onPageChange }: PaginationProps)
       </span>
       <div className={styles.paginationActions}>
         <Button size="sm" variant="secondary" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
-          Prev
+          {t('codex_management.pagination_prev', { defaultValue: '上一页' })}
         </Button>
         <Button
           size="sm"
@@ -662,7 +734,7 @@ function PaginationBar({ page, total, pageSize, onPageChange }: PaginationProps)
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
         >
-          Next
+          {t('codex_management.pagination_next', { defaultValue: '下一页' })}
         </Button>
       </div>
     </div>
@@ -702,13 +774,15 @@ function PayloadRuleGroup({
   onRemoveParam,
   onParamChange,
 }: RuleGroupProps) {
+  const { t } = useTranslation();
+
   return (
     <Card
       title={title}
       subtitle={description}
       extra={
         <Button size="sm" variant="secondary" onClick={onAddRule}>
-          Add rule
+          {t('codex_management.config.add_rule', { defaultValue: '添加规则' })}
         </Button>
       }
     >
@@ -748,28 +822,42 @@ function PayloadRuleGroup({
         ) : null}
 
         {rules.length === 0 ? (
-          <EmptyState title="No rules yet" description="Add a visual rule instead of editing JSON directly." />
+          <EmptyState
+            title={t('codex_management.config.empty_rules_title', { defaultValue: '暂无规则' })}
+            description={t('codex_management.config.empty_rules_description', {
+              defaultValue: '可先添加可视化规则，避免直接编辑 JSON。',
+            })}
+          />
         ) : (
           rules.map((rule, index) => (
             <div key={rule.id} className={styles.ruleCard}>
               <div className={styles.ruleHeader}>
-                <strong>{`Rule ${index + 1}`}</strong>
+                <strong>
+                  {t('codex_management.config.rule_title', {
+                    index: index + 1,
+                    defaultValue: `规则 ${index + 1}`,
+                  })}
+                </strong>
                 <Button size="sm" variant="ghost" onClick={() => onRemoveRule(rule.id)}>
-                  Remove
+                  {t('codex_management.config.remove_rule', { defaultValue: '删除规则' })}
                 </Button>
               </div>
               <Input
-                label="Models"
+                label={t('codex_management.config.models_label', { defaultValue: '匹配模型' })}
                 value={rule.modelsText}
                 onChange={(event) => onModelsChange(rule.id, event.target.value)}
-                placeholder="gpt-5-codex, codex-mini-latest"
-                hint="Separate multiple models with commas or new lines."
+                placeholder={t('codex_management.config.models_placeholder', {
+                  defaultValue: 'gpt-5-codex, codex-mini-latest',
+                })}
+                hint={t('codex_management.config.models_hint', {
+                  defaultValue: '多个模型可用逗号或换行分隔。',
+                })}
               />
               <div className={styles.paramSection}>
                 <div className={styles.paramSectionHeader}>
-                  <span>Params</span>
+                  <span>{t('codex_management.config.params_label', { defaultValue: '参数列表' })}</span>
                   <Button size="sm" variant="secondary" onClick={() => onAddParam(rule.id)}>
-                    Add param
+                    {t('codex_management.config.add_param', { defaultValue: '添加参数' })}
                   </Button>
                 </div>
                 <div className={styles.paramList}>
@@ -777,10 +865,12 @@ function PayloadRuleGroup({
                     <div key={param.id} className={styles.paramRow}>
                       <div>
                         <Input
-                          label="Path"
+                          label={t('codex_management.config.path_label', { defaultValue: '字段路径' })}
                           value={param.path}
                           onChange={(event) => onParamChange(rule.id, param.id, 'path', event.target.value)}
-                          placeholder="instructions"
+                          placeholder={t('codex_management.config.path_placeholder', {
+                            defaultValue: 'instructions',
+                          })}
                           list={`${title.replace(/\W+/g, '-').toLowerCase()}-paths`}
                         />
                         {(() => {
@@ -797,23 +887,33 @@ function PayloadRuleGroup({
                         })()}
                       </div>
                       <div className={styles.typeField}>
-                        <label className={styles.fieldLabel}>Type</label>
+                        <label className={styles.fieldLabel}>
+                          {t('codex_management.config.type_label', { defaultValue: '值类型' })}
+                        </label>
                         <Select
                           value={param.type}
                           options={RULE_VALUE_OPTIONS.map((option) => ({
                             value: option.value,
-                            label: option.label,
+                            label: getRuleValueTypeLabel(option.value, t),
                           }))}
                           onChange={(value) => onParamChange(rule.id, param.id, 'type', value)}
                         />
                       </div>
                       <div className={styles.valueField}>
-                        <label className={styles.fieldLabel}>Value</label>
+                        <label className={styles.fieldLabel}>
+                          {t('codex_management.config.value_label', { defaultValue: '参数值' })}
+                        </label>
                         <textarea
                           value={param.value}
                           onChange={(event) => onParamChange(rule.id, param.id, 'value', event.target.value)}
                           rows={param.type === 'json' || param.type === 'raw_json' ? 4 : 2}
-                          placeholder={param.type === 'json' || param.type === 'raw_json' ? '{"key":"value"}' : 'Value'}
+                          placeholder={
+                            param.type === 'json' || param.type === 'raw_json'
+                              ? t('codex_management.config.value_placeholder_json', {
+                                  defaultValue: '{"key":"value"}',
+                                })
+                              : t('codex_management.config.value_placeholder', { defaultValue: '请输入参数值' })
+                          }
                         />
                         {(() => {
                           const hint = findFieldHint(fieldHints, param.path, ruleTarget);
@@ -835,7 +935,7 @@ function PayloadRuleGroup({
                       </div>
                       <div className={styles.paramActions}>
                         <Button size="sm" variant="ghost" onClick={() => onRemoveParam(rule.id, param.id)}>
-                          Remove
+                          {t('codex_management.config.remove_param', { defaultValue: '删除参数' })}
                         </Button>
                       </div>
                     </div>
@@ -876,13 +976,17 @@ function FilterRuleGroup({
   onRemoveRule,
   onChange,
 }: FilterRuleGroupProps) {
+  const { t } = useTranslation();
+
   return (
     <Card
-      title="Payload Filter"
-      subtitle="Remove or trim fields by model through a visible rule list."
+      title={t('codex_management.config.filter_title', { defaultValue: 'Payload 过滤规则' })}
+      subtitle={t('codex_management.config.filter_description', {
+        defaultValue: '通过可视化规则按模型移除或裁剪字段。',
+      })}
       extra={
         <Button size="sm" variant="secondary" onClick={onAddRule}>
-          Add rule
+          {t('codex_management.config.add_rule', { defaultValue: '添加规则' })}
         </Button>
       }
     >
@@ -904,9 +1008,13 @@ function FilterRuleGroup({
         ) : null}
         {suggestions.length > 0 ? (
           <div className={styles.fieldGroupCard}>
-            <div className={styles.fieldGroupTitle}>Suggested paths</div>
+            <div className={styles.fieldGroupTitle}>
+              {t('codex_management.config.suggested_paths', { defaultValue: '建议路径' })}
+            </div>
             <div className={styles.fieldGroupDescription}>
-              Common fields that are often removed for upstream compatibility.
+              {t('codex_management.config.suggested_paths_description', {
+                defaultValue: '这些是为兼容上游时最常见会被移除的字段。',
+              })}
             </div>
             <div className={styles.fieldChipList}>
               {suggestions.map((hint) => (
@@ -918,28 +1026,44 @@ function FilterRuleGroup({
           </div>
         ) : null}
         {rules.length === 0 ? (
-          <EmptyState title="No filter rules yet" description="Use filter rules to remove specific params by model." />
+          <EmptyState
+            title={t('codex_management.config.empty_filter_rules_title', { defaultValue: '暂无过滤规则' })}
+            description={t('codex_management.config.empty_filter_rules_description', {
+              defaultValue: '可通过过滤规则按模型移除特定参数。',
+            })}
+          />
         ) : (
           rules.map((rule, index) => (
             <div key={rule.id} className={styles.ruleCard}>
               <div className={styles.ruleHeader}>
-                <strong>{`Filter ${index + 1}`}</strong>
+                <strong>
+                  {t('codex_management.config.filter_rule_title', {
+                    index: index + 1,
+                    defaultValue: `过滤规则 ${index + 1}`,
+                  })}
+                </strong>
                 <Button size="sm" variant="ghost" onClick={() => onRemoveRule(rule.id)}>
-                  Remove
+                  {t('codex_management.config.remove_rule', { defaultValue: '删除规则' })}
                 </Button>
               </div>
               <Input
-                label="Models"
+                label={t('codex_management.config.models_label', { defaultValue: '匹配模型' })}
                 value={rule.modelsText}
                 onChange={(event) => onChange(rule.id, 'modelsText', event.target.value)}
-                placeholder="gpt-5-codex, codex-mini-latest"
+                placeholder={t('codex_management.config.models_placeholder', {
+                  defaultValue: 'gpt-5-codex, codex-mini-latest',
+                })}
               />
-              <label className={styles.fieldLabel}>Filtered param paths</label>
+              <label className={styles.fieldLabel}>
+                {t('codex_management.config.filtered_paths_label', { defaultValue: '待过滤字段路径' })}
+              </label>
               <textarea
                 value={rule.filtersText}
                 onChange={(event) => onChange(rule.id, 'filtersText', event.target.value)}
                 rows={4}
-                placeholder="store\nverbosity"
+                placeholder={t('codex_management.config.filtered_paths_placeholder', {
+                  defaultValue: 'store\nverbosity',
+                })}
               />
               {suggestions.length > 0 ? (
                 <div className={styles.enumChipList}>
@@ -963,7 +1087,11 @@ function FilterRuleGroup({
                   ))}
                 </div>
               ) : null}
-              <div className="hint">Separate multiple paths with commas or new lines.</div>
+              <div className="hint">
+                {t('codex_management.config.filtered_paths_hint', {
+                  defaultValue: '多个路径可用逗号或换行分隔。',
+                })}
+              </div>
             </div>
           ))
         )}
@@ -2149,11 +2277,15 @@ export function CodexAuthPage() {
                       <strong>{formatNumber(configGuide.context_windows.gpt41_max_context_tokens)}</strong>
                     </div>
                     <div className={styles.contextStat}>
-                      <span>Official 1M for GPT-5</span>
-                      <strong>{configGuide.context_windows.gpt5_supports_official_one_million ? 'Yes' : 'No'}</strong>
+                      <span>{t('codex_management.config.official_one_million_label', { defaultValue: 'GPT-5 官方 1M 上下文' })}</span>
+                      <strong>
+                        {configGuide.context_windows.gpt5_supports_official_one_million
+                          ? t('codex_management.config.boolean_true', { defaultValue: '是' })
+                          : t('codex_management.config.boolean_false', { defaultValue: '否' })}
+                      </strong>
                     </div>
                     <div className={styles.contextStat}>
-                      <span>Recommended long context family</span>
+                      <span>{t('codex_management.config.recommended_context_family_label', { defaultValue: '建议长上下文系列' })}</span>
                       <strong>{configGuide.context_windows.official_one_million_recommended_family || '-'}</strong>
                     </div>
                   </div>
@@ -2169,7 +2301,7 @@ export function CodexAuthPage() {
                         rel="noreferrer"
                         title={url}
                       >
-                        {key}
+                        {getCodexGuideDocLabel(key, t)}
                       </a>
                     ))}
                   </div>
@@ -2190,7 +2322,7 @@ export function CodexAuthPage() {
                           <div className={styles.fieldGuidePath}>{hint.path}</div>
                           <div className={styles.fieldGuideMeta}>
                             <span>{hint.label}</span>
-                            <span>{hint.value_type}</span>
+                            <span>{getRuleValueTypeLabel(hint.value_type, t)}</span>
                           </div>
                           <p>{hint.description}</p>
                         </div>
@@ -2204,8 +2336,8 @@ export function CodexAuthPage() {
               <div className={styles.notesPanel}>
                 {Object.entries(configEditor.notes).map(([key, value]) => (
                   <div key={key} className={styles.noteItem}>
-                    <span className={styles.noteKey}>{key}</span>
-                    <span className={styles.noteValue}>{collectSearchableText(value) || '-'}</span>
+                    <span className={styles.noteKey}>{getCodexNoteLabel(key, t)}</span>
+                    <span className={styles.noteValue}>{getCodexNoteValue(key, value, t)}</span>
                   </div>
                 ))}
               </div>

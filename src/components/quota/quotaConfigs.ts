@@ -123,6 +123,8 @@ export interface QuotaConfig<TState, TData> {
   fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<TData>;
   storeSelector: (state: QuotaStore) => Record<string, TState>;
   storeSetter: keyof QuotaStore;
+  buildInitialState?: (file: AuthFileItem, t: TFunction) => TState | null;
+  shouldReplaceWithInitialState?: (current: TState, file: AuthFileItem) => boolean;
   buildLoadingState: () => TState;
   buildSuccessState: (data: TData) => TState;
   buildErrorState: (message: string, status?: number) => TState;
@@ -775,6 +777,54 @@ const renderCodexItems = (
     );
   }
 
+  if (quota.source === 'persisted' && windows.length === 0) {
+    const levelLabel = getCodexQuotaLevelLabel(quota.quotaLevel, t);
+    nodes.push(
+      h(
+        'div',
+        { key: 'persisted-level', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h(
+            'span',
+            { className: styleMap.quotaModel },
+            t('codex_quota.persisted_level_label', { defaultValue: '持久化配额等级' })
+          ),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, levelLabel ?? '--'),
+            quota.resetLabel && quota.resetLabel !== '-'
+              ? h('span', { className: styleMap.quotaReset }, quota.resetLabel)
+              : null
+          )
+        )
+      )
+    );
+
+    if (quota.statusDisplay) {
+      nodes.push(
+        h(
+          'div',
+          { key: 'persisted-status', className: styleMap.quotaMessage },
+          quota.statusDisplay
+        )
+      );
+    }
+
+    nodes.push(
+      h(
+        'div',
+        { key: 'persisted-hint', className: styleMap.quotaMessage },
+        t('codex_quota.persisted_hint', {
+          defaultValue: '当前展示的是后端最近一次持久化的配额快照；点击刷新可重新拉取实时配额。',
+        })
+      )
+    );
+    return h(Fragment, null, ...nodes);
+  }
+
   if (windows.length === 0) {
     nodes.push(
       h('div', { key: 'empty', className: styleMap.quotaMessage }, t('codex_quota.empty_windows'))
@@ -788,9 +838,7 @@ const renderCodexItems = (
       const clampedUsed = used === null ? null : Math.max(0, Math.min(100, used));
       const remaining = clampedUsed === null ? null : Math.max(0, Math.min(100, 100 - clampedUsed));
       const percentLabel = remaining === null ? '--' : `${Math.round(remaining)}%`;
-      const windowLabel = window.labelKey
-        ? t(window.labelKey, window.labelParams as Record<string, string | number>)
-        : window.label;
+      const windowLabel = window.labelKey ? t(window.labelKey) : window.label;
 
       return h(
         'div',
@@ -1097,6 +1145,72 @@ const renderClaudeItems = (
   return h(Fragment, null, ...nodes);
 };
 
+const getCodexQuotaLevelLabel = (
+  level: string | null | undefined,
+  t: TFunction
+): string | null => {
+  const normalized = normalizeStringValue(level)?.toLowerCase();
+  if (!normalized) return null;
+  if (['full', 'max', 'maximum', 'available'].includes(normalized)) {
+    return t('auth_files.quota_level_full');
+  }
+  if (normalized === 'high') {
+    return t('auth_files.quota_level_high');
+  }
+  if (['medium', 'mid'].includes(normalized)) {
+    return t('auth_files.quota_level_medium');
+  }
+  if (['low', 'limited', 'warning', 'critical', 'exceeded', 'empty', 'none'].includes(normalized)) {
+    return t('auth_files.quota_level_low');
+  }
+  return level ?? normalized;
+};
+
+const hasPersistedCodexQuota = (file: AuthFileItem): boolean => {
+  if (typeof file.quota_checked === 'boolean') {
+    return file.quota_checked;
+  }
+  return Boolean(
+    normalizeStringValue(file.quota_level) ??
+      normalizeStringValue(file.quota_reason) ??
+      normalizeStringValue(file['status_display']) ??
+      normalizeStringValue(file.next_recover_at) ??
+      normalizeStringValue(file.next_retry_after)
+  );
+};
+
+const buildPersistedCodexQuotaState = (
+  file: AuthFileItem,
+  t: TFunction
+): CodexQuotaState | null => {
+  if (!hasPersistedCodexQuota(file)) {
+    return null;
+  }
+
+  const quotaLevel = normalizeStringValue(file.quota_level)?.toLowerCase() ?? null;
+  const levelLabel = getCodexQuotaLevelLabel(quotaLevel, t);
+  const resetAt =
+    normalizeStringValue(file.next_recover_at) ??
+    normalizeStringValue(file.next_retry_after) ??
+    undefined;
+  const statusDisplay =
+    normalizeStringValue(file['status_display']) ??
+    normalizeStringValue(file.quota_reason) ??
+    normalizeStringValue(file.status_message ?? file.statusMessage) ??
+    levelLabel ??
+    t('codex_quota.persisted_snapshot_label', { defaultValue: '已持久化配额状态' });
+
+  return {
+    status: 'success',
+    windows: [],
+    planType: resolveCodexPlanType(file),
+    source: 'persisted',
+    quotaLevel,
+    statusDisplay,
+    resetLabel: formatQuotaResetTime(resetAt),
+  };
+};
+
 export const CLAUDE_CONFIG: QuotaConfig<
   ClaudeQuotaState,
   { windows: ClaudeQuotaWindow[]; extraUsage?: ClaudeExtraUsage | null; planType?: string | null }
@@ -1162,15 +1276,19 @@ export const CODEX_CONFIG: QuotaConfig<
   fetchQuota: fetchCodexQuota,
   storeSelector: (state) => state.codexQuota,
   storeSetter: 'setCodexQuota',
-  buildLoadingState: () => ({ status: 'loading', windows: [] }),
+  buildInitialState: (file, t) => buildPersistedCodexQuotaState(file, t),
+  shouldReplaceWithInitialState: (current) => current.source === 'persisted',
+  buildLoadingState: () => ({ status: 'loading', windows: [], source: 'live' }),
   buildSuccessState: (data) => ({
     status: 'success',
     windows: data.windows,
     planType: data.planType,
+    source: 'live',
   }),
   buildErrorState: (message, status) => ({
     status: 'error',
     windows: [],
+    source: 'live',
     error: message,
     errorStatus: status,
   }),

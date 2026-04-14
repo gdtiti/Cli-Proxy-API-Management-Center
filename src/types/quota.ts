@@ -242,6 +242,10 @@ export interface CodexQuotaState {
   status: 'idle' | 'loading' | 'success' | 'error';
   windows: CodexQuotaWindow[];
   planType?: string | null;
+  source?: 'live' | 'persisted';
+  quotaLevel?: string | null;
+  statusDisplay?: string | null;
+  resetLabel?: string;
   error?: string;
   errorStatus?: number;
 }
