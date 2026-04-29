@@ -12,6 +12,7 @@ export type CodexAuthUiState = {
   activeTab?: CodexAuthTabKey;
   accountsSearch?: string;
   accountsStatus?: string;
+  accountsModel?: string;
   accountsPage?: number;
   accountsPageSize?: number;
   accountsSort?: StoredSortState;

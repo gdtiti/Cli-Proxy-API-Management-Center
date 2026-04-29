@@ -34,6 +34,7 @@ export type AuthFilesUiState = {
   statusFilter?: AuthFilesStatusFilter;
   quotaFilter?: AuthFilesQuotaFilter;
   expiryFilter?: AuthFilesExpiryFilter;
+  modelFilter?: string;
 };
 
 const AUTH_FILES_UI_STATE_KEY = 'authFilesPage.uiState';

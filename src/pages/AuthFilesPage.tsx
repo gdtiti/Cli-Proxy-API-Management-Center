@@ -199,6 +199,28 @@ const matchesExpiryFilter = (
   return expiresAt > now && expiresAt - now <= EXPIRY_SOON_MS;
 };
 
+const getAuthFileModels = (file: AuthFileItem) => {
+  const value = file.available_models;
+  return Array.isArray(value) ? value : [];
+};
+
+const getAuthFileModelID = (model: unknown): string => {
+  if (!model || typeof model !== 'object') return '';
+  const value = (model as Record<string, unknown>).id;
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const matchesModelFilter = (file: AuthFileItem, modelFilter: string) => {
+  const normalized = modelFilter.trim().toLowerCase();
+  if (!normalized) return true;
+  return getAuthFileModels(file).some((model) => {
+    const modelID = getAuthFileModelID(model).toLowerCase();
+    const displayName =
+      typeof model.display_name === 'string' ? model.display_name.trim().toLowerCase() : '';
+    return modelID.includes(normalized) || displayName.includes(normalized);
+  });
+};
+
 const matchesSearch = (file: AuthFileItem, term: string) => {
   if (!term) return true;
   return [
@@ -243,6 +265,8 @@ export function AuthFilesPage() {
   const [statusFilter, setStatusFilter] = useState<AuthFilesStatusFilter>('all');
   const [quotaFilter, setQuotaFilter] = useState<AuthFilesQuotaFilter>('all');
   const [expiryFilter, setExpiryFilter] = useState<AuthFilesExpiryFilter>('all');
+  const [modelFilter, setModelFilter] = useState('');
+  const [refreshingModels, setRefreshingModels] = useState(false);
   const [pageSizeByMode, setPageSizeByMode] = useState({
     regular: DEFAULT_REGULAR_PAGE_SIZE,
     compact: DEFAULT_COMPACT_PAGE_SIZE,
@@ -392,6 +416,9 @@ export function AuthFilesPage() {
     if (isAuthFilesExpiryFilter(persisted.expiryFilter)) {
       setExpiryFilter(persisted.expiryFilter);
     }
+    if (typeof persisted.modelFilter === 'string') {
+      setModelFilter(persisted.modelFilter);
+    }
   }, []);
 
   useEffect(() => {
@@ -408,11 +435,13 @@ export function AuthFilesPage() {
       statusFilter,
       quotaFilter,
       expiryFilter,
+      modelFilter,
     });
   }, [
     compactMode,
     expiryFilter,
     filter,
+    modelFilter,
     page,
     pageSize,
     pageSizeByMode,
@@ -590,6 +619,22 @@ export function AuthFilesPage() {
     [t]
   );
 
+  const modelFilterOptions = useMemo(() => {
+    const models = new Set<string>();
+    files.forEach((file) => {
+      getAuthFileModels(file).forEach((model) => {
+        const id = getAuthFileModelID(model);
+        if (id) models.add(id);
+      });
+    });
+    return [
+      { value: '', label: t('auth_files.model_filter_all', { defaultValue: 'All models' }) },
+      ...Array.from(models)
+        .sort((left, right) => left.localeCompare(right))
+        .map((value) => ({ value, label: value })),
+    ];
+  }, [files, t]);
+
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = { all: filesMatchingProblemFilter.length };
     filesMatchingProblemFilter.forEach((file) => {
@@ -614,10 +659,19 @@ export function AuthFilesPage() {
         matchesStatusFilter(item, statusFilter) &&
         matchesQuotaFilter(item, quotaFilter) &&
         matchesExpiryFilter(item, expiryFilter, now) &&
+        matchesModelFilter(item, modelFilter) &&
         matchesSearch(item, term)
       );
     });
-  }, [expiryFilter, filesMatchingProblemFilter, filter, quotaFilter, search, statusFilter]);
+  }, [
+    expiryFilter,
+    filesMatchingProblemFilter,
+    filter,
+    modelFilter,
+    quotaFilter,
+    search,
+    statusFilter,
+  ]);
 
   const downloadableFilteredFiles = useMemo(
     () => filtered.filter((file) => !isRuntimeOnlyAuthFile(file)),
@@ -635,6 +689,7 @@ export function AuthFilesPage() {
     statusFilter !== 'all' ||
     quotaFilter !== 'all' ||
     expiryFilter !== 'all' ||
+    Boolean(modelFilter.trim()) ||
     Boolean(search.trim());
 
   const batchDownloadArchiveName = useMemo(() => {
@@ -651,8 +706,11 @@ export function AuthFilesPage() {
     if (search.trim()) {
       segments.push('filtered');
     }
+    if (modelFilter.trim()) {
+      segments.push(modelFilter.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, '-'));
+    }
     return `${segments.join('-')}.zip`;
-  }, [filter, problemOnly, search]);
+  }, [filter, modelFilter, problemOnly, search]);
 
   const batchDownloadAllArchiveName = useMemo(() => 'auth-files-all.zip', []);
 
@@ -834,7 +892,7 @@ export function AuthFilesPage() {
 
     const payload: Parameters<typeof authFilesApi.patchFieldsBatch>[0] = {
       names: selectedNames,
-    };
+  };
 
     if (batchFieldsEditor.prefixEnabled) {
       payload.prefix = batchFieldsEditor.prefix;
@@ -904,6 +962,37 @@ export function AuthFilesPage() {
       setBatchFieldsEditor((current) => ({ ...current, saving: false }));
     }
   }, [batchFieldsEditor, deselectAll, loadFiles, refreshKeyStats, selectedNames, showNotification, t]);
+
+  const handleRefreshSelectedModels = useCallback(async () => {
+    const names = selectedNames.length > 0 ? selectedNames : sorted.map((file) => file.name);
+    if (names.length === 0) {
+      showNotification(
+        t('auth_files.models_refresh_empty', { defaultValue: 'No auth files to refresh' }),
+        'warning'
+      );
+      return;
+    }
+    setRefreshingModels(true);
+    try {
+      const result = await authFilesApi.refreshAuthFileModels(names);
+      await loadFiles();
+      const failed = Array.isArray(result.failed) ? result.failed.length : 0;
+      showNotification(
+        failed > 0
+          ? t('auth_files.models_refresh_partial', {
+              failed,
+              defaultValue: '{{failed}} auth files failed to refresh models',
+            })
+          : t('auth_files.models_refresh_success', { defaultValue: 'Model list refreshed' }),
+        failed > 0 ? 'warning' : 'success'
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('notification.refresh_failed');
+      showNotification(message, 'error');
+    } finally {
+      setRefreshingModels(false);
+    }
+  }, [loadFiles, selectedNames, showNotification, sorted, t]);
 
   const openExcludedEditor = useCallback(
     (provider?: string) => {
@@ -1153,6 +1242,15 @@ export function AuthFilesPage() {
             <Button
               variant="secondary"
               size="sm"
+              onClick={() => void handleRefreshSelectedModels()}
+              disabled={disableControls || loading || uploading || refreshingModels || sorted.length === 0}
+              loading={refreshingModels}
+            >
+              {t('auth_files.models_refresh_button', { defaultValue: 'Refresh models' })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => requestBatchDownload(downloadableAllFiles, batchDownloadAllArchiveName)}
               disabled={
                 disableControls ||
@@ -1311,6 +1409,20 @@ export function AuthFilesPage() {
                       setPage(1);
                     }}
                     ariaLabel={t('auth_files.expiry_filter_label')}
+                    fullWidth
+                  />
+                </div>
+                <div className={styles.filterItem}>
+                  <label>{t('auth_files.model_filter_label', { defaultValue: 'Model' })}</label>
+                  <Select
+                    className={styles.sortSelect}
+                    value={modelFilter}
+                    options={modelFilterOptions}
+                    onChange={(value) => {
+                      setModelFilter(value);
+                      setPage(1);
+                    }}
+                    ariaLabel={t('auth_files.model_filter_label', { defaultValue: 'Model' })}
                     fullWidth
                   />
                 </div>
@@ -1526,6 +1638,15 @@ export function AuthFilesPage() {
                     disabled={disableControls || selectedNames.length === 0}
                   >
                     {t('auth_files.batch_download')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void handleRefreshSelectedModels()}
+                    disabled={disableControls || selectedNames.length === 0 || refreshingModels}
+                    loading={refreshingModels}
+                  >
+                    {t('auth_files.models_refresh_selected', { defaultValue: 'Refresh models' })}
                   </Button>
                   <Button
                     size="sm"

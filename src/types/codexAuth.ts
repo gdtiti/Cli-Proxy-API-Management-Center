@@ -45,6 +45,12 @@ export interface CodexAuthSnapshot {
   quota_reason?: string;
   quota_model?: string;
   quota_backoff_level?: number | null;
+  available_models?: import('./authFile').AuthFileModelItem[];
+  available_model_count?: number;
+  model_refresh_status?: string;
+  model_last_checked_at?: string | number | null;
+  model_last_success_at?: string | number | null;
+  model_last_error?: string;
   next_recover_at?: string;
   last_refreshed_at?: string;
   next_refresh_after?: string;

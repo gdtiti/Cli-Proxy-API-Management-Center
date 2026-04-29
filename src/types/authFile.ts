@@ -52,10 +52,59 @@ export interface AuthFileItem {
   quota_exceeded?: boolean | null;
   quota_reason?: string;
   quota_backoff_level?: number | null;
+  available_models?: AuthFileModelItem[];
+  available_model_count?: number;
+  model_refresh_status?: string;
+  model_last_checked_at?: string | number | null;
+  model_last_success_at?: string | number | null;
+  model_last_error?: string;
   metadata?: Record<string, unknown> | null;
   attributes?: Record<string, unknown> | null;
   id_token?: Record<string, unknown> | string | null;
   [key: string]: unknown;
+}
+
+export interface AuthFileModelItem {
+  id: string;
+  display_name?: string;
+  provider?: string;
+  type?: string;
+  owned_by?: string;
+  source?: string;
+  first_seen_at?: string;
+  last_seen_at?: string;
+}
+
+export interface AuthFileModelRelation {
+  auth_id?: string;
+  auth_index?: string;
+  file_name?: string;
+  model_id?: string;
+  available?: boolean;
+  source?: string;
+  refresh_status?: string;
+  last_checked_at?: string;
+  last_success_at?: string;
+  last_error?: string;
+}
+
+export interface AuthFileModelView {
+  auth_id?: string;
+  auth_index?: string;
+  file_name?: string;
+  refresh_status?: string;
+  last_checked_at?: string;
+  last_success_at?: string;
+  last_error?: string;
+  models?: AuthFileModelItem[];
+  relations?: AuthFileModelRelation[];
+}
+
+export interface AuthFileModelsBatchResponse {
+  auths?: AuthFileModelView[];
+  models?: AuthFileModelItem[];
+  results?: AuthFileModelView[];
+  failed?: AuthFileModelView[];
 }
 
 export interface AuthFilesListPagination {
@@ -74,6 +123,7 @@ export interface AuthFilesListParams {
   prefix?: string;
   proxy_url?: string;
   auth_index?: string;
+  model?: string;
   quota_level?: string;
   quota_checked?: boolean;
   runtime_only?: boolean;

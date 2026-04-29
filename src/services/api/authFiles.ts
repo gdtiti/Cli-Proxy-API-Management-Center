@@ -3,7 +3,11 @@
  */
 
 import { apiClient } from './client';
-import type { AuthFilesResponse } from '@/types/authFile';
+import type {
+  AuthFileModelItem,
+  AuthFileModelsBatchResponse,
+  AuthFilesResponse,
+} from '@/types/authFile';
 import type { OAuthModelAliasEntry } from '@/types';
 
 type StatusError = { status?: number };
@@ -481,15 +485,21 @@ export const authFilesApi = {
   },
 
   // 获取认证凭证支持的模型
-  async getModelsForAuthFile(
-    name: string
-  ): Promise<{ id: string; display_name?: string; type?: string; owned_by?: string }[]> {
+  async queryAuthFileModels(names: string[] = []): Promise<AuthFileModelsBatchResponse> {
+    return apiClient.post<AuthFileModelsBatchResponse>('/auth-files/models/query', { names });
+  },
+
+  async refreshAuthFileModels(names: string[] = []): Promise<AuthFileModelsBatchResponse> {
+    return apiClient.post<AuthFileModelsBatchResponse>('/auth-files/models/refresh', { names });
+  },
+
+  async getModelsForAuthFile(name: string): Promise<AuthFileModelItem[]> {
     const data = await apiClient.get<Record<string, unknown>>(
       `/auth-files/models?name=${encodeURIComponent(name)}`
     );
     const models = data.models ?? data['models'];
     return Array.isArray(models)
-      ? (models as { id: string; display_name?: string; type?: string; owned_by?: string }[])
+      ? (models as AuthFileModelItem[])
       : [];
   },
 

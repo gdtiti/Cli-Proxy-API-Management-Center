@@ -245,6 +245,21 @@ const formatAverage = (value?: number | null) => {
 
 const normalizeText = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
+const getAvailableModelIDs = (item: { available_models?: unknown }) =>
+  Array.isArray(item.available_models)
+    ? item.available_models
+        .map((model) =>
+          model && typeof model === 'object' ? String((model as Record<string, unknown>).id ?? '').trim() : ''
+        )
+        .filter(Boolean)
+    : [];
+
+const matchesModelFilter = (item: CodexAuthSnapshot, model: string) => {
+  const normalized = model.trim().toLowerCase();
+  if (!normalized) return true;
+  return getAvailableModelIDs(item).some((modelID) => modelID.toLowerCase().includes(normalized));
+};
+
 const paginate = <T,>(items: T[], page: number, pageSize: number) => {
   const safePage = Math.max(1, page);
   const start = (safePage - 1) * pageSize;
@@ -335,6 +350,12 @@ const mergeCodexSnapshotWithAuthFile = (
     quota_reason: snapshot?.quota_reason ?? authFile?.quota_reason,
     quota_model: snapshot?.quota_model,
     quota_backoff_level: snapshot?.quota_backoff_level ?? authFile?.quota_backoff_level ?? null,
+    available_models: snapshot?.available_models ?? authFile?.available_models,
+    available_model_count: snapshot?.available_model_count ?? authFile?.available_model_count,
+    model_refresh_status: snapshot?.model_refresh_status ?? authFile?.model_refresh_status,
+    model_last_checked_at: snapshot?.model_last_checked_at ?? authFile?.model_last_checked_at,
+    model_last_success_at: snapshot?.model_last_success_at ?? authFile?.model_last_success_at,
+    model_last_error: snapshot?.model_last_error ?? authFile?.model_last_error,
     next_recover_at: snapshot?.next_recover_at ?? (String(authFile?.next_recover_at ?? '').trim() || undefined),
     last_refreshed_at: snapshot?.last_refreshed_at,
     next_refresh_after: snapshot?.next_refresh_after,
@@ -1126,6 +1147,7 @@ export function CodexAuthPage() {
     const value = persistedUiState?.accountsStatus;
     return typeof value === 'string' && value.trim() ? value : 'all';
   });
+  const [accountsModel, setAccountsModel] = useState(() => persistedUiState?.accountsModel ?? '');
   const [accountsPage, setAccountsPage] = useState(() =>
     clampCodexAuthPage(persistedUiState?.accountsPage, 1)
   );
@@ -1247,7 +1269,7 @@ export function CodexAuthPage() {
 
   useEffect(() => {
     setAccountsPage(1);
-  }, [accountsPageSize, accountsSearch, accountsStatus, accountsSort]);
+  }, [accountsModel, accountsPageSize, accountsSearch, accountsStatus, accountsSort]);
 
   useEffect(() => {
     setUsagePage(1);
@@ -1262,6 +1284,7 @@ export function CodexAuthPage() {
       activeTab,
       accountsSearch,
       accountsStatus,
+      accountsModel,
       accountsPage,
       accountsPageSize,
       accountsSort,
@@ -1279,6 +1302,7 @@ export function CodexAuthPage() {
     activeTab,
     accountsPage,
     accountsPageSize,
+    accountsModel,
     accountsSearch,
     accountsSort,
     accountsStatus,
@@ -1341,6 +1365,19 @@ export function CodexAuthPage() {
     ];
   }, [accounts, t]);
 
+  const accountModelOptions = useMemo(() => {
+    const values = new Set<string>();
+    accounts.forEach((item) => {
+      getAvailableModelIDs(item).forEach((modelID) => values.add(modelID));
+    });
+    return [
+      { value: '', label: t('codex_management.model_all', { defaultValue: 'All models' }) },
+      ...Array.from(values)
+        .sort((left, right) => left.localeCompare(right))
+        .map((value) => ({ value, label: value })),
+    ];
+  }, [accounts, t]);
+
   const authIndexOptions = useMemo(() => {
     const values = new Set<string>();
     accounts.forEach((item) => {
@@ -1359,10 +1396,11 @@ export function CodexAuthPage() {
     const keyword = accountsSearch.trim().toLowerCase();
     return accounts.filter((item) => {
       if (accountsStatus !== 'all' && getStatusText(item) !== accountsStatus) return false;
+      if (!matchesModelFilter(item, accountsModel)) return false;
       if (!keyword) return true;
       return collectSearchableText(item).includes(keyword);
     });
-  }, [accounts, accountsSearch, accountsStatus]);
+  }, [accounts, accountsModel, accountsSearch, accountsStatus]);
 
   const filteredUsage = useMemo(() => {
     const keyword = usageSearch.trim().toLowerCase();
@@ -1774,6 +1812,12 @@ export function CodexAuthPage() {
               <Select value={accountsStatus} options={statusOptions} onChange={setAccountsStatus} />
             </div>
             <div className={styles.toolbarField}>
+              <label className={styles.fieldLabel}>
+                {t('codex_management.model_filter', { defaultValue: 'Model' })}
+              </label>
+              <Select value={accountsModel} options={accountModelOptions} onChange={setAccountsModel} />
+            </div>
+            <div className={styles.toolbarField}>
               <label className={styles.fieldLabel}>{t('codex_management.page_size')}</label>
               <Select
                 value={String(accountsPageSize)}
@@ -1918,6 +1962,9 @@ export function CodexAuthPage() {
                         <td>
                           <div>{item.file_name || '-'}</div>
                           <div className={styles.subtle}>{item.expires_at ? formatDateTime(item.expires_at) : '-'}</div>
+                          {getAvailableModelIDs(item).length > 0 ? (
+                            <div className={styles.subtle}>{getAvailableModelIDs(item).slice(0, 3).join(', ')}</div>
+                          ) : null}
                         </td>
                         <td>
                           <span className={`${styles.statusChip} ${getStatusTone(item)}`}>{getStatusText(item)}</span>
