@@ -405,7 +405,8 @@ export function VisualConfigEditor({
         220
       );
       const maxHeight = Math.max(window.innerHeight - top - viewportPadding, 160);
-      const isVisible = workspaceRect.bottom > stickyTop + 24 && anchorRect.top < window.innerHeight;
+      const isVisible =
+        workspaceRect.bottom > stickyTop + 24 && anchorRect.top < window.innerHeight;
 
       floatingElement.style.setProperty('--visual-config-floating-left', `${left}px`);
       floatingElement.style.setProperty('--visual-config-floating-top', `${top}px`);
@@ -803,6 +804,14 @@ export function VisualConfigEditor({
                       {
                         value: 'fill-first',
                         label: t('config_management.visual.sections.network.strategy_fill_first'),
+                      },
+                      {
+                        value: 'success-rate',
+                        label: t('config_management.visual.sections.network.strategy_success_rate'),
+                      },
+                      {
+                        value: 'simhash',
+                        label: t('config_management.visual.sections.network.strategy_simhash'),
                       },
                     ]}
                     id={`${routingStrategyLabelId}-select`}

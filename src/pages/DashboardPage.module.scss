@@ -67,7 +67,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -287,6 +288,18 @@
   color: $success-color;
   border-color: rgba($success-color, 0.3);
   background: rgba($success-color, 0.12);
+}
+
+.configBadgeSuccessRate {
+  color: $warning-color;
+  border-color: rgba($warning-color, 0.3);
+  background: rgba($warning-color, 0.12);
+}
+
+.configBadgeSimHash {
+  color: $info-color;
+  border-color: rgba($info-color, 0.3);
+  background: rgba($info-color, 0.12);
 }
 
 .configBadgeUnknown {

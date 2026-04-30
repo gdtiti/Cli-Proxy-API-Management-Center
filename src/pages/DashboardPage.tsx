@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  IconKey,
-  IconBot,
-  IconFileText,
-  IconSatellite
-} from '@/components/ui/icons';
+import { IconKey, IconBot, IconFileText, IconSatellite } from '@/components/ui/icons';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
@@ -45,14 +40,14 @@ export function DashboardPage() {
     authFiles: number | null;
   }>({
     apiKeys: null,
-    authFiles: null
+    authFiles: null,
   });
 
   const [providerStats, setProviderStats] = useState<ProviderStats>({
     gemini: null,
     codex: null,
     claude: null,
-    openai: null
+    openai: null,
   });
 
   const [loading, setLoading] = useState(true);
@@ -120,42 +115,46 @@ export function DashboardPage() {
     }
   }, [config?.apiKeys]);
 
-  const fetchModels = useCallback(async (forceRefresh: boolean = false) => {
-    if (connectionStatus !== 'connected' || !apiBase) {
-      return;
-    }
+  const fetchModels = useCallback(
+    async (forceRefresh: boolean = false) => {
+      if (connectionStatus !== 'connected' || !apiBase) {
+        return;
+      }
 
-    try {
-      const apiKeys = await resolveApiKeysForModels();
-      const primaryKey = apiKeys[0];
-      await fetchModelsFromStore(apiBase, primaryKey, forceRefresh);
-    } catch {
-      // Ignore model fetch errors on dashboard
-    }
-  }, [connectionStatus, apiBase, resolveApiKeysForModels, fetchModelsFromStore]);
+      try {
+        const apiKeys = await resolveApiKeysForModels();
+        const primaryKey = apiKeys[0];
+        await fetchModelsFromStore(apiBase, primaryKey, forceRefresh);
+      } catch {
+        // Ignore model fetch errors on dashboard
+      }
+    },
+    [connectionStatus, apiBase, resolveApiKeysForModels, fetchModelsFromStore]
+  );
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] = await Promise.allSettled([
-        apiKeysApi.list(),
-        authFilesApi.list(),
-        providersApi.getGeminiKeys(),
-        providersApi.getCodexConfigs(),
-        providersApi.getClaudeConfigs(),
-        providersApi.getOpenAIProviders()
-      ]);
+      const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] =
+        await Promise.allSettled([
+          apiKeysApi.list(),
+          authFilesApi.list(),
+          providersApi.getGeminiKeys(),
+          providersApi.getCodexConfigs(),
+          providersApi.getClaudeConfigs(),
+          providersApi.getOpenAIProviders(),
+        ]);
 
       setStats({
         apiKeys: keysRes.status === 'fulfilled' ? safeCount(keysRes.value) : null,
-        authFiles: filesRes.status === 'fulfilled' ? safeAuthFilesCount(filesRes.value) : null
+        authFiles: filesRes.status === 'fulfilled' ? safeAuthFilesCount(filesRes.value) : null,
       });
 
       setProviderStats({
         gemini: geminiRes.status === 'fulfilled' ? safeCount(geminiRes.value) : null,
         codex: codexRes.status === 'fulfilled' ? safeCount(codexRes.value) : null,
         claude: claudeRes.status === 'fulfilled' ? safeCount(claudeRes.value) : null,
-        openai: openaiRes.status === 'fulfilled' ? safeCount(openaiRes.value) : null
+        openai: openaiRes.status === 'fulfilled' ? safeCount(openaiRes.value) : null,
       });
     } catch (err) {
       console.warn('Dashboard: failed to fetch stats:', err);
@@ -171,7 +170,6 @@ export function DashboardPage() {
   useHeaderRefresh(handleHeaderRefresh);
 
   useEffect(() => {
-
     if (connectionStatus === 'connected') {
       fetchStats();
       fetchModels();
@@ -205,7 +203,7 @@ export function DashboardPage() {
       icon: <IconKey size={24} />,
       path: '/config',
       loading: loading && stats.apiKeys === null,
-      sublabel: t('nav.config_management')
+      sublabel: t('nav.config_management'),
     },
     {
       label: t('nav.ai_providers'),
@@ -218,9 +216,9 @@ export function DashboardPage() {
             gemini: providerStats.gemini ?? '-',
             codex: providerStats.codex ?? '-',
             claude: providerStats.claude ?? '-',
-            openai: providerStats.openai ?? '-'
+            openai: providerStats.openai ?? '-',
           })
-        : undefined
+        : undefined,
     },
     {
       label: t('nav.auth_files'),
@@ -228,7 +226,7 @@ export function DashboardPage() {
       icon: <IconFileText size={24} />,
       path: '/auth-files',
       loading: loading && stats.authFiles === null,
-      sublabel: t('dashboard.oauth_credentials')
+      sublabel: t('dashboard.oauth_credentials'),
     },
     {
       label: t('dashboard.available_models'),
@@ -236,8 +234,8 @@ export function DashboardPage() {
       icon: <IconSatellite size={24} />,
       path: '/system',
       loading: modelsLoading,
-      sublabel: t('dashboard.available_models_desc')
-    }
+      sublabel: t('dashboard.available_models_desc'),
+    },
   ];
 
   const routingStrategyRaw = config?.routingStrategy?.trim() || '';
@@ -247,14 +245,22 @@ export function DashboardPage() {
       ? t('basic_settings.routing_strategy_round_robin')
       : routingStrategyRaw === 'fill-first'
         ? t('basic_settings.routing_strategy_fill_first')
-        : routingStrategyRaw;
+        : routingStrategyRaw === 'success-rate'
+          ? t('basic_settings.routing_strategy_success_rate')
+          : routingStrategyRaw === 'simhash'
+            ? t('basic_settings.routing_strategy_simhash')
+            : routingStrategyRaw;
   const routingStrategyBadgeClass = !routingStrategyRaw
     ? styles.configBadgeUnknown
     : routingStrategyRaw === 'round-robin'
       ? styles.configBadgeRoundRobin
       : routingStrategyRaw === 'fill-first'
         ? styles.configBadgeFillFirst
-        : styles.configBadgeUnknown;
+        : routingStrategyRaw === 'success-rate'
+          ? styles.configBadgeSuccessRate
+          : routingStrategyRaw === 'simhash'
+            ? styles.configBadgeSimHash
+            : styles.configBadgeUnknown;
 
   return (
     <div className={styles.dashboard}>
@@ -320,19 +326,29 @@ export function DashboardPage() {
           <div className={styles.configGrid}>
             <div className={styles.configItem}>
               <span className={styles.configLabel}>{t('basic_settings.debug_enable')}</span>
-              <span className={`${styles.configValue} ${config.debug ? styles.enabled : styles.disabled}`}>
+              <span
+                className={`${styles.configValue} ${config.debug ? styles.enabled : styles.disabled}`}
+              >
                 {config.debug ? t('common.yes') : t('common.no')}
               </span>
             </div>
             <div className={styles.configItem}>
-              <span className={styles.configLabel}>{t('basic_settings.usage_statistics_enable')}</span>
-              <span className={`${styles.configValue} ${config.usageStatisticsEnabled ? styles.enabled : styles.disabled}`}>
+              <span className={styles.configLabel}>
+                {t('basic_settings.usage_statistics_enable')}
+              </span>
+              <span
+                className={`${styles.configValue} ${config.usageStatisticsEnabled ? styles.enabled : styles.disabled}`}
+              >
                 {config.usageStatisticsEnabled ? t('common.yes') : t('common.no')}
               </span>
             </div>
             <div className={styles.configItem}>
-              <span className={styles.configLabel}>{t('basic_settings.logging_to_file_enable')}</span>
-              <span className={`${styles.configValue} ${config.loggingToFile ? styles.enabled : styles.disabled}`}>
+              <span className={styles.configLabel}>
+                {t('basic_settings.logging_to_file_enable')}
+              </span>
+              <span
+                className={`${styles.configValue} ${config.loggingToFile ? styles.enabled : styles.disabled}`}
+              >
                 {config.loggingToFile ? t('common.yes') : t('common.no')}
               </span>
             </div>
@@ -342,7 +358,9 @@ export function DashboardPage() {
             </div>
             <div className={styles.configItem}>
               <span className={styles.configLabel}>{t('basic_settings.ws_auth_enable')}</span>
-              <span className={`${styles.configValue} ${config.wsAuth ? styles.enabled : styles.disabled}`}>
+              <span
+                className={`${styles.configValue} ${config.wsAuth ? styles.enabled : styles.disabled}`}
+              >
                 {config.wsAuth ? t('common.yes') : t('common.no')}
               </span>
             </div>

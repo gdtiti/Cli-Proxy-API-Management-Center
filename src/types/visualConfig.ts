@@ -51,6 +51,8 @@ export interface StreamingConfig {
   nonstreamKeepaliveInterval: string;
 }
 
+export type RoutingStrategy = 'round-robin' | 'fill-first' | 'success-rate' | 'simhash';
+
 export type VisualConfigValues = {
   host: string;
   port: string;
@@ -75,7 +77,7 @@ export type VisualConfigValues = {
   maxRetryInterval: string;
   quotaSwitchProject: boolean;
   quotaSwitchPreviewModel: boolean;
-  routingStrategy: 'round-robin' | 'fill-first';
+  routingStrategy: RoutingStrategy;
   wsAuth: boolean;
   payloadDefaultRules: PayloadRule[];
   payloadDefaultRawRules: PayloadRule[];

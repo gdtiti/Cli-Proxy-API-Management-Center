@@ -6,6 +6,7 @@ import type {
   PayloadParamEntry,
   PayloadParamValueType,
   PayloadRule,
+  RoutingStrategy,
   VisualConfigValues,
   VisualConfigValidationErrors,
   PayloadParamValidationErrorCode,
@@ -126,6 +127,19 @@ function setIntFromStringInDoc(doc: YamlDocument, path: YamlPath, value: unknown
   }
 }
 
+function normalizeRoutingStrategy(value: unknown): RoutingStrategy {
+  switch (typeof value === 'string' ? value.trim() : '') {
+    case 'fill-first':
+      return 'fill-first';
+    case 'success-rate':
+      return 'success-rate';
+    case 'simhash':
+      return 'simhash';
+    default:
+      return 'round-robin';
+  }
+}
+
 function getNonNegativeIntegerError(value: string): 'non_negative_integer' | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -190,7 +204,9 @@ export function getPayloadParamValidationError(
 }
 
 function hasPayloadParamValidationErrors(rules: PayloadRule[]): boolean {
-  return rules.some((rule) => rule.params.some((param) => Boolean(getPayloadParamValidationError(param))));
+  return rules.some((rule) =>
+    rule.params.some((param) => Boolean(getPayloadParamValidationError(param)))
+  );
 }
 
 function deepClone<T>(value: T): T {
@@ -493,7 +509,7 @@ export function useVisualConfig() {
             ? remoteManagement['panel-github-repository']
             : typeof remoteManagement?.['panel-repo'] === 'string'
               ? remoteManagement['panel-repo']
-            : '',
+              : '',
 
         authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
         apiKeysText: resolveApiKeysText(parsed),
@@ -514,7 +530,7 @@ export function useVisualConfig() {
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
         quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
 
-        routingStrategy: routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
+        routingStrategy: normalizeRoutingStrategy(routing?.strategy),
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadDefaultRawRules: parseRawPayloadRules(payload?.['default-raw']),

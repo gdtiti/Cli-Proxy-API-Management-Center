@@ -203,10 +203,12 @@
     "ws_auth_enable": "启用 /ws/* 鉴权",
     "routing_title": "路由策略",
     "routing_strategy_label": "路由策略:",
-    "routing_strategy_hint": "round-robin 为轮询，fill-first 为优先填充。",
+    "routing_strategy_hint": "可选策略：round-robin、fill-first、success-rate、simhash。",
     "routing_strategy_update": "更新",
     "routing_strategy_round_robin": "round-robin (轮询)",
-    "routing_strategy_fill_first": "fill-first (优先填充)"
+    "routing_strategy_fill_first": "fill-first (优先填充)",
+    "routing_strategy_success_rate": "success-rate (成功率自适应)",
+    "routing_strategy_simhash": "simhash (请求粘滞)"
   },
   "api_keys": {
     "title": "API 密钥管理",
@@ -1341,6 +1343,8 @@
           "routing_strategy_hint": "选择凭据选择策略",
           "strategy_round_robin": "轮询 (Round Robin)",
           "strategy_fill_first": "填充优先 (Fill First)",
+          "strategy_success_rate": "成功率自适应 (Success Rate)",
+          "strategy_simhash": "请求粘滞 (SimHash)",
           "force_model_prefix": "强制模型前缀",
           "force_model_prefix_desc": "未带前缀的模型请求只使用无前缀凭据",
           "ws_auth": "WebSocket 认证",
