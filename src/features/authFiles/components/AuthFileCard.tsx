@@ -33,6 +33,12 @@ import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQu
 import styles from '@/pages/AuthFilesPage.module.scss';
 
 const HEALTHY_STATUS_MESSAGES = new Set(['ok', 'healthy', 'ready', 'success', 'available']);
+const AUTO_RECOVER_KEYS = {
+  enabled: 'auth_maintenance_auto_recover',
+  reason: 'auth_maintenance_auto_recover_reason',
+  disabledAt: 'auth_maintenance_auto_recover_disabled_at',
+  nextCheckAt: 'auth_maintenance_auto_recover_next_check_at',
+} as const;
 
 export type AuthFileCardProps = {
   file: AuthFileItem;
@@ -70,6 +76,48 @@ const hasPersistedQuotaDetails = (file: AuthFileItem) =>
     file.next_retry_after,
     file.next_recover_at,
   ].some((value) => value !== undefined && value !== null && String(value).trim() !== '');
+
+type AutoRecoverInfo = {
+  enabled: boolean;
+  reason: string;
+  disabledAt: string;
+  nextCheckAt: string;
+  visible: boolean;
+};
+
+const readMetadataValue = (file: AuthFileItem, key: string) => {
+  const directValue = file[key];
+  if (directValue !== undefined && directValue !== null) return directValue;
+  const metadata = file.metadata;
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  return metadata[key];
+};
+
+const formatAutoRecoverDate = (value: unknown) => {
+  if (value === undefined || value === null || String(value).trim() === '') return '-';
+  const raw =
+    typeof value === 'number' && value > 0 && value < 10_000_000_000 ? value * 1000 : value;
+  const date = new Date(raw as string | number);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+};
+
+const readAutoRecoverInfo = (file: AuthFileItem): AutoRecoverInfo => {
+  const enabled = readMetadataValue(file, AUTO_RECOVER_KEYS.enabled) === true;
+  const reasonValue = readMetadataValue(file, AUTO_RECOVER_KEYS.reason);
+  const disabledAtValue = readMetadataValue(file, AUTO_RECOVER_KEYS.disabledAt);
+  const nextCheckAtValue = readMetadataValue(file, AUTO_RECOVER_KEYS.nextCheckAt);
+  const reason = typeof reasonValue === 'string' ? reasonValue.trim() : '';
+  const disabledAt = formatAutoRecoverDate(disabledAtValue);
+  const nextCheckAt = formatAutoRecoverDate(nextCheckAtValue);
+  return {
+    enabled,
+    reason,
+    disabledAt,
+    nextCheckAt,
+    visible: enabled || Boolean(reason) || disabledAt !== '-' || nextCheckAt !== '-',
+  };
+};
 
 export function AuthFileCard(props: AuthFileCardProps) {
   const { t } = useTranslation();
@@ -132,6 +180,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
 
   const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
   const noteValue = typeof file.note === 'string' ? file.note.trim() : '';
+  const autoRecoverInfo = readAutoRecoverInfo(file);
   const stateLabel = isRuntimeOnly
     ? t('auth_files.type_virtual', { defaultValue: 'Virtual auth file' })
     : file.disabled
@@ -234,6 +283,34 @@ export function AuthFileCard(props: AuthFileCardProps) {
             <div className={styles.healthStatusMessage} title={rawStatusMessage}>
               <IconInfo className={styles.messageIcon} size={14} />
               <span>{rawStatusMessage}</span>
+            </div>
+          )}
+
+          {autoRecoverInfo.visible && (
+            <div className={styles.autoRecoverPanel}>
+              <div className={styles.autoRecoverHeader}>
+                <IconInfo className={styles.messageIcon} size={14} />
+                <span>{t('auth_files.auto_recover_title')}</span>
+                {autoRecoverInfo.enabled ? (
+                  <strong>{t('auth_files.auto_recover_enabled')}</strong>
+                ) : null}
+              </div>
+              <div className={styles.autoRecoverGrid}>
+                {autoRecoverInfo.reason ? (
+                  <div>
+                    <span>{t('auth_files.auto_recover_reason')}</span>
+                    <strong>{autoRecoverInfo.reason}</strong>
+                  </div>
+                ) : null}
+                <div>
+                  <span>{t('auth_files.auto_recover_disabled_at')}</span>
+                  <strong>{autoRecoverInfo.disabledAt}</strong>
+                </div>
+                <div>
+                  <span>{t('auth_files.auto_recover_next_check_at')}</span>
+                  <strong>{autoRecoverInfo.nextCheckAt}</strong>
+                </div>
+              </div>
             </div>
           )}
 

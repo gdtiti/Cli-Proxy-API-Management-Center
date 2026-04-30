@@ -127,6 +127,46 @@ function setIntFromStringInDoc(doc: YamlDocument, path: YamlPath, value: unknown
   }
 }
 
+function parseStatusCodesText(raw: unknown): string {
+  if (!Array.isArray(raw)) return '';
+  return raw
+    .map((item) =>
+      typeof item === 'number' || typeof item === 'string' ? String(item).trim() : ''
+    )
+    .filter(Boolean)
+    .join(', ');
+}
+
+function parseStatusCodesFromText(value: string): number[] | null {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  const parts = trimmed
+    .split(/[\s,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const codes: number[] = [];
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) return null;
+    const code = Number(part);
+    if (!Number.isInteger(code) || code < 100 || code > 599) return null;
+    codes.push(code);
+  }
+  return codes;
+}
+
+function setStatusCodesFromTextInDoc(doc: YamlDocument, path: YamlPath, value: unknown): void {
+  const safe = typeof value === 'string' ? value : '';
+  const codes = parseStatusCodesFromText(safe);
+  if (codes === null) return;
+  if (codes.length > 0) {
+    doc.setIn(path, codes);
+    return;
+  }
+  if (docHas(doc, path)) doc.deleteIn(path);
+}
+
 function normalizeRoutingStrategy(value: unknown): RoutingStrategy {
   switch (typeof value === 'string' ? value.trim() : '') {
     case 'fill-first':
@@ -147,6 +187,10 @@ function getNonNegativeIntegerError(value: string): 'non_negative_integer' | und
   return Number(trimmed) >= 0 ? undefined : 'non_negative_integer';
 }
 
+function getStatusCodesError(value: string): 'status_code_list' | undefined {
+  return parseStatusCodesFromText(value) === null ? 'status_code_list' : undefined;
+}
+
 function getPortError(value: string): 'port_range' | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -164,6 +208,33 @@ export function getVisualConfigValidationErrors(
     requestRetry: getNonNegativeIntegerError(values.requestRetry),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
+    'authRuntime.unauthorizedDeleteThreshold': getNonNegativeIntegerError(
+      values.authRuntime.unauthorizedDeleteThreshold
+    ),
+    'authRuntime.unauthorizedDeleteWindowSeconds': getNonNegativeIntegerError(
+      values.authRuntime.unauthorizedDeleteWindowSeconds
+    ),
+    'authMaintenance.scanIntervalSeconds': getNonNegativeIntegerError(
+      values.authMaintenance.scanIntervalSeconds
+    ),
+    'authMaintenance.deleteIntervalSeconds': getNonNegativeIntegerError(
+      values.authMaintenance.deleteIntervalSeconds
+    ),
+    'authMaintenance.deleteStatusCodes': getStatusCodesError(
+      values.authMaintenance.deleteStatusCodes
+    ),
+    'authMaintenance.disableStatusCodes': getStatusCodesError(
+      values.authMaintenance.disableStatusCodes
+    ),
+    'authMaintenance.quotaStrikeThreshold': getNonNegativeIntegerError(
+      values.authMaintenance.quotaStrikeThreshold
+    ),
+    'authMaintenance.codexMaxRequestCount': getNonNegativeIntegerError(
+      values.authMaintenance.codexMaxRequestCount
+    ),
+    'authMaintenance.codexQuotaCheckRequestInterval': getNonNegativeIntegerError(
+      values.authMaintenance.codexQuotaCheckRequestInterval
+    ),
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
     'streaming.nonstreamKeepaliveInterval': getNonNegativeIntegerError(
@@ -489,6 +560,8 @@ export function useVisualConfig() {
       const routing = asRecord(parsed.routing);
       const payload = asRecord(parsed.payload);
       const streaming = asRecord(parsed.streaming);
+      const authRuntime = asRecord(parsed['auth-runtime']);
+      const authMaintenance = asRecord(parsed['auth-maintenance']);
 
       const newValues: VisualConfigValues = {
         host: typeof parsed.host === 'string' ? parsed.host : '',
@@ -542,6 +615,30 @@ export function useVisualConfig() {
           keepaliveSeconds: String(streaming?.['keepalive-seconds'] ?? ''),
           bootstrapRetries: String(streaming?.['bootstrap-retries'] ?? ''),
           nonstreamKeepaliveInterval: String(parsed['nonstream-keepalive-interval'] ?? ''),
+        },
+        authRuntime: {
+          unauthorizedDeleteThreshold: String(
+            authRuntime?.['unauthorized-delete-threshold'] ?? '3'
+          ),
+          unauthorizedDeleteWindowSeconds: String(
+            authRuntime?.['unauthorized-delete-window-seconds'] ?? '600'
+          ),
+        },
+        authMaintenance: {
+          enable: Boolean(authMaintenance?.enable ?? true),
+          scanIntervalSeconds: String(authMaintenance?.['scan-interval-seconds'] ?? '30'),
+          deleteIntervalSeconds: String(authMaintenance?.['delete-interval-seconds'] ?? '5'),
+          deleteStatusCodes: parseStatusCodesText(authMaintenance?.['delete-status-codes']),
+          disableStatusCodes: parseStatusCodesText(authMaintenance?.['disable-status-codes']),
+          deleteQuotaExceeded: Boolean(authMaintenance?.['delete-quota-exceeded']),
+          quotaStrikeThreshold: String(authMaintenance?.['quota-strike-threshold'] ?? '6'),
+          disableCodexUsageLimitReached: Boolean(
+            authMaintenance?.['disable-codex-usage-limit-reached'] ?? true
+          ),
+          codexMaxRequestCount: String(authMaintenance?.['codex-max-request-count'] ?? '0'),
+          codexQuotaCheckRequestInterval: String(
+            authMaintenance?.['codex-quota-check-request-interval'] ?? '0'
+          ),
         },
 
         // 新增超时配置
@@ -680,6 +777,88 @@ export function useVisualConfig() {
 
         setIntFromStringInDoc(doc, ['nonstream-keepalive-interval'], nonstreamKeepaliveInterval);
 
+        const authRuntimeDefined =
+          docHas(doc, ['auth-runtime']) ||
+          values.authRuntime.unauthorizedDeleteThreshold.trim() !== '3' ||
+          values.authRuntime.unauthorizedDeleteWindowSeconds.trim() !== '600';
+        if (authRuntimeDefined) {
+          ensureMapInDoc(doc, ['auth-runtime']);
+          setIntFromStringInDoc(
+            doc,
+            ['auth-runtime', 'unauthorized-delete-threshold'],
+            values.authRuntime.unauthorizedDeleteThreshold
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-runtime', 'unauthorized-delete-window-seconds'],
+            values.authRuntime.unauthorizedDeleteWindowSeconds
+          );
+          deleteIfMapEmpty(doc, ['auth-runtime']);
+        }
+
+        const authMaintenanceDefined =
+          docHas(doc, ['auth-maintenance']) ||
+          values.authMaintenance.enable !== true ||
+          values.authMaintenance.scanIntervalSeconds.trim() !== '30' ||
+          values.authMaintenance.deleteIntervalSeconds.trim() !== '5' ||
+          values.authMaintenance.deleteStatusCodes.trim() !== '' ||
+          values.authMaintenance.disableStatusCodes.trim() !== '' ||
+          values.authMaintenance.deleteQuotaExceeded ||
+          values.authMaintenance.quotaStrikeThreshold.trim() !== '6' ||
+          values.authMaintenance.disableCodexUsageLimitReached !== true ||
+          values.authMaintenance.codexMaxRequestCount.trim() !== '0' ||
+          values.authMaintenance.codexQuotaCheckRequestInterval.trim() !== '0';
+        if (authMaintenanceDefined) {
+          ensureMapInDoc(doc, ['auth-maintenance']);
+          setBooleanInDoc(doc, ['auth-maintenance', 'enable'], values.authMaintenance.enable);
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'scan-interval-seconds'],
+            values.authMaintenance.scanIntervalSeconds
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'delete-interval-seconds'],
+            values.authMaintenance.deleteIntervalSeconds
+          );
+          setStatusCodesFromTextInDoc(
+            doc,
+            ['auth-maintenance', 'delete-status-codes'],
+            values.authMaintenance.deleteStatusCodes
+          );
+          setStatusCodesFromTextInDoc(
+            doc,
+            ['auth-maintenance', 'disable-status-codes'],
+            values.authMaintenance.disableStatusCodes
+          );
+          setBooleanInDoc(
+            doc,
+            ['auth-maintenance', 'delete-quota-exceeded'],
+            values.authMaintenance.deleteQuotaExceeded
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'quota-strike-threshold'],
+            values.authMaintenance.quotaStrikeThreshold
+          );
+          setBooleanInDoc(
+            doc,
+            ['auth-maintenance', 'disable-codex-usage-limit-reached'],
+            values.authMaintenance.disableCodexUsageLimitReached
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'codex-max-request-count'],
+            values.authMaintenance.codexMaxRequestCount
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'codex-quota-check-request-interval'],
+            values.authMaintenance.codexQuotaCheckRequestInterval
+          );
+          deleteIfMapEmpty(doc, ['auth-maintenance']);
+        }
+
         if (
           docHas(doc, ['payload']) ||
           values.payloadDefaultRules.length > 0 ||
@@ -760,6 +939,12 @@ export function useVisualConfig() {
       const next: VisualConfigValues = { ...prev, ...newValues } as VisualConfigValues;
       if (newValues.streaming) {
         next.streaming = { ...prev.streaming, ...newValues.streaming };
+      }
+      if (newValues.authRuntime) {
+        next.authRuntime = { ...prev.authRuntime, ...newValues.authRuntime };
+      }
+      if (newValues.authMaintenance) {
+        next.authMaintenance = { ...prev.authMaintenance, ...newValues.authMaintenance };
       }
       return next;
     });

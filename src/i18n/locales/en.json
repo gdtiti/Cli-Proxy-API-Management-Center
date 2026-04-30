@@ -684,7 +684,12 @@
     "quota_exceeded_label": "Exceeded",
     "quota_persisted_empty": "No persisted quota data",
     "quota_refresh_success": "Quota refreshed for \"{{name}}\"",
-    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}"
+    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}",
+    "auto_recover_title": "Auto maintenance",
+    "auto_recover_enabled": "Auto recover: enabled",
+    "auto_recover_reason": "Reason",
+    "auto_recover_disabled_at": "Disabled at",
+    "auto_recover_next_check_at": "Next check"
   },
   "antigravity_quota": {
     "title": "Antigravity Quota",
@@ -1316,7 +1321,30 @@
           "title": "Authentication Configuration",
           "description": "API keys and authentication directory settings",
           "auth_dir": "Auth Directory (auth-dir)",
-          "auth_dir_hint": "Directory path for authentication files (supports ~)"
+          "auth_dir_hint": "Directory path for authentication files (supports ~)",
+          "runtime_title": "Runtime 401 guard",
+          "runtime_description": "Control the unauthorized failure threshold and counting window before automatic disablement.",
+          "unauthorized_delete_threshold": "401 auto-disable threshold",
+          "unauthorized_delete_window_seconds": "401 counting window (seconds)",
+          "unauthorized_delete_window_hint": "Disable the credential after the threshold is reached within this window.",
+          "maintenance_title": "Automatic maintenance",
+          "maintenance_description": "Configure background scans, status-code policies, Codex usage limits, and recovery checks.",
+          "maintenance_enable": "Enable maintenance",
+          "maintenance_enable_desc": "When off, automatic persistent disablement and recovery scans are skipped.",
+          "delete_quota_exceeded": "Delete when quota is exceeded",
+          "delete_quota_exceeded_desc": "Keep this off to avoid automatic deletion; disablement remains the default action.",
+          "disable_codex_usage_limit_reached": "Disable on Codex usage_limit_reached",
+          "disable_codex_usage_limit_reached_desc": "Automatically disable accounts when Codex returns usage_limit_reached.",
+          "scan_interval_seconds": "Scan interval (seconds)",
+          "delete_interval_seconds": "Delete/disable throttle interval (seconds)",
+          "quota_strike_threshold": "Quota strike threshold",
+          "quota_strike_threshold_hint": "Trigger maintenance after this many consecutive quota-limit strikes.",
+          "codex_max_request_count": "Codex max request count",
+          "codex_quota_check_request_interval": "Codex quota-check request interval",
+          "zero_disabled_hint": "0 disables this limit.",
+          "delete_status_codes": "Delete status codes",
+          "disable_status_codes": "Disable status codes",
+          "status_codes_hint": "Separate HTTP status codes with commas, spaces, or new lines. Valid range: 100-599."
         },
         "system": {
           "title": "System Configuration",
@@ -1439,7 +1467,8 @@
         "non_negative_integer": "Enter a non-negative whole number",
         "payload_invalid_number": "Enter a valid number",
         "payload_invalid_boolean": "Choose true or false",
-        "payload_invalid_json": "Enter valid JSON"
+        "payload_invalid_json": "Enter valid JSON",
+        "status_code_list": "Enter HTTP status codes in the 100-599 range"
       },
       "common": {
         "edit": "Edit",
@@ -1460,6 +1489,35 @@
     "apply": "Apply",
     "no_data": "No data",
     "requests": "Requests",
+    "account": {
+      "title": "Account Overview",
+      "subtitle": "Aggregate requests, success rate, tokens, and recent status by auth account",
+      "click_hint": "Click an account row to inspect details",
+      "total_accounts": "Accounts",
+      "failing_accounts": "Failing accounts",
+      "total_requests": "Total requests",
+      "search_placeholder": "Search account, source, provider, or model...",
+      "all_status": "All status",
+      "only_failed": "Failed only",
+      "only_healthy": "Healthy only",
+      "account": "Account",
+      "provider": "Provider",
+      "requests": "Success / Failed",
+      "success_rate": "Success rate",
+      "tokens": "Tokens",
+      "models": "Models",
+      "latest_request": "Latest request",
+      "actions": "Actions",
+      "focus": "Trace",
+      "clear_focus": "Clear trace",
+      "detail_title": "Account {{account}} Trace",
+      "success_failed": "Success {{success}} / Failed {{failed}}",
+      "model_breakdown": "Model usage",
+      "model": "Model",
+      "recent_requests": "Recent requests",
+      "source_count": "{{count}} sources",
+      "no_data": "No account data"
+    },
     "channel": {
       "title": "Channel Stats",
       "subtitle": "Request distribution by channel",
@@ -1900,7 +1958,8 @@
       "quota": "Quota",
       "last_refresh": "Last Refresh",
       "messages": "Messages",
-      "events": "Events"
+      "events": "Events",
+      "maintenance": "Auto maintenance"
     },
     "empty": {
       "accounts": "No account data",
@@ -1912,6 +1971,10 @@
       "detail": "No detail data",
       "detail_description": "This account did not return detail data.",
       "detail_events": "No events for this account"
-    }
+    },
+    "auto_recover_enabled": "Auto recover enabled",
+    "auto_recover_reason": "Auto-disable reason",
+    "auto_recover_disabled_at": "Auto-disabled at",
+    "auto_recover_next_check_at": "Next recovery check"
   }
 }

@@ -52,11 +52,16 @@ export interface CodexAuthSnapshot {
   model_last_success_at?: string | number | null;
   model_last_error?: string;
   next_recover_at?: string;
+  auth_maintenance_auto_recover?: boolean | null;
+  auth_maintenance_auto_recover_reason?: string | null;
+  auth_maintenance_auto_recover_disabled_at?: string | number | null;
+  auth_maintenance_auto_recover_next_check_at?: string | number | null;
   last_refreshed_at?: string;
   next_refresh_after?: string;
   next_retry_after?: string;
   updated_at?: string;
   usage?: CodexUsageRollup;
+  metadata?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
 

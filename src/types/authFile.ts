@@ -47,6 +47,10 @@ export interface AuthFileItem {
   updated_at?: string | number | null;
   next_retry_after?: string | number | null;
   next_recover_at?: string | number | null;
+  auth_maintenance_auto_recover?: boolean | null;
+  auth_maintenance_auto_recover_reason?: string | null;
+  auth_maintenance_auto_recover_disabled_at?: string | number | null;
+  auth_maintenance_auto_recover_next_check_at?: string | number | null;
   quota_checked?: boolean | null;
   quota_level?: string;
   quota_exceeded?: boolean | null;

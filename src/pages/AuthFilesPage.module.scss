@@ -397,7 +397,7 @@
   gap: $spacing-md;
   align-items: flex-end;
 
-// Fix nested Input styles inside filterItem
+  // Fix nested Input styles inside filterItem
   :global(.form-group) {
     margin: 0;
   }
@@ -1399,6 +1399,56 @@
   border-radius: 12px;
   padding: 10px 12px;
   word-break: break-word;
+}
+
+.autoRecoverPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--warning-border) 72%, var(--border-color));
+  background: color-mix(in srgb, var(--warning-bg) 72%, var(--bg-primary));
+}
+
+.autoRecoverHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--warning-text);
+  font-size: 12px;
+  font-weight: 700;
+
+  strong {
+    margin-left: auto;
+    color: var(--text-primary);
+    font-size: 11px;
+  }
+}
+
+.autoRecoverGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  span {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  strong {
+    color: var(--text-primary);
+    font-size: 12px;
+    word-break: break-word;
+  }
 }
 
 .messageIcon {

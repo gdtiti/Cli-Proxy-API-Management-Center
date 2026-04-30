@@ -172,6 +172,12 @@ const RULE_TARGET_TO_COLLECTION_KEY: Record<Exclude<RuleTargetId, 'filter'>, Rul
   override: 'overrideRules',
   override_raw: 'overrideRawRules',
 };
+const AUTO_RECOVER_KEYS = {
+  enabled: 'auth_maintenance_auto_recover',
+  reason: 'auth_maintenance_auto_recover_reason',
+  disabledAt: 'auth_maintenance_auto_recover_disabled_at',
+  nextCheckAt: 'auth_maintenance_auto_recover_next_check_at',
+} as const;
 
 const nextLocalId = (prefix: string) => {
   localIdSeed += 1;
@@ -223,9 +229,10 @@ const normalizeRuleValueType = (valueType?: string): RuleValueType => {
   }
 };
 
-const formatDateTime = (value?: string | null) => {
-  if (!value) return '-';
-  const date = new Date(value);
+const formatDateTime = (value?: string | number | null) => {
+  if (value === undefined || value === null || String(value).trim() === '') return '-';
+  const normalized = typeof value === 'number' && value > 0 && value < 10_000_000_000 ? value * 1000 : value;
+  const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString();
 };
@@ -244,6 +251,39 @@ const formatAverage = (value?: number | null) => {
 };
 
 const normalizeText = (value: unknown) => String(value ?? '').trim().toLowerCase();
+
+type AutoRecoverInfo = {
+  enabled: boolean;
+  reason: string;
+  disabledAt: string | number | null;
+  nextCheckAt: string | number | null;
+  visible: boolean;
+};
+
+const readSnapshotValue = (item: CodexAuthSnapshot, key: string) => {
+  const directValue = item[key];
+  if (directValue !== undefined && directValue !== null) return directValue;
+  const metadata = item.metadata;
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  return metadata[key];
+};
+
+const getAutoRecoverInfo = (item: CodexAuthSnapshot): AutoRecoverInfo => {
+  const reasonValue = readSnapshotValue(item, AUTO_RECOVER_KEYS.reason);
+  const disabledAtValue = readSnapshotValue(item, AUTO_RECOVER_KEYS.disabledAt);
+  const nextCheckAtValue = readSnapshotValue(item, AUTO_RECOVER_KEYS.nextCheckAt);
+  const reason = typeof reasonValue === 'string' ? reasonValue.trim() : '';
+  return {
+    enabled: readSnapshotValue(item, AUTO_RECOVER_KEYS.enabled) === true,
+    reason,
+    disabledAt: typeof disabledAtValue === 'string' || typeof disabledAtValue === 'number' ? disabledAtValue : null,
+    nextCheckAt: typeof nextCheckAtValue === 'string' || typeof nextCheckAtValue === 'number' ? nextCheckAtValue : null,
+    visible: readSnapshotValue(item, AUTO_RECOVER_KEYS.enabled) === true || Boolean(reason) || Boolean(disabledAtValue) || Boolean(nextCheckAtValue),
+  };
+};
+
+const getRecoverTime = (item: CodexAuthSnapshot) =>
+  getAutoRecoverInfo(item).nextCheckAt || item.next_recover_at || item.next_retry_after || item.next_refresh_after;
 
 const getAvailableModelIDs = (item: { available_models?: unknown }) =>
   Array.isArray(item.available_models)
@@ -401,8 +441,10 @@ const compareNumber = (left: unknown, right: unknown) => {
 };
 
 const compareDate = (left: unknown, right: unknown) => {
-  const leftTime = left ? new Date(String(left)).getTime() : 0;
-  const rightTime = right ? new Date(String(right)).getTime() : 0;
+  const normalize = (value: unknown) =>
+    typeof value === 'number' && value > 0 && value < 10_000_000_000 ? value * 1000 : value;
+  const leftTime = left ? new Date(normalize(left) as string | number).getTime() : 0;
+  const rightTime = right ? new Date(normalize(right) as string | number).getTime() : 0;
   return leftTime - rightTime;
 };
 
@@ -1436,13 +1478,7 @@ export function CodexAuthPage() {
             accountsSort.direction
           );
         case 'recover':
-          return applySortDirection(
-            compareDate(
-              left.next_recover_at || left.next_retry_after || left.next_refresh_after,
-              right.next_recover_at || right.next_retry_after || right.next_refresh_after
-            ),
-            accountsSort.direction
-          );
+          return applySortDirection(compareDate(getRecoverTime(left), getRecoverTime(right)), accountsSort.direction);
         case 'requests':
           return applySortDirection(
             compareNumber(left.usage?.request_count, right.usage?.request_count),
@@ -1943,7 +1979,9 @@ export function CodexAuthPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedAccounts.map((item) => (
+                    {pagedAccounts.map((item) => {
+                      const autoRecoverInfo = getAutoRecoverInfo(item);
+                      return (
                       <tr key={String(item.auth_index ?? item.auth_id ?? `${item.account}-${item.file_name}`)}>
                         <td>
                           <input
@@ -1969,6 +2007,13 @@ export function CodexAuthPage() {
                         <td>
                           <span className={`${styles.statusChip} ${getStatusTone(item)}`}>{getStatusText(item)}</span>
                           {item.status_message ? <div className={styles.subtle}>{item.status_message}</div> : null}
+                          {autoRecoverInfo.visible ? (
+                            <div className={styles.subtle}>
+                              {autoRecoverInfo.enabled ? t('codex_management.auto_recover_enabled') : null}
+                              {autoRecoverInfo.enabled && autoRecoverInfo.reason ? ' · ' : ''}
+                              {autoRecoverInfo.reason || null}
+                            </div>
+                          ) : null}
                         </td>
                         <td>
                           <div>{getQuotaSummary(item, t)}</div>
@@ -1979,7 +2024,12 @@ export function CodexAuthPage() {
                           ) : null}
                           {item.last_error_message ? <div className={styles.subtle}>{item.last_error_message}</div> : null}
                         </td>
-                        <td>{formatDateTime(item.next_recover_at || item.next_retry_after || item.next_refresh_after)}</td>
+                        <td>
+                          <div>{formatDateTime(getRecoverTime(item))}</div>
+                          {autoRecoverInfo.nextCheckAt ? (
+                            <div className={styles.subtle}>{t('codex_management.auto_recover_next_check_at')}</div>
+                          ) : null}
+                        </td>
                         <td>{formatNumber(item.usage?.request_count)}</td>
                         <td>{formatAverage(item.usage?.avg_total_tokens)}</td>
                         <td>
@@ -1993,7 +2043,8 @@ export function CodexAuthPage() {
                           </Button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2631,13 +2682,7 @@ export function CodexAuthPage() {
                   </div>
                   <div>
                     <span>{t('codex_management.table.recover')}</span>
-                    <strong>
-                      {formatDateTime(
-                        detail.snapshot.next_recover_at ||
-                          detail.snapshot.next_retry_after ||
-                          detail.snapshot.next_refresh_after
-                      )}
-                    </strong>
+                    <strong>{formatDateTime(getRecoverTime(detail.snapshot))}</strong>
                   </div>
                   <div>
                     <span>{t('codex_management.detail_cards.last_refresh')}</span>
@@ -2645,6 +2690,35 @@ export function CodexAuthPage() {
                   </div>
                 </div>
               </Card>
+              {(() => {
+                const autoRecoverInfo = getAutoRecoverInfo(detail.snapshot);
+                return autoRecoverInfo.visible ? (
+                  <Card title={t('codex_management.detail_cards.maintenance')}>
+                    <div className={styles.detailList}>
+                      <div>
+                        <span>{t('codex_management.auto_recover_enabled')}</span>
+                        <strong>
+                          {autoRecoverInfo.enabled
+                            ? t('auth_files.quota_checked_yes')
+                            : t('auth_files.quota_checked_no')}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>{t('codex_management.auto_recover_reason')}</span>
+                        <strong>{autoRecoverInfo.reason || '-'}</strong>
+                      </div>
+                      <div>
+                        <span>{t('codex_management.auto_recover_disabled_at')}</span>
+                        <strong>{formatDateTime(autoRecoverInfo.disabledAt)}</strong>
+                      </div>
+                      <div>
+                        <span>{t('codex_management.auto_recover_next_check_at')}</span>
+                        <strong>{formatDateTime(autoRecoverInfo.nextCheckAt)}</strong>
+                      </div>
+                    </div>
+                  </Card>
+                ) : null;
+              })()}
             </div>
 
             {detail.snapshot.status_message || detail.snapshot.last_error_message ? (

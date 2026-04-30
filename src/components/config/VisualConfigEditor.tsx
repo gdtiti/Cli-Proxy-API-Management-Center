@@ -204,6 +204,42 @@ export function VisualConfigEditor({
   const requestRetryError = getValidationMessage(t, validationErrors?.requestRetry);
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const unauthorizedDeleteThresholdError = getValidationMessage(
+    t,
+    validationErrors?.['authRuntime.unauthorizedDeleteThreshold']
+  );
+  const unauthorizedDeleteWindowSecondsError = getValidationMessage(
+    t,
+    validationErrors?.['authRuntime.unauthorizedDeleteWindowSeconds']
+  );
+  const scanIntervalSecondsError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.scanIntervalSeconds']
+  );
+  const deleteIntervalSecondsError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.deleteIntervalSeconds']
+  );
+  const deleteStatusCodesError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.deleteStatusCodes']
+  );
+  const disableStatusCodesError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.disableStatusCodes']
+  );
+  const quotaStrikeThresholdError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.quotaStrikeThreshold']
+  );
+  const codexMaxRequestCountError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.codexMaxRequestCount']
+  );
+  const codexQuotaCheckRequestIntervalError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.codexQuotaCheckRequestInterval']
+  );
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
   const bootstrapRetriesError = getValidationMessage(
     t,
@@ -273,7 +309,17 @@ export function VisualConfigEditor({
         title: t('config_management.visual.sections.auth.title'),
         description: t('config_management.visual.sections.auth.description'),
         icon: IconKey,
-        errorCount: 0,
+        errorCount: countErrors([
+          'authRuntime.unauthorizedDeleteThreshold',
+          'authRuntime.unauthorizedDeleteWindowSeconds',
+          'authMaintenance.scanIntervalSeconds',
+          'authMaintenance.deleteIntervalSeconds',
+          'authMaintenance.deleteStatusCodes',
+          'authMaintenance.disableStatusCodes',
+          'authMaintenance.quotaStrikeThreshold',
+          'authMaintenance.codexMaxRequestCount',
+          'authMaintenance.codexQuotaCheckRequestInterval',
+        ]),
       },
       {
         id: 'system',
@@ -682,6 +728,225 @@ export function VisualConfigEditor({
                   onChange={handleApiKeysTextChange}
                 />
               </div>
+              <SectionSubsection
+                title={t('config_management.visual.sections.auth.runtime_title')}
+                description={t('config_management.visual.sections.auth.runtime_description')}
+              >
+                <SectionGrid>
+                  <Input
+                    label={t(
+                      'config_management.visual.sections.auth.unauthorized_delete_threshold'
+                    )}
+                    type="number"
+                    placeholder="3"
+                    value={values.authRuntime.unauthorizedDeleteThreshold}
+                    onChange={(e) =>
+                      onChange({
+                        authRuntime: {
+                          ...values.authRuntime,
+                          unauthorizedDeleteThreshold: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    error={unauthorizedDeleteThresholdError}
+                  />
+                  <Input
+                    label={t(
+                      'config_management.visual.sections.auth.unauthorized_delete_window_seconds'
+                    )}
+                    type="number"
+                    placeholder="600"
+                    value={values.authRuntime.unauthorizedDeleteWindowSeconds}
+                    onChange={(e) =>
+                      onChange({
+                        authRuntime: {
+                          ...values.authRuntime,
+                          unauthorizedDeleteWindowSeconds: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t(
+                      'config_management.visual.sections.auth.unauthorized_delete_window_hint'
+                    )}
+                    error={unauthorizedDeleteWindowSecondsError}
+                  />
+                </SectionGrid>
+              </SectionSubsection>
+              <SectionSubsection
+                title={t('config_management.visual.sections.auth.maintenance_title')}
+                description={t('config_management.visual.sections.auth.maintenance_description')}
+              >
+                <SectionGrid>
+                  <ToggleRow
+                    title={t('config_management.visual.sections.auth.maintenance_enable')}
+                    description={t(
+                      'config_management.visual.sections.auth.maintenance_enable_desc'
+                    )}
+                    checked={values.authMaintenance.enable}
+                    disabled={disabled}
+                    onChange={(enable) =>
+                      onChange({
+                        authMaintenance: { ...values.authMaintenance, enable },
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    title={t('config_management.visual.sections.auth.delete_quota_exceeded')}
+                    description={t(
+                      'config_management.visual.sections.auth.delete_quota_exceeded_desc'
+                    )}
+                    checked={values.authMaintenance.deleteQuotaExceeded}
+                    disabled={disabled}
+                    onChange={(deleteQuotaExceeded) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          deleteQuotaExceeded,
+                        },
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    title={t(
+                      'config_management.visual.sections.auth.disable_codex_usage_limit_reached'
+                    )}
+                    description={t(
+                      'config_management.visual.sections.auth.disable_codex_usage_limit_reached_desc'
+                    )}
+                    checked={values.authMaintenance.disableCodexUsageLimitReached}
+                    disabled={disabled}
+                    onChange={(disableCodexUsageLimitReached) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          disableCodexUsageLimitReached,
+                        },
+                      })
+                    }
+                  />
+                </SectionGrid>
+                <SectionGrid>
+                  <Input
+                    label={t('config_management.visual.sections.auth.scan_interval_seconds')}
+                    type="number"
+                    placeholder="30"
+                    value={values.authMaintenance.scanIntervalSeconds}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          scanIntervalSeconds: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    error={scanIntervalSecondsError}
+                  />
+                  <Input
+                    label={t('config_management.visual.sections.auth.delete_interval_seconds')}
+                    type="number"
+                    placeholder="5"
+                    value={values.authMaintenance.deleteIntervalSeconds}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          deleteIntervalSeconds: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    error={deleteIntervalSecondsError}
+                  />
+                  <Input
+                    label={t('config_management.visual.sections.auth.quota_strike_threshold')}
+                    type="number"
+                    placeholder="6"
+                    value={values.authMaintenance.quotaStrikeThreshold}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          quotaStrikeThreshold: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t('config_management.visual.sections.auth.quota_strike_threshold_hint')}
+                    error={quotaStrikeThresholdError}
+                  />
+                  <Input
+                    label={t('config_management.visual.sections.auth.codex_max_request_count')}
+                    type="number"
+                    placeholder="0"
+                    value={values.authMaintenance.codexMaxRequestCount}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          codexMaxRequestCount: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t('config_management.visual.sections.auth.zero_disabled_hint')}
+                    error={codexMaxRequestCountError}
+                  />
+                  <Input
+                    label={t(
+                      'config_management.visual.sections.auth.codex_quota_check_request_interval'
+                    )}
+                    type="number"
+                    placeholder="0"
+                    value={values.authMaintenance.codexQuotaCheckRequestInterval}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          codexQuotaCheckRequestInterval: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t('config_management.visual.sections.auth.zero_disabled_hint')}
+                    error={codexQuotaCheckRequestIntervalError}
+                  />
+                  <Input
+                    label={t('config_management.visual.sections.auth.delete_status_codes')}
+                    placeholder="401, 403"
+                    value={values.authMaintenance.deleteStatusCodes}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          deleteStatusCodes: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t('config_management.visual.sections.auth.status_codes_hint')}
+                    error={deleteStatusCodesError}
+                  />
+                  <Input
+                    label={t('config_management.visual.sections.auth.disable_status_codes')}
+                    placeholder="429, 503"
+                    value={values.authMaintenance.disableStatusCodes}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          disableStatusCodes: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t('config_management.visual.sections.auth.status_codes_hint')}
+                    error={disableStatusCodesError}
+                  />
+                </SectionGrid>
+              </SectionSubsection>
             </SectionStack>
           </ConfigSection>
 

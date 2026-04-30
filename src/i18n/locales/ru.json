@@ -687,7 +687,12 @@
     "quota_exceeded_label": "Лимит превышен",
     "quota_persisted_empty": "Сохранённых данных по квоте нет",
     "quota_refresh_success": "Квота для \"{{name}}\" обновлена",
-    "quota_refresh_failed": "Не удалось обновить квоту для \"{{name}}\": {{message}}"
+    "quota_refresh_failed": "Не удалось обновить квоту для \"{{name}}\": {{message}}",
+    "auto_recover_title": "Автообслуживание",
+    "auto_recover_enabled": "Автовосстановление: включено",
+    "auto_recover_reason": "Причина",
+    "auto_recover_disabled_at": "Отключено в",
+    "auto_recover_next_check_at": "Следующая проверка"
   },
   "antigravity_quota": {
     "title": "Квота Antigravity",
@@ -1319,7 +1324,30 @@
           "title": "Настройки аутентификации",
           "description": "API-ключи и каталог аутентификации",
           "auth_dir": "Каталог auth-dir",
-          "auth_dir_hint": "Путь к каталогу с файлами аутентификации (поддерживает ~)"
+          "auth_dir_hint": "Путь к каталогу с файлами аутентификации (поддерживает ~)",
+          "runtime_title": "Защита 401 во время выполнения",
+          "runtime_description": "Настройка порога ошибок авторизации и окна подсчёта перед автоматическим отключением.",
+          "unauthorized_delete_threshold": "Порог автоотключения 401",
+          "unauthorized_delete_window_seconds": "Окно подсчёта 401 (сек.)",
+          "unauthorized_delete_window_hint": "Отключать учётные данные после достижения порога в этом окне.",
+          "maintenance_title": "Автоматическое обслуживание",
+          "maintenance_description": "Настройка сканирования, кодов статуса, лимитов Codex и проверок восстановления.",
+          "maintenance_enable": "Включить обслуживание",
+          "maintenance_enable_desc": "Если выключено, постоянное автоотключение и проверки восстановления пропускаются.",
+          "delete_quota_exceeded": "Удалять при исчерпании квоты",
+          "delete_quota_exceeded_desc": "Оставьте выключенным, чтобы избежать автоудаления; по умолчанию используется отключение.",
+          "disable_codex_usage_limit_reached": "Отключать при Codex usage_limit_reached",
+          "disable_codex_usage_limit_reached_desc": "Автоматически отключать аккаунты при ответе Codex usage_limit_reached.",
+          "scan_interval_seconds": "Интервал сканирования (сек.)",
+          "delete_interval_seconds": "Интервал удаления/отключения (сек.)",
+          "quota_strike_threshold": "Порог срабатываний квоты",
+          "quota_strike_threshold_hint": "Запускать обслуживание после такого числа подряд ограничений квоты.",
+          "codex_max_request_count": "Максимум запросов Codex",
+          "codex_quota_check_request_interval": "Интервал проверки квоты Codex",
+          "zero_disabled_hint": "0 отключает это ограничение.",
+          "delete_status_codes": "Коды статуса для удаления",
+          "disable_status_codes": "Коды статуса для отключения",
+          "status_codes_hint": "Разделяйте HTTP-коды запятыми, пробелами или новыми строками. Диапазон: 100-599."
         },
         "system": {
           "title": "Системные настройки",
@@ -1444,7 +1472,8 @@
         "non_negative_integer": "Введите неотрицательное целое число",
         "payload_invalid_number": "Введите корректное число",
         "payload_invalid_boolean": "Выберите true или false",
-        "payload_invalid_json": "Введите корректный JSON"
+        "payload_invalid_json": "Введите корректный JSON",
+        "status_code_list": "Введите HTTP-коды статуса в диапазоне 100-599"
       },
       "common": {
         "edit": "Изменить",
@@ -1465,6 +1494,35 @@
     "apply": "Применить",
     "no_data": "Нет данных",
     "requests": "Запросы",
+    "account": {
+      "title": "Обзор аккаунтов",
+      "subtitle": "Запросы, успешность, токены и последние статусы по auth-аккаунтам",
+      "click_hint": "Нажмите строку аккаунта для деталей",
+      "total_accounts": "Аккаунты",
+      "failing_accounts": "Аккаунты с ошибками",
+      "total_requests": "Всего запросов",
+      "search_placeholder": "Поиск аккаунта, источника, провайдера или модели...",
+      "all_status": "Все статусы",
+      "only_failed": "Только с ошибками",
+      "only_healthy": "Только здоровые",
+      "account": "Аккаунт",
+      "provider": "Провайдер",
+      "requests": "Успех / Ошибка",
+      "success_rate": "Успешность",
+      "tokens": "Токены",
+      "models": "Модели",
+      "latest_request": "Последний запрос",
+      "actions": "Действия",
+      "focus": "Отследить",
+      "clear_focus": "Сбросить",
+      "detail_title": "Трассировка аккаунта {{account}}",
+      "success_failed": "Успех {{success}} / Ошибка {{failed}}",
+      "model_breakdown": "Использование моделей",
+      "model": "Модель",
+      "recent_requests": "Последние запросы",
+      "source_count": "{{count}} источников",
+      "no_data": "Нет данных аккаунтов"
+    },
     "channel": {
       "title": "Статистика каналов",
       "subtitle": "Распределение запросов по каналам",
@@ -1905,7 +1963,8 @@
       "quota": "Квота",
       "last_refresh": "Последнее обновление",
       "messages": "Сообщения",
-      "events": "События"
+      "events": "События",
+      "maintenance": "Автообслуживание"
     },
     "empty": {
       "accounts": "Нет данных по аккаунтам",
@@ -1917,6 +1976,10 @@
       "detail": "Нет деталей",
       "detail_description": "Для этого аккаунта не пришли детали.",
       "detail_events": "Для этого аккаунта нет событий"
-    }
+    },
+    "auto_recover_enabled": "Автовосстановление включено",
+    "auto_recover_reason": "Причина автоотключения",
+    "auto_recover_disabled_at": "Автоотключено в",
+    "auto_recover_next_check_at": "Следующая проверка восстановления"
   }
 }

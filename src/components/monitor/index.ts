@@ -3,6 +3,7 @@ export { ModelDistributionChart } from './ModelDistributionChart';
 export { DailyTrendChart } from './DailyTrendChart';
 export { HourlyModelChart } from './HourlyModelChart';
 export { HourlyTokenChart } from './HourlyTokenChart';
+export { AccountOverview } from './AccountOverview';
 export { ChannelStats } from './ChannelStats';
 export { FailureAnalysis } from './FailureAnalysis';
 export { RequestLogs } from './RequestLogs';

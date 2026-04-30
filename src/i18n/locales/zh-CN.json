@@ -684,7 +684,12 @@
     "quota_exceeded_label": "已超额",
     "quota_persisted_empty": "暂无持久化配额信息",
     "quota_refresh_success": "已刷新 \"{{name}}\" 的额度",
-    "quota_refresh_failed": "刷新 \"{{name}}\" 的额度失败：{{message}}"
+    "quota_refresh_failed": "刷新 \"{{name}}\" 的额度失败：{{message}}",
+    "auto_recover_title": "自动维护",
+    "auto_recover_enabled": "自动恢复：已开启",
+    "auto_recover_reason": "原因",
+    "auto_recover_disabled_at": "禁用时间",
+    "auto_recover_next_check_at": "下次检查"
   },
   "antigravity_quota": {
     "title": "Antigravity 额度",
@@ -1316,7 +1321,30 @@
           "title": "认证配置",
           "description": "API 密钥与认证文件目录设置",
           "auth_dir": "认证文件目录 (auth-dir)",
-          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）"
+          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）",
+          "runtime_title": "运行时 401 防护",
+          "runtime_description": "控制连续未授权失败后的自动禁用阈值与统计窗口。",
+          "unauthorized_delete_threshold": "401 自动禁用阈值",
+          "unauthorized_delete_window_seconds": "401 统计窗口（秒）",
+          "unauthorized_delete_window_hint": "在该时间窗口内累计达到阈值后禁用认证。",
+          "maintenance_title": "自动禁用维护",
+          "maintenance_description": "配置后台扫描、状态码策略、Codex 用量限制和恢复检查节奏。",
+          "maintenance_enable": "启用自动维护",
+          "maintenance_enable_desc": "关闭后跳过自动持久禁用与恢复扫描。",
+          "delete_quota_exceeded": "额度耗尽时删除",
+          "delete_quota_exceeded_desc": "保持关闭可避免自动删除认证文件；默认只禁用。",
+          "disable_codex_usage_limit_reached": "禁用 Codex usage_limit_reached",
+          "disable_codex_usage_limit_reached_desc": "命中 Codex usage_limit_reached 时自动禁用账号。",
+          "scan_interval_seconds": "扫描间隔（秒）",
+          "delete_interval_seconds": "删除/禁用节流间隔（秒）",
+          "quota_strike_threshold": "额度连续命中阈值",
+          "quota_strike_threshold_hint": "连续命中额度限制达到该次数后触发维护动作。",
+          "codex_max_request_count": "Codex 最大请求数",
+          "codex_quota_check_request_interval": "Codex 额度检查请求间隔",
+          "zero_disabled_hint": "0 表示不启用该限制。",
+          "delete_status_codes": "删除状态码列表",
+          "disable_status_codes": "禁用状态码列表",
+          "status_codes_hint": "用逗号、空格或换行分隔 HTTP 状态码，范围 100-599。"
         },
         "system": {
           "title": "系统配置",
@@ -1439,7 +1467,8 @@
         "non_negative_integer": "请输入非负整数",
         "payload_invalid_number": "请输入有效数字",
         "payload_invalid_boolean": "请选择 true 或 false",
-        "payload_invalid_json": "请输入有效的 JSON"
+        "payload_invalid_json": "请输入有效的 JSON",
+        "status_code_list": "请输入 100-599 范围内的 HTTP 状态码列表"
       },
       "common": {
         "edit": "编辑",
@@ -1460,6 +1489,35 @@
     "apply": "应用",
     "no_data": "暂无数据",
     "requests": "请求",
+    "account": {
+      "title": "账号汇总",
+      "subtitle": "按认证账号聚合请求、成功率、Token 与最近状态",
+      "click_hint": "点击账号行查看追踪详情",
+      "total_accounts": "账号数",
+      "failing_accounts": "异常账号",
+      "total_requests": "总请求",
+      "search_placeholder": "搜索账号、来源、提供商或模型...",
+      "all_status": "全部状态",
+      "only_failed": "仅异常",
+      "only_healthy": "仅健康",
+      "account": "账号",
+      "provider": "提供商",
+      "requests": "成功 / 失败",
+      "success_rate": "成功率",
+      "tokens": "Token",
+      "models": "模型数",
+      "latest_request": "最近请求",
+      "actions": "操作",
+      "focus": "追踪",
+      "clear_focus": "清除追踪",
+      "detail_title": "账号 {{account}} 追踪",
+      "success_failed": "成功 {{success}} / 失败 {{failed}}",
+      "model_breakdown": "模型消费",
+      "model": "模型",
+      "recent_requests": "最近请求",
+      "source_count": "{{count}} 个来源",
+      "no_data": "暂无账号数据"
+    },
     "channel": {
       "title": "通道统计",
       "subtitle": "按通道统计请求分布",
@@ -1900,7 +1958,8 @@
       "quota": "配额状态",
       "last_refresh": "最近刷新",
       "messages": "状态消息",
-      "events": "关联事件"
+      "events": "关联事件",
+      "maintenance": "自动维护"
     },
     "empty": {
       "accounts": "暂无账号数据",
@@ -1912,6 +1971,10 @@
       "detail": "暂无详情",
       "detail_description": "这个账号目前没有返回详情数据。",
       "detail_events": "这个账号暂无事件记录"
-    }
+    },
+    "auto_recover_enabled": "自动恢复已开启",
+    "auto_recover_reason": "自动禁用原因",
+    "auto_recover_disabled_at": "自动禁用时间",
+    "auto_recover_next_check_at": "下次恢复检查"
   }
 }
