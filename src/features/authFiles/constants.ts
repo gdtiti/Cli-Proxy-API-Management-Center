@@ -108,6 +108,26 @@ export const TYPE_COLORS: Record<string, TypeColorSet> = {
     light: { bg: '#e4edfd', text: '#2b5fbc' },
     dark: { bg: '#1a3d80', text: '#89b3f7' },
   },
+  codearts: {
+    light: { bg: '#e6f2ff', text: '#1f62b3' },
+    dark: { bg: '#153c72', text: '#8fc0ff' },
+  },
+  qoder: {
+    light: { bg: '#e9e7ff', text: '#4541c4' },
+    dark: { bg: '#29256f', text: '#b8b3ff' },
+  },
+  codebuddy: {
+    light: { bg: '#e7f0ff', text: '#3152c7' },
+    dark: { bg: '#1f2e78', text: '#a9bbff' },
+  },
+  'codebuddy-ai': {
+    light: { bg: '#edf0ff', text: '#5143c3' },
+    dark: { bg: '#2d276f', text: '#c2b8ff' },
+  },
+  bt: {
+    light: { bg: '#e9f8f0', text: '#16824c' },
+    dark: { bg: '#124c31', text: '#89d8ac' },
+  },
   empty: {
     light: { bg: '#f5f5f5', text: '#616161' },
     dark: { bg: '#424242', text: '#bdbdbd' },
@@ -123,10 +143,15 @@ export const AUTH_FILE_ICONS: Record<string, AuthFileIconAsset> = {
   aistudio: iconGemini,
   claude: iconClaude,
   codex: iconCodex,
+  codearts: iconVertex,
+  codebuddy: iconCodex,
+  'codebuddy-ai': iconCodex,
+  bt: iconCodex,
   gemini: iconGemini,
   'gemini-cli': iconGemini,
   iflow: iconIflow,
   kimi: { light: iconKimiLight, dark: iconKimiDark },
+  qoder: iconCodex,
   qwen: iconQwen,
   vertex: iconVertex,
 };

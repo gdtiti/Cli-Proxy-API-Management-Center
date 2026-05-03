@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useNotificationStore, useThemeStore } from '@/stores';
+import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
 import { oauthApi, type OAuthProvider, type IFlowCookieAuthResponse } from '@/services/api/oauth';
 import { vertexApi, type VertexImportResponse } from '@/services/api/vertex';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -149,6 +149,7 @@ export function OAuthPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
+  const apiBase = useAuthStore((state) => state.apiBase);
   const [states, setStates] = useState<Record<OAuthProvider, ProviderState>>(
     {} as Record<OAuthProvider, ProviderState>
   );
@@ -436,6 +437,12 @@ export function OAuthPage() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  const openCodeArtsOAuth = () => {
+    if (!apiBase) return;
+    const baseUrl = apiBase.replace(/\/+$/, '');
+    window.open(`${baseUrl}/v0/oauth/codearts`, '_blank', 'noopener,noreferrer');
+  };
+
   const handleKiroTokenImport = async () => {
     const token = kiroTokenImport.token.trim();
     if (!token) {
@@ -461,9 +468,10 @@ export function OAuthPage() {
       }
       setKiroTokenImport((prev) => ({ ...prev, loading: false, success: true }));
       showNotification(t('auth_login.kiro_token_import_success'), 'success');
-    } catch (err: any) {
-      setKiroTokenImport((prev) => ({ ...prev, loading: false, error: err?.message }));
-      showNotification(`${t('auth_login.kiro_token_import_error')} ${err?.message || ''}`, 'error');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setKiroTokenImport((prev) => ({ ...prev, loading: false, error: message }));
+      showNotification(`${t('auth_login.kiro_token_import_error')} ${message || ''}`, 'error');
     }
   };
 
@@ -583,6 +591,24 @@ export function OAuthPage() {
             </div>
           );
         })}
+
+        <Card
+          title={
+            <span className={styles.cardTitle}>
+              <img src={iconVertex} alt="" className={styles.cardTitleIcon} />
+              {t('auth_login.codearts_oauth_title')}
+            </span>
+          }
+          extra={
+            <Button onClick={openCodeArtsOAuth} disabled={!apiBase}>
+              {t('auth_login.codearts_oauth_open_button')}
+            </Button>
+          }
+        >
+          <div className={styles.cardContent}>
+            <div className={styles.cardHint}>{t('auth_login.codearts_oauth_hint')}</div>
+          </div>
+        </Card>
 
         {/* Vertex JSON 登录 */}
         <Card
