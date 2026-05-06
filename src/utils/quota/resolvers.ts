@@ -25,10 +25,47 @@ export function resolveCodexChatgptAccountId(file: AuthFileItem): string | null 
       ? (file.attributes as Record<string, unknown>)
       : null;
 
+  const directCandidates = [
+    file.chatgpt_account_id,
+    file.chatgptAccountId,
+    file.account_id,
+    file.accountId,
+    metadata?.chatgpt_account_id,
+    metadata?.chatgptAccountId,
+    metadata?.account_id,
+    metadata?.accountId,
+    attributes?.chatgpt_account_id,
+    attributes?.chatgptAccountId,
+    attributes?.account_id,
+    attributes?.accountId
+  ];
+
+  for (const candidate of directCandidates) {
+    const id = normalizeStringValue(candidate);
+    if (id) return id;
+  }
+
   const candidates = [file.id_token, metadata?.id_token, attributes?.id_token];
 
   for (const candidate of candidates) {
     const id = extractCodexChatgptAccountId(candidate);
+    if (id) return id;
+  }
+
+  const emailCandidates = [
+    file.email,
+    file.account_email,
+    file.accountEmail,
+    metadata?.email,
+    metadata?.account_email,
+    metadata?.accountEmail,
+    attributes?.email,
+    attributes?.account_email,
+    attributes?.accountEmail
+  ];
+
+  for (const candidate of emailCandidates) {
+    const id = normalizeStringValue(candidate);
     if (id) return id;
   }
 
