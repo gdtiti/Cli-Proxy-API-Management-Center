@@ -57,6 +57,7 @@ export interface CodexAuthSnapshot {
   next_retry_after?: string;
   updated_at?: string;
   usage?: CodexUsageRollup;
+  cycles?: CodexAuthCycle[];
   [key: string]: unknown;
 }
 
@@ -75,6 +76,7 @@ export interface CodexAuthEvent {
   quota_exceeded?: boolean;
   quota_reason?: string;
   quota_model?: string;
+  quota_window?: string;
   disabled_at?: string | null;
   enabled_at?: string | null;
   recover_at?: string | null;
@@ -86,6 +88,47 @@ export interface CodexAuthEvent {
   total_tokens?: number;
   recovered_tokens?: number | null;
   created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CodexAuthCycle {
+  id?: string;
+  auth_id?: string;
+  auth_index?: string;
+  provider?: string;
+  account?: string;
+  status?: string;
+  quota_window?: string;
+  quota_reason?: string;
+  quota_model?: string;
+  started_at?: string | null;
+  quota_exceeded_at?: string | null;
+  recover_at?: string | null;
+  recovered_at?: string | null;
+  start_request_count?: number;
+  start_input_tokens?: number;
+  start_output_tokens?: number;
+  start_cached_tokens?: number;
+  start_reasoning_tokens?: number;
+  start_total_tokens?: number;
+  start_recovered_tokens?: number | null;
+  end_request_count?: number;
+  end_input_tokens?: number;
+  end_output_tokens?: number;
+  end_cached_tokens?: number;
+  end_reasoning_tokens?: number;
+  end_total_tokens?: number;
+  end_recovered_tokens?: number | null;
+  delta_request_count?: number;
+  delta_input_tokens?: number;
+  delta_output_tokens?: number;
+  delta_cached_tokens?: number;
+  delta_reasoning_tokens?: number;
+  delta_total_tokens?: number;
+  delta_recovered_tokens?: number | null;
+  avg_total_tokens?: number;
+  requests_per_hour?: number;
+  updated_at?: string;
   [key: string]: unknown;
 }
 
@@ -207,4 +250,5 @@ export interface CodexAuthConfigPayload {
 export interface CodexAuthDetail {
   snapshot?: CodexAuthSnapshot;
   events?: CodexAuthEvent[];
+  cycles?: CodexAuthCycle[];
 }

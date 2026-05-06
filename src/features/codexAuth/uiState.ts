@@ -1,4 +1,4 @@
-export const CODEX_AUTH_TABS = ['accounts', 'usage', 'events', 'config'] as const;
+export const CODEX_AUTH_TABS = ['accounts', 'usage', 'events', 'cycles', 'config'] as const;
 export const CODEX_AUTH_PAGE_SIZES = [10, 20, 50] as const;
 
 export type CodexAuthTabKey = (typeof CODEX_AUTH_TABS)[number];
@@ -25,6 +25,11 @@ export type CodexAuthUiState = {
   eventsPage?: number;
   eventsPageSize?: number;
   eventsSort?: StoredSortState;
+  cyclesSearch?: string;
+  cyclesAuthIndex?: string;
+  cyclesPage?: number;
+  cyclesPageSize?: number;
+  cyclesSort?: StoredSortState;
 };
 
 const CODEX_AUTH_UI_STATE_KEY = 'codexAuthPage.uiState';

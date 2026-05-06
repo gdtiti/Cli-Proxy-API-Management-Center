@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type {
   CodexAuthConfig,
   CodexAuthConfigPayload,
+  CodexAuthCycle,
   CodexAuthDetail,
   CodexAuthEvent,
   CodexAuthSnapshot,
@@ -20,7 +21,12 @@ interface CodexEventsResponse {
   events?: CodexAuthEvent[];
 }
 
-const normalizePayloadRules = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+interface CodexCyclesResponse {
+  cycles?: CodexAuthCycle[];
+}
+
+const normalizePayloadRules = <T>(value: unknown): T[] =>
+  Array.isArray(value) ? (value as T[]) : [];
 
 export const codexAuthApi = {
   async getQuota(): Promise<CodexAuthSnapshot[]> {
@@ -41,6 +47,26 @@ export const codexAuthApi = {
       `/codex-auth-events${suffix ? `?${suffix}` : ''}`
     );
     return Array.isArray(data?.events) ? data.events : [];
+  },
+
+  async getCycles(params?: {
+    authIndex?: string;
+    authId?: string;
+    account?: string;
+    status?: string;
+    limit?: number;
+  }): Promise<CodexAuthCycle[]> {
+    const query = new URLSearchParams();
+    if (params?.authIndex) query.set('auth_index', params.authIndex);
+    if (params?.authId) query.set('auth_id', params.authId);
+    if (params?.account) query.set('account', params.account);
+    if (params?.status) query.set('status', params.status);
+    if (params?.limit) query.set('limit', String(params.limit));
+    const suffix = query.toString();
+    const data = await apiClient.get<CodexCyclesResponse>(
+      `/codex-auth-cycles${suffix ? `?${suffix}` : ''}`
+    );
+    return Array.isArray(data?.cycles) ? data.cycles : [];
   },
 
   async getUsage(): Promise<CodexUsageRollup[]> {

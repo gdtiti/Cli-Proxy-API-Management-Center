@@ -1822,7 +1822,8 @@
       "accounts": "账号",
       "usage": "用量",
       "events": "事件",
-      "config": "配置"
+      "config": "配置",
+      "cycles": "周期"
     },
     "summary": {
       "accounts": "账号总数",
@@ -1889,14 +1890,23 @@
       "created_at": "创建时间",
       "event_type": "事件类型",
       "reason": "原因",
-      "select": "选择"
+      "select": "选择",
+      "cycle_status": "周期状态",
+      "quota_window": "额度窗口",
+      "started_at": "开始时间",
+      "quota_exceeded_at": "额度耗尽时间",
+      "recovered_at": "恢复时间",
+      "delta_requests": "周期请求数",
+      "delta_total_tokens": "周期总 Tokens",
+      "requests_per_hour": "每小时请求数"
     },
     "detail_cards": {
       "account": "账号信息",
       "quota": "配额状态",
       "last_refresh": "最近刷新",
       "messages": "状态消息",
-      "events": "关联事件"
+      "events": "关联事件",
+      "cycles": "使用周期"
     },
     "empty": {
       "accounts": "暂无账号数据",
@@ -1907,7 +1917,14 @@
       "events_description": "当前筛选条件下没有匹配的事件。",
       "detail": "暂无详情",
       "detail_description": "这个账号目前没有返回详情数据。",
-      "detail_events": "这个账号暂无事件记录"
+      "detail_events": "这个账号暂无事件记录",
+      "cycles": "暂无周期数据",
+      "cycles_description": "当前筛选条件下没有匹配的冷却周期记录。",
+      "detail_cycles": "该账号暂无周期记录"
+    },
+    "cycles": {
+      "title": "冷却周期",
+      "description": "按 Codex 认证账号查看每个冷却周期、恢复周期和额度使用效率。"
     }
   }
 }

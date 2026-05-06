@@ -20,6 +20,7 @@ import type {
   AuthFileItem,
   CodexAuthConfig,
   CodexAuthConfigPayload,
+  CodexAuthCycle,
   CodexConfigGuide,
   CodexAuthDetail,
   CodexAuthEvent,
@@ -34,7 +35,7 @@ import type {
 } from '@/types';
 import styles from './CodexAuthPage.module.scss';
 
-type TabKey = 'accounts' | 'usage' | 'events' | 'config';
+type TabKey = 'accounts' | 'usage' | 'events' | 'cycles' | 'config';
 type RuleValueType = 'string' | 'number' | 'boolean' | 'json' | 'raw_json';
 type RuleCollectionKey = 'defaultRules' | 'defaultRawRules' | 'overrideRules' | 'overrideRawRules';
 type RuleTargetId = 'default' | 'default_raw' | 'override' | 'override_raw' | 'filter';
@@ -75,6 +76,7 @@ type DetailState = {
   loading: boolean;
   snapshot: CodexAuthSnapshot | null;
   events: CodexAuthEvent[];
+  cycles: CodexAuthCycle[];
 };
 
 type SortDirection = 'asc' | 'desc';
@@ -113,6 +115,18 @@ type EventsSortKey =
   | 'total_tokens'
   | 'recover';
 
+type CyclesSortKey =
+  | 'started_at'
+  | 'auth_index'
+  | 'account'
+  | 'status'
+  | 'quota_window'
+  | 'delta_requests'
+  | 'delta_total_tokens'
+  | 'avg_total'
+  | 'requests_per_hour'
+  | 'recover';
+
 const ACCOUNTS_SORT_KEYS: AccountsSortKey[] = [
   'auth_index',
   'account',
@@ -145,6 +159,19 @@ const EVENTS_SORT_KEYS: EventsSortKey[] = [
   'recover',
 ];
 
+const CYCLES_SORT_KEYS: CyclesSortKey[] = [
+  'started_at',
+  'auth_index',
+  'account',
+  'status',
+  'quota_window',
+  'delta_requests',
+  'delta_total_tokens',
+  'avg_total',
+  'requests_per_hour',
+  'recover',
+];
+
 let localIdSeed = 0;
 
 const PAGE_SIZE_OPTIONS = ['10', '20', '50'];
@@ -161,10 +188,30 @@ const RULE_SECTION_CONFIG: Array<{
   title: string;
   descriptionKey: string;
 }> = [
-  { key: 'defaultRules', target: 'default', title: 'payload.default', descriptionKey: 'codex_management.config.default_description' },
-  { key: 'defaultRawRules', target: 'default_raw', title: 'payload.default_raw', descriptionKey: 'codex_management.config.default_raw_description' },
-  { key: 'overrideRules', target: 'override', title: 'payload.override', descriptionKey: 'codex_management.config.override_description' },
-  { key: 'overrideRawRules', target: 'override_raw', title: 'payload.override_raw', descriptionKey: 'codex_management.config.override_raw_description' },
+  {
+    key: 'defaultRules',
+    target: 'default',
+    title: 'payload.default',
+    descriptionKey: 'codex_management.config.default_description',
+  },
+  {
+    key: 'defaultRawRules',
+    target: 'default_raw',
+    title: 'payload.default_raw',
+    descriptionKey: 'codex_management.config.default_raw_description',
+  },
+  {
+    key: 'overrideRules',
+    target: 'override',
+    title: 'payload.override',
+    descriptionKey: 'codex_management.config.override_description',
+  },
+  {
+    key: 'overrideRawRules',
+    target: 'override_raw',
+    title: 'payload.override_raw',
+    descriptionKey: 'codex_management.config.override_raw_description',
+  },
 ];
 const RULE_TARGET_TO_COLLECTION_KEY: Record<Exclude<RuleTargetId, 'filter'>, RuleCollectionKey> = {
   default: 'defaultRules',
@@ -178,7 +225,11 @@ const nextLocalId = (prefix: string) => {
   return `${prefix}-${localIdSeed}`;
 };
 
-const createEditableParam = (path = '', type: RuleValueType = 'string', value = ''): EditableParam => ({
+const createEditableParam = (
+  path = '',
+  type: RuleValueType = 'string',
+  value = ''
+): EditableParam => ({
   id: nextLocalId('param'),
   path,
   type,
@@ -209,7 +260,11 @@ const createEmptyConfigEditor = (): ConfigEditorState => ({
 });
 
 const normalizeRuleValueType = (valueType?: string): RuleValueType => {
-  switch (String(valueType ?? '').trim().toLowerCase()) {
+  switch (
+    String(valueType ?? '')
+      .trim()
+      .toLowerCase()
+  ) {
     case 'number':
       return 'number';
     case 'boolean':
@@ -243,13 +298,18 @@ const formatAverage = (value?: number | null) => {
   });
 };
 
-const normalizeText = (value: unknown) => String(value ?? '').trim().toLowerCase();
+const normalizeText = (value: unknown) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
 
 const getAvailableModelIDs = (item: { available_models?: unknown }) =>
   Array.isArray(item.available_models)
     ? item.available_models
         .map((model) =>
-          model && typeof model === 'object' ? String((model as Record<string, unknown>).id ?? '').trim() : ''
+          model && typeof model === 'object'
+            ? String((model as Record<string, unknown>).id ?? '').trim()
+            : ''
         )
         .filter(Boolean)
     : [];
@@ -267,13 +327,7 @@ const paginate = <T,>(items: T[], page: number, pageSize: number) => {
 };
 
 const uniqueStrings = (values: Array<string | null | undefined>) =>
-  Array.from(
-    new Set(
-      values
-        .map((value) => String(value ?? '').trim())
-        .filter(Boolean)
-    )
-  );
+  Array.from(new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean)));
 
 type AuthFileLookup = {
   byFileName: Map<string, AuthFileItem>;
@@ -327,7 +381,9 @@ const mergeCodexSnapshotWithAuthFile = (
   return {
     ...(authFile ?? {}),
     ...(snapshot ?? {}),
-    auth_index: String(snapshot?.auth_index ?? authFile?.auth_index ?? authFile?.authIndex ?? '').trim() || undefined,
+    auth_index:
+      String(snapshot?.auth_index ?? authFile?.auth_index ?? authFile?.authIndex ?? '').trim() ||
+      undefined,
     file_name: String(snapshot?.file_name ?? authFile?.name ?? '').trim() || undefined,
     provider: snapshot?.provider ?? authFile?.provider ?? authFile?.type,
     label: snapshot?.label ?? authFile?.label,
@@ -356,10 +412,12 @@ const mergeCodexSnapshotWithAuthFile = (
     model_last_checked_at: snapshot?.model_last_checked_at ?? authFile?.model_last_checked_at,
     model_last_success_at: snapshot?.model_last_success_at ?? authFile?.model_last_success_at,
     model_last_error: snapshot?.model_last_error ?? authFile?.model_last_error,
-    next_recover_at: snapshot?.next_recover_at ?? (String(authFile?.next_recover_at ?? '').trim() || undefined),
+    next_recover_at:
+      snapshot?.next_recover_at ?? (String(authFile?.next_recover_at ?? '').trim() || undefined),
     last_refreshed_at: snapshot?.last_refreshed_at,
     next_refresh_after: snapshot?.next_refresh_after,
-    next_retry_after: snapshot?.next_retry_after ?? (String(authFile?.next_retry_after ?? '').trim() || undefined),
+    next_retry_after:
+      snapshot?.next_retry_after ?? (String(authFile?.next_retry_after ?? '').trim() || undefined),
     updated_at: snapshot?.updated_at ?? (String(authFile?.updated_at ?? '').trim() || undefined),
     usage: snapshot?.usage,
   };
@@ -374,25 +432,29 @@ const filterCodexAccountsByAuthFiles = (
     authFiles.map((item) => String(item.name ?? '').trim()).filter(Boolean)
   );
   const existingAuthIndexes = new Set(
-    authFiles
-      .map((item) => String(item.auth_index ?? item.authIndex ?? '').trim())
-      .filter(Boolean)
+    authFiles.map((item) => String(item.auth_index ?? item.authIndex ?? '').trim()).filter(Boolean)
   );
 
-  return accounts.filter((item) => {
-    const fileName = String(item.file_name ?? '').trim();
-    const authIndex = String(item.auth_index ?? '').trim();
-    if (fileName && existingFileNames.has(fileName)) return true;
-    if (authIndex && existingAuthIndexes.has(authIndex)) return true;
-    return false;
-  }).map((item) => mergeCodexSnapshotWithAuthFile(item, findMatchingAuthFile(item, lookup)) ?? item);
+  return accounts
+    .filter((item) => {
+      const fileName = String(item.file_name ?? '').trim();
+      const authIndex = String(item.auth_index ?? '').trim();
+      if (fileName && existingFileNames.has(fileName)) return true;
+      if (authIndex && existingAuthIndexes.has(authIndex)) return true;
+      return false;
+    })
+    .map(
+      (item) => mergeCodexSnapshotWithAuthFile(item, findMatchingAuthFile(item, lookup)) ?? item
+    );
 };
 
 const compareText = (left: unknown, right: unknown) =>
-  String(left ?? '').trim().localeCompare(String(right ?? '').trim(), undefined, {
-    numeric: true,
-    sensitivity: 'base',
-  });
+  String(left ?? '')
+    .trim()
+    .localeCompare(String(right ?? '').trim(), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
 
 const compareNumber = (left: unknown, right: unknown) => {
   const leftNumber = typeof left === 'number' ? left : Number(left ?? 0);
@@ -433,7 +495,9 @@ function SortButton({ label, active, direction, onClick }: SortButtonProps) {
   return (
     <button type="button" className={styles.sortButton} onClick={onClick}>
       <span>{label}</span>
-      <span className={styles.sortIndicator}>{active ? (direction === 'asc' ? '▲' : '▼') : '↕'}</span>
+      <span className={styles.sortIndicator}>
+        {active ? (direction === 'asc' ? '▲' : '▼') : '↕'}
+      </span>
     </button>
   );
 }
@@ -496,7 +560,9 @@ const buildEditableRules = (rules: CodexPayloadRule[] | undefined): EditableRule
       }))
     : [];
 
-const buildEditableFilterRules = (rules: CodexPayloadFilterRule[] | undefined): EditableFilterRule[] =>
+const buildEditableFilterRules = (
+  rules: CodexPayloadFilterRule[] | undefined
+): EditableFilterRule[] =>
   Array.isArray(rules)
     ? rules.map((rule) => ({
         id: nextLocalId('filter'),
@@ -600,7 +666,10 @@ const buildPayloadRules = (rules: EditableRule[], sectionKey: string): CodexPayl
     return { models, params };
   });
 
-const buildFilterRules = (rules: EditableFilterRule[], sectionKey: string): CodexPayloadFilterRule[] =>
+const buildFilterRules = (
+  rules: EditableFilterRule[],
+  sectionKey: string
+): CodexPayloadFilterRule[] =>
   rules.map((rule, ruleIndex) => {
     const models = parseModelsText(rule.modelsText);
     if (models.length === 0) {
@@ -628,10 +697,21 @@ const getStatusText = (item: CodexAuthSnapshot) => {
   return item.status || 'unknown';
 };
 
+const getCycleStatusTone = (status?: string) => {
+  const normalized = normalizeText(status);
+  if (normalized === 'recovered' || normalized === 'closed') return styles.statusSuccess;
+  if (normalized === 'cooling' || normalized === 'blocked') return styles.statusError;
+  if (normalized === 'active' || normalized === 'open') return styles.statusWarning;
+  return styles.statusMuted;
+};
+
 const getQuotaLevelText = (item: CodexAuthSnapshot, t: ReturnType<typeof useTranslation>['t']) => {
-  const level = String(item.quota_level ?? '').trim().toLowerCase();
+  const level = String(item.quota_level ?? '')
+    .trim()
+    .toLowerCase();
   if (!level) return '-';
-  if (['full', 'max', 'maximum', 'available'].includes(level)) return t('auth_files.quota_level_full');
+  if (['full', 'max', 'maximum', 'available'].includes(level))
+    return t('auth_files.quota_level_full');
   if (level === 'high') return t('auth_files.quota_level_high');
   if (['medium', 'mid'].includes(level)) return t('auth_files.quota_level_medium');
   if (['low', 'limited', 'warning', 'critical', 'exceeded', 'empty', 'none'].includes(level)) {
@@ -703,13 +783,21 @@ const getCodexNoteLabel = (key: string, t: TranslateFn): string => {
     case 'custom_params':
       return t('codex_management.config.note_custom_params', { defaultValue: '自定义参数' });
     case 'long_context_behavior':
-      return t('codex_management.config.note_long_context_behavior', { defaultValue: '长上下文行为' });
+      return t('codex_management.config.note_long_context_behavior', {
+        defaultValue: '长上下文行为',
+      });
     case 'one_million_context':
-      return t('codex_management.config.note_one_million_context', { defaultValue: '1M 上下文说明' });
+      return t('codex_management.config.note_one_million_context', {
+        defaultValue: '1M 上下文说明',
+      });
     case 'one_million_context_config':
-      return t('codex_management.config.note_one_million_context_config', { defaultValue: '1M 上下文配置建议' });
+      return t('codex_management.config.note_one_million_context_config', {
+        defaultValue: '1M 上下文配置建议',
+      });
     case 'recovered_tokens_available':
-      return t('codex_management.config.note_recovered_tokens_available', { defaultValue: '是否提供恢复 Token' });
+      return t('codex_management.config.note_recovered_tokens_available', {
+        defaultValue: '是否提供恢复 Token',
+      });
     default:
       return key;
   }
@@ -746,7 +834,12 @@ function PaginationBar({ page, total, pageSize, onPageChange }: PaginationProps)
         {total === 0 ? '0 / 0' : `${page} / ${totalPages}`}
       </span>
       <div className={styles.paginationActions}>
-        <Button size="sm" variant="secondary" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+        >
           {t('codex_management.pagination_prev', { defaultValue: '上一页' })}
         </Button>
         <Button
@@ -776,7 +869,12 @@ interface RuleGroupProps {
   onModelsChange: (ruleId: string, value: string) => void;
   onAddParam: (ruleId: string) => void;
   onRemoveParam: (ruleId: string, paramId: string) => void;
-  onParamChange: (ruleId: string, paramId: string, key: 'path' | 'type' | 'value', value: string) => void;
+  onParamChange: (
+    ruleId: string,
+    paramId: string,
+    key: 'path' | 'type' | 'value',
+    value: string
+  ) => void;
 }
 
 function PayloadRuleGroup({
@@ -876,7 +974,9 @@ function PayloadRuleGroup({
               />
               <div className={styles.paramSection}>
                 <div className={styles.paramSectionHeader}>
-                  <span>{t('codex_management.config.params_label', { defaultValue: '参数列表' })}</span>
+                  <span>
+                    {t('codex_management.config.params_label', { defaultValue: '参数列表' })}
+                  </span>
                   <Button size="sm" variant="secondary" onClick={() => onAddParam(rule.id)}>
                     {t('codex_management.config.add_param', { defaultValue: '添加参数' })}
                   </Button>
@@ -886,9 +986,13 @@ function PayloadRuleGroup({
                     <div key={param.id} className={styles.paramRow}>
                       <div>
                         <Input
-                          label={t('codex_management.config.path_label', { defaultValue: '字段路径' })}
+                          label={t('codex_management.config.path_label', {
+                            defaultValue: '字段路径',
+                          })}
                           value={param.path}
-                          onChange={(event) => onParamChange(rule.id, param.id, 'path', event.target.value)}
+                          onChange={(event) =>
+                            onParamChange(rule.id, param.id, 'path', event.target.value)
+                          }
                           placeholder={t('codex_management.config.path_placeholder', {
                             defaultValue: 'instructions',
                           })}
@@ -901,7 +1005,12 @@ function PayloadRuleGroup({
                               <strong>{hint.label}</strong>
                               <span>{hint.description}</span>
                               {hint.example !== undefined ? (
-                                <code>{stringifyRuleValue(hint.example, normalizeRuleValueType(hint.value_type))}</code>
+                                <code>
+                                  {stringifyRuleValue(
+                                    hint.example,
+                                    normalizeRuleValueType(hint.value_type)
+                                  )}
+                                </code>
                               ) : null}
                             </div>
                           ) : null;
@@ -926,14 +1035,18 @@ function PayloadRuleGroup({
                         </label>
                         <textarea
                           value={param.value}
-                          onChange={(event) => onParamChange(rule.id, param.id, 'value', event.target.value)}
+                          onChange={(event) =>
+                            onParamChange(rule.id, param.id, 'value', event.target.value)
+                          }
                           rows={param.type === 'json' || param.type === 'raw_json' ? 4 : 2}
                           placeholder={
                             param.type === 'json' || param.type === 'raw_json'
                               ? t('codex_management.config.value_placeholder_json', {
                                   defaultValue: '{"key":"value"}',
                                 })
-                              : t('codex_management.config.value_placeholder', { defaultValue: '请输入参数值' })
+                              : t('codex_management.config.value_placeholder', {
+                                  defaultValue: '请输入参数值',
+                                })
                           }
                         />
                         {(() => {
@@ -955,7 +1068,11 @@ function PayloadRuleGroup({
                         })()}
                       </div>
                       <div className={styles.paramActions}>
-                        <Button size="sm" variant="ghost" onClick={() => onRemoveParam(rule.id, param.id)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onRemoveParam(rule.id, param.id)}
+                        >
                           {t('codex_management.config.remove_param', { defaultValue: '删除参数' })}
                         </Button>
                       </div>
@@ -1048,7 +1165,9 @@ function FilterRuleGroup({
         ) : null}
         {rules.length === 0 ? (
           <EmptyState
-            title={t('codex_management.config.empty_filter_rules_title', { defaultValue: '暂无过滤规则' })}
+            title={t('codex_management.config.empty_filter_rules_title', {
+              defaultValue: '暂无过滤规则',
+            })}
             description={t('codex_management.config.empty_filter_rules_description', {
               defaultValue: '可通过过滤规则按模型移除特定参数。',
             })}
@@ -1076,7 +1195,9 @@ function FilterRuleGroup({
                 })}
               />
               <label className={styles.fieldLabel}>
-                {t('codex_management.config.filtered_paths_label', { defaultValue: '待过滤字段路径' })}
+                {t('codex_management.config.filtered_paths_label', {
+                  defaultValue: '待过滤字段路径',
+                })}
               </label>
               <textarea
                 value={rule.filtersText}
@@ -1136,13 +1257,18 @@ export function CodexAuthPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
-  const [authFilesLookup, setAuthFilesLookup] = useState<AuthFileLookup>(() => createAuthFileLookup([]));
+  const [authFilesLookup, setAuthFilesLookup] = useState<AuthFileLookup>(() =>
+    createAuthFileLookup([])
+  );
   const [accounts, setAccounts] = useState<CodexAuthSnapshot[]>([]);
   const [usage, setUsage] = useState<CodexUsageRollup[]>([]);
   const [events, setEvents] = useState<CodexAuthEvent[]>([]);
+  const [cycles, setCycles] = useState<CodexAuthCycle[]>([]);
   const [configGuide, setConfigGuide] = useState<CodexConfigGuide | null>(null);
   const [configEditor, setConfigEditor] = useState<ConfigEditorState>(createEmptyConfigEditor);
-  const [accountsSearch, setAccountsSearch] = useState(() => persistedUiState?.accountsSearch ?? '');
+  const [accountsSearch, setAccountsSearch] = useState(
+    () => persistedUiState?.accountsSearch ?? ''
+  );
   const [accountsStatus, setAccountsStatus] = useState(() => {
     const value = persistedUiState?.accountsStatus;
     return typeof value === 'string' && value.trim() ? value : 'all';
@@ -1156,7 +1282,10 @@ export function CodexAuthPage() {
   );
   const [accountsSort, setAccountsSort] = useState<SortState<AccountsSortKey>>(
     () =>
-      normalizeStoredSortState<AccountsSortKey>(persistedUiState?.accountsSort, ACCOUNTS_SORT_KEYS) ?? {
+      normalizeStoredSortState<AccountsSortKey>(
+        persistedUiState?.accountsSort,
+        ACCOUNTS_SORT_KEYS
+      ) ?? {
         key: null,
         direction: 'asc',
       }
@@ -1193,6 +1322,24 @@ export function CodexAuthPage() {
         direction: 'asc',
       }
   );
+  const [cyclesSearch, setCyclesSearch] = useState(() => persistedUiState?.cyclesSearch ?? '');
+  const [cyclesAuthIndex, setCyclesAuthIndex] = useState(() => {
+    const value = persistedUiState?.cyclesAuthIndex;
+    return typeof value === 'string' && value.trim() ? value : 'all';
+  });
+  const [cyclesPage, setCyclesPage] = useState(() =>
+    clampCodexAuthPage(persistedUiState?.cyclesPage, 1)
+  );
+  const [cyclesPageSize, setCyclesPageSize] = useState(() =>
+    clampCodexAuthPageSize(persistedUiState?.cyclesPageSize, 10)
+  );
+  const [cyclesSort, setCyclesSort] = useState<SortState<CyclesSortKey>>(
+    () =>
+      normalizeStoredSortState<CyclesSortKey>(persistedUiState?.cyclesSort, CYCLES_SORT_KEYS) ?? {
+        key: 'started_at',
+        direction: 'desc',
+      }
+  );
   const [selectedAccountFiles, setSelectedAccountFiles] = useState<Set<string>>(() => new Set());
   const [batchProxyOpen, setBatchProxyOpen] = useState(false);
   const [batchProxyMode, setBatchProxyMode] = useState<'set' | 'clear'>('set');
@@ -1204,6 +1351,7 @@ export function CodexAuthPage() {
     loading: false,
     snapshot: null,
     events: [],
+    cycles: [],
   });
 
   const disableControls = connectionStatus !== 'connected';
@@ -1237,12 +1385,26 @@ export function CodexAuthPage() {
     setEvents(response);
   }, []);
 
+  const loadCycles = useCallback(async (authIndex: string) => {
+    const response = await codexAuthApi.getCycles({
+      authIndex: authIndex !== 'all' ? authIndex : undefined,
+      limit: 1000,
+    });
+    setCycles(response);
+  }, []);
+
   const refreshAll = useCallback(
     async (silent = false) => {
       if (!silent) setRefreshing(true);
       setPageError('');
       try {
-        await Promise.all([loadConfig(), loadAccounts(), loadUsage(), loadEvents(eventsAuthIndex)]);
+        await Promise.all([
+          loadConfig(),
+          loadAccounts(),
+          loadUsage(),
+          loadEvents(eventsAuthIndex),
+          loadCycles(cyclesAuthIndex),
+        ]);
       } catch (error) {
         const message = error instanceof Error ? error.message : t('notification.refresh_failed');
         setPageError(message);
@@ -1252,7 +1414,17 @@ export function CodexAuthPage() {
         if (!silent) setRefreshing(false);
       }
     },
-    [eventsAuthIndex, loadAccounts, loadConfig, loadEvents, loadUsage, showNotification, t]
+    [
+      cyclesAuthIndex,
+      eventsAuthIndex,
+      loadAccounts,
+      loadConfig,
+      loadCycles,
+      loadEvents,
+      loadUsage,
+      showNotification,
+      t,
+    ]
   );
 
   useEffect(() => {
@@ -1268,6 +1440,14 @@ export function CodexAuthPage() {
   }, [eventsAuthIndex, loadEvents, loading, showNotification, t]);
 
   useEffect(() => {
+    if (loading) return;
+    void loadCycles(cyclesAuthIndex).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : t('notification.refresh_failed');
+      showNotification(message, 'error');
+    });
+  }, [cyclesAuthIndex, loadCycles, loading, showNotification, t]);
+
+  useEffect(() => {
     setAccountsPage(1);
   }, [accountsModel, accountsPageSize, accountsSearch, accountsStatus, accountsSort]);
 
@@ -1278,6 +1458,10 @@ export function CodexAuthPage() {
   useEffect(() => {
     setEventsPage(1);
   }, [eventsAuthIndex, eventsPageSize, eventsSearch, eventsSort]);
+
+  useEffect(() => {
+    setCyclesPage(1);
+  }, [cyclesAuthIndex, cyclesPageSize, cyclesSearch, cyclesSort]);
 
   useEffect(() => {
     writeCodexAuthUiState({
@@ -1297,6 +1481,11 @@ export function CodexAuthPage() {
       eventsPage,
       eventsPageSize,
       eventsSort,
+      cyclesSearch,
+      cyclesAuthIndex,
+      cyclesPage,
+      cyclesPageSize,
+      cyclesSort,
     });
   }, [
     activeTab,
@@ -1306,6 +1495,11 @@ export function CodexAuthPage() {
     accountsSearch,
     accountsSort,
     accountsStatus,
+    cyclesAuthIndex,
+    cyclesPage,
+    cyclesPageSize,
+    cyclesSearch,
+    cyclesSort,
     eventsAuthIndex,
     eventsPage,
     eventsPageSize,
@@ -1386,11 +1580,14 @@ export function CodexAuthPage() {
     usage.forEach((item) => {
       if (item.auth_index) values.add(String(item.auth_index));
     });
+    cycles.forEach((item) => {
+      if (item.auth_index) values.add(String(item.auth_index));
+    });
     return [
       { value: 'all', label: t('codex_management.all_accounts') },
       ...Array.from(values).map((value) => ({ value, label: value })),
     ];
-  }, [accounts, t, usage]);
+  }, [accounts, cycles, t, usage]);
 
   const filteredAccounts = useMemo(() => {
     const keyword = accountsSearch.trim().toLowerCase();
@@ -1414,25 +1611,43 @@ export function CodexAuthPage() {
     return events.filter((item) => collectSearchableText(item).includes(keyword));
   }, [events, eventsSearch]);
 
+  const filteredCycles = useMemo(() => {
+    const keyword = cyclesSearch.trim().toLowerCase();
+    if (!keyword) return cycles;
+    return cycles.filter((item) => collectSearchableText(item).includes(keyword));
+  }, [cycles, cyclesSearch]);
+
   const sortedAccounts = useMemo(() => {
     const list = [...filteredAccounts];
     if (!accountsSort.key) return list;
     list.sort((left, right) => {
       switch (accountsSort.key) {
         case 'auth_index':
-          return applySortDirection(compareText(left.auth_index, right.auth_index), accountsSort.direction);
+          return applySortDirection(
+            compareText(left.auth_index, right.auth_index),
+            accountsSort.direction
+          );
         case 'account':
           return applySortDirection(
             compareText(left.account || left.label, right.account || right.label),
             accountsSort.direction
           );
         case 'file_name':
-          return applySortDirection(compareText(left.file_name, right.file_name), accountsSort.direction);
+          return applySortDirection(
+            compareText(left.file_name, right.file_name),
+            accountsSort.direction
+          );
         case 'status':
-          return applySortDirection(compareText(getStatusText(left), getStatusText(right)), accountsSort.direction);
+          return applySortDirection(
+            compareText(getStatusText(left), getStatusText(right)),
+            accountsSort.direction
+          );
         case 'quota':
           return applySortDirection(
-            compareText(left.quota_reason || left.quota_model, right.quota_reason || right.quota_model),
+            compareText(
+              left.quota_reason || left.quota_model,
+              right.quota_reason || right.quota_model
+            ),
             accountsSort.direction
           );
         case 'recover':
@@ -1466,19 +1681,37 @@ export function CodexAuthPage() {
     list.sort((left, right) => {
       switch (usageSort.key) {
         case 'auth_index':
-          return applySortDirection(compareText(left.auth_index, right.auth_index), usageSort.direction);
+          return applySortDirection(
+            compareText(left.auth_index, right.auth_index),
+            usageSort.direction
+          );
         case 'account':
           return applySortDirection(compareText(left.account, right.account), usageSort.direction);
         case 'requests':
-          return applySortDirection(compareNumber(left.request_count, right.request_count), usageSort.direction);
+          return applySortDirection(
+            compareNumber(left.request_count, right.request_count),
+            usageSort.direction
+          );
         case 'input_tokens':
-          return applySortDirection(compareNumber(left.input_tokens, right.input_tokens), usageSort.direction);
+          return applySortDirection(
+            compareNumber(left.input_tokens, right.input_tokens),
+            usageSort.direction
+          );
         case 'output_tokens':
-          return applySortDirection(compareNumber(left.output_tokens, right.output_tokens), usageSort.direction);
+          return applySortDirection(
+            compareNumber(left.output_tokens, right.output_tokens),
+            usageSort.direction
+          );
         case 'cached_tokens':
-          return applySortDirection(compareNumber(left.cached_tokens, right.cached_tokens), usageSort.direction);
+          return applySortDirection(
+            compareNumber(left.cached_tokens, right.cached_tokens),
+            usageSort.direction
+          );
         case 'total_tokens':
-          return applySortDirection(compareNumber(left.total_tokens, right.total_tokens), usageSort.direction);
+          return applySortDirection(
+            compareNumber(left.total_tokens, right.total_tokens),
+            usageSort.direction
+          );
         case 'recovered_tokens':
           return applySortDirection(
             compareNumber(left.recovered_tokens, right.recovered_tokens),
@@ -1497,28 +1730,105 @@ export function CodexAuthPage() {
     list.sort((left, right) => {
       switch (eventsSort.key) {
         case 'created_at':
-          return applySortDirection(compareDate(left.created_at, right.created_at), eventsSort.direction);
+          return applySortDirection(
+            compareDate(left.created_at, right.created_at),
+            eventsSort.direction
+          );
         case 'auth_index':
-          return applySortDirection(compareText(left.auth_index, right.auth_index), eventsSort.direction);
+          return applySortDirection(
+            compareText(left.auth_index, right.auth_index),
+            eventsSort.direction
+          );
         case 'event_type':
-          return applySortDirection(compareText(left.event_type, right.event_type), eventsSort.direction);
+          return applySortDirection(
+            compareText(left.event_type, right.event_type),
+            eventsSort.direction
+          );
         case 'reason':
           return applySortDirection(
             compareText(left.reason || left.status_message, right.reason || right.status_message),
             eventsSort.direction
           );
         case 'requests':
-          return applySortDirection(compareNumber(left.request_count, right.request_count), eventsSort.direction);
+          return applySortDirection(
+            compareNumber(left.request_count, right.request_count),
+            eventsSort.direction
+          );
         case 'total_tokens':
-          return applySortDirection(compareNumber(left.total_tokens, right.total_tokens), eventsSort.direction);
+          return applySortDirection(
+            compareNumber(left.total_tokens, right.total_tokens),
+            eventsSort.direction
+          );
         case 'recover':
-          return applySortDirection(compareDate(left.recover_at, right.recover_at), eventsSort.direction);
+          return applySortDirection(
+            compareDate(left.recover_at, right.recover_at),
+            eventsSort.direction
+          );
         default:
           return 0;
       }
     });
     return list;
   }, [eventsSort, filteredEvents]);
+
+  const sortedCycles = useMemo(() => {
+    const list = [...filteredCycles];
+    if (!cyclesSort.key) return list;
+    list.sort((left, right) => {
+      switch (cyclesSort.key) {
+        case 'started_at':
+          return applySortDirection(
+            compareDate(left.started_at, right.started_at),
+            cyclesSort.direction
+          );
+        case 'auth_index':
+          return applySortDirection(
+            compareText(left.auth_index, right.auth_index),
+            cyclesSort.direction
+          );
+        case 'account':
+          return applySortDirection(compareText(left.account, right.account), cyclesSort.direction);
+        case 'status':
+          return applySortDirection(compareText(left.status, right.status), cyclesSort.direction);
+        case 'quota_window':
+          return applySortDirection(
+            compareText(left.quota_window, right.quota_window),
+            cyclesSort.direction
+          );
+        case 'delta_requests':
+          return applySortDirection(
+            compareNumber(left.delta_request_count, right.delta_request_count),
+            cyclesSort.direction
+          );
+        case 'delta_total_tokens':
+          return applySortDirection(
+            compareNumber(left.delta_total_tokens, right.delta_total_tokens),
+            cyclesSort.direction
+          );
+        case 'avg_total':
+          return applySortDirection(
+            compareNumber(left.avg_total_tokens, right.avg_total_tokens),
+            cyclesSort.direction
+          );
+        case 'requests_per_hour':
+          return applySortDirection(
+            compareNumber(left.requests_per_hour, right.requests_per_hour),
+            cyclesSort.direction
+          );
+        case 'recover':
+          return applySortDirection(
+            compareDate(
+              left.recovered_at || left.recover_at,
+              right.recovered_at || right.recover_at
+            ),
+            cyclesSort.direction
+          );
+        default:
+          return 0;
+      }
+    });
+    return list;
+  }, [cyclesSort, filteredCycles]);
 
   const filteredAccountFileNames = useMemo(
     () => uniqueStrings(sortedAccounts.map((item) => item.file_name)),
@@ -1542,6 +1852,10 @@ export function CodexAuthPage() {
     () => paginate(sortedEvents, eventsPage, eventsPageSize),
     [eventsPage, eventsPageSize, sortedEvents]
   );
+  const pagedCycles = useMemo(
+    () => paginate(sortedCycles, cyclesPage, cyclesPageSize),
+    [cyclesPage, cyclesPageSize, sortedCycles]
+  );
 
   const pagedAccountFileNames = useMemo(
     () => uniqueStrings(pagedAccounts.map((item) => item.file_name)),
@@ -1551,7 +1865,9 @@ export function CodexAuthPage() {
   const allPagedAccountFilesSelected =
     pagedAccountFileNames.length > 0 &&
     pagedAccountFileNames.every((name) => selectedAccountFiles.has(name));
-  const somePagedAccountFilesSelected = pagedAccountFileNames.some((name) => selectedAccountFiles.has(name));
+  const somePagedAccountFilesSelected = pagedAccountFileNames.some((name) =>
+    selectedAccountFiles.has(name)
+  );
 
   useEffect(() => {
     const available = new Set(uniqueStrings(accounts.map((item) => item.file_name)));
@@ -1665,6 +1981,7 @@ export function CodexAuthPage() {
         loading: true,
         snapshot: null,
         events: [],
+        cycles: [],
       });
       try {
         const response: CodexAuthDetail = await codexAuthApi.getQuotaDetail(authIndex);
@@ -1678,6 +1995,11 @@ export function CodexAuthPage() {
           loading: false,
           snapshot: mergeCodexSnapshotWithAuthFile(response.snapshot, matchedAuthFile),
           events: Array.isArray(response.events) ? response.events : [],
+          cycles: Array.isArray(response.snapshot?.cycles)
+            ? response.snapshot.cycles
+            : Array.isArray(response.cycles)
+              ? response.cycles
+              : [],
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : t('notification.refresh_failed');
@@ -1698,9 +2020,12 @@ export function CodexAuthPage() {
     []
   );
 
-  const updateFilterCollection = useCallback((updater: (rules: EditableFilterRule[]) => EditableFilterRule[]) => {
-    setConfigEditor((current) => ({ ...current, filterRules: updater(current.filterRules) }));
-  }, []);
+  const updateFilterCollection = useCallback(
+    (updater: (rules: EditableFilterRule[]) => EditableFilterRule[]) => {
+      setConfigEditor((current) => ({ ...current, filterRules: updater(current.filterRules) }));
+    },
+    []
+  );
 
   const handleApplyPreset = useCallback(
     (preset: CodexPayloadPreset) => {
@@ -1709,10 +2034,14 @@ export function CodexAuthPage() {
         return;
       }
 
-      const targetKey = RULE_TARGET_TO_COLLECTION_KEY[preset.rule_target as Exclude<RuleTargetId, 'filter'>];
+      const targetKey =
+        RULE_TARGET_TO_COLLECTION_KEY[preset.rule_target as Exclude<RuleTargetId, 'filter'>];
       if (!targetKey) return;
 
-      updateRuleCollection(targetKey, (rules) => [...rules, buildEditableRuleFromPreset(preset, guideFieldHints)]);
+      updateRuleCollection(targetKey, (rules) => [
+        ...rules,
+        buildEditableRuleFromPreset(preset, guideFieldHints),
+      ]);
     },
     [guideFieldHints, updateFilterCollection, updateRuleCollection]
   );
@@ -1748,6 +2077,7 @@ export function CodexAuthPage() {
     { key: 'accounts' as const, label: t('codex_management.tabs.accounts') },
     { key: 'usage' as const, label: t('codex_management.tabs.usage') },
     { key: 'events' as const, label: t('codex_management.tabs.events') },
+    { key: 'cycles' as const, label: t('codex_management.tabs.cycles') },
     { key: 'config' as const, label: t('codex_management.tabs.config') },
   ];
 
@@ -1759,7 +2089,12 @@ export function CodexAuthPage() {
           <p className={styles.pageDescription}>{t('codex_management.description')}</p>
         </div>
         <div className={styles.pageActions}>
-          <Button variant="secondary" onClick={() => void refreshAll()} loading={refreshing} disabled={disableControls}>
+          <Button
+            variant="secondary"
+            onClick={() => void refreshAll()}
+            loading={refreshing}
+            disabled={disableControls}
+          >
             {t('common.refresh')}
           </Button>
         </div>
@@ -1777,8 +2112,12 @@ export function CodexAuthPage() {
           <strong className={styles.summaryValue}>{formatNumber(summary.disabledAccounts)}</strong>
         </Card>
         <Card className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>{t('codex_management.summary.quota_exceeded')}</span>
-          <strong className={styles.summaryValue}>{formatNumber(summary.quotaExceededAccounts)}</strong>
+          <span className={styles.summaryLabel}>
+            {t('codex_management.summary.quota_exceeded')}
+          </span>
+          <strong className={styles.summaryValue}>
+            {formatNumber(summary.quotaExceededAccounts)}
+          </strong>
         </Card>
         <Card className={styles.summaryCard}>
           <span className={styles.summaryLabel}>{t('codex_management.summary.requests')}</span>
@@ -1800,7 +2139,10 @@ export function CodexAuthPage() {
       </div>
 
       {activeTab === 'accounts' ? (
-        <Card title={t('codex_management.accounts.title')} subtitle={t('codex_management.accounts.description')}>
+        <Card
+          title={t('codex_management.accounts.title')}
+          subtitle={t('codex_management.accounts.description')}
+        >
           <div className={styles.toolbar}>
             <Input
               value={accountsSearch}
@@ -1815,7 +2157,11 @@ export function CodexAuthPage() {
               <label className={styles.fieldLabel}>
                 {t('codex_management.model_filter', { defaultValue: 'Model' })}
               </label>
-              <Select value={accountsModel} options={accountModelOptions} onChange={setAccountsModel} />
+              <Select
+                value={accountsModel}
+                options={accountModelOptions}
+                onChange={setAccountsModel}
+              />
             </div>
             <div className={styles.toolbarField}>
               <label className={styles.fieldLabel}>{t('codex_management.page_size')}</label>
@@ -1828,7 +2174,9 @@ export function CodexAuthPage() {
           </div>
           <div className={styles.toolbarActions}>
             <span className={styles.selectionSummary}>
-              {t('codex_management.accounts.selected_files', { count: selectedAccountFileNames.length })}
+              {t('codex_management.accounts.selected_files', {
+                count: selectedAccountFileNames.length,
+              })}
             </span>
             <Button
               variant="secondary"
@@ -1846,7 +2194,11 @@ export function CodexAuthPage() {
             >
               {t('codex_management.accounts.clear_selection')}
             </Button>
-            <Button size="sm" onClick={openBatchProxyModal} disabled={disableControls || selectedAccountFileNames.length === 0}>
+            <Button
+              size="sm"
+              onClick={openBatchProxyModal}
+              disabled={disableControls || selectedAccountFileNames.length === 0}
+            >
               {t('codex_management.accounts.batch_proxy')}
             </Button>
           </div>
@@ -1868,75 +2220,132 @@ export function CodexAuthPage() {
                           checked={allPagedAccountFilesSelected}
                           ref={(input) => {
                             if (input) {
-                              input.indeterminate = !allPagedAccountFilesSelected && somePagedAccountFilesSelected;
+                              input.indeterminate =
+                                !allPagedAccountFilesSelected && somePagedAccountFilesSelected;
                             }
                           }}
                           onChange={togglePagedAccountFiles}
                           aria-label={t('codex_management.table.select')}
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'auth_index', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'auth_index',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.auth_index')}
                           active={accountsSort.key === 'auth_index'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'auth_index'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'auth_index'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'account', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'account',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.account')}
                           active={accountsSort.key === 'account'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'account'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'account'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'file_name', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'file_name',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.file')}
                           active={accountsSort.key === 'file_name'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'file_name'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'file_name'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'status', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'status',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.status')}
                           active={accountsSort.key === 'status'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'status'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'status'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'quota', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'quota',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.quota')}
                           active={accountsSort.key === 'quota'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'quota'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'quota'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'recover', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'recover',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.recover')}
                           active={accountsSort.key === 'recover'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'recover'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'recover'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'requests', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'requests',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.requests')}
                           active={accountsSort.key === 'requests'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'requests'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'requests'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(accountsSort.key === 'avg_total', accountsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'avg_total',
+                          accountsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.avg_total')}
                           active={accountsSort.key === 'avg_total'}
                           direction={accountsSort.direction}
-                          onClick={() => setAccountsSort((current) => nextSortState(current, 'avg_total'))}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'avg_total'))
+                          }
                         />
                       </th>
                       <th>{t('codex_management.table.actions')}</th>
@@ -1944,12 +2353,22 @@ export function CodexAuthPage() {
                   </thead>
                   <tbody>
                     {pagedAccounts.map((item) => (
-                      <tr key={String(item.auth_index ?? item.auth_id ?? `${item.account}-${item.file_name}`)}>
+                      <tr
+                        key={String(
+                          item.auth_index ?? item.auth_id ?? `${item.account}-${item.file_name}`
+                        )}
+                      >
                         <td>
                           <input
                             type="checkbox"
-                            checked={item.file_name ? selectedAccountFiles.has(String(item.file_name)) : false}
-                            onChange={() => toggleAccountFileSelection(String(item.file_name ?? ''))}
+                            checked={
+                              item.file_name
+                                ? selectedAccountFiles.has(String(item.file_name))
+                                : false
+                            }
+                            onChange={() =>
+                              toggleAccountFileSelection(String(item.file_name ?? ''))
+                            }
                             disabled={!item.file_name}
                             aria-label={`${t('codex_management.table.select')} ${item.file_name || item.account || ''}`}
                           />
@@ -1957,18 +2376,28 @@ export function CodexAuthPage() {
                         <td className={styles.mono}>{item.auth_index || '-'}</td>
                         <td>
                           <div>{item.account || item.label || '-'}</div>
-                          <div className={styles.subtle}>{item.account_type || item.provider || '-'}</div>
+                          <div className={styles.subtle}>
+                            {item.account_type || item.provider || '-'}
+                          </div>
                         </td>
                         <td>
                           <div>{item.file_name || '-'}</div>
-                          <div className={styles.subtle}>{item.expires_at ? formatDateTime(item.expires_at) : '-'}</div>
+                          <div className={styles.subtle}>
+                            {item.expires_at ? formatDateTime(item.expires_at) : '-'}
+                          </div>
                           {getAvailableModelIDs(item).length > 0 ? (
-                            <div className={styles.subtle}>{getAvailableModelIDs(item).slice(0, 3).join(', ')}</div>
+                            <div className={styles.subtle}>
+                              {getAvailableModelIDs(item).slice(0, 3).join(', ')}
+                            </div>
                           ) : null}
                         </td>
                         <td>
-                          <span className={`${styles.statusChip} ${getStatusTone(item)}`}>{getStatusText(item)}</span>
-                          {item.status_message ? <div className={styles.subtle}>{item.status_message}</div> : null}
+                          <span className={`${styles.statusChip} ${getStatusTone(item)}`}>
+                            {getStatusText(item)}
+                          </span>
+                          {item.status_message ? (
+                            <div className={styles.subtle}>{item.status_message}</div>
+                          ) : null}
                         </td>
                         <td>
                           <div>{getQuotaSummary(item, t)}</div>
@@ -1977,9 +2406,15 @@ export function CodexAuthPage() {
                               {t('auth_files.quota_level_label')}：{getQuotaLevelText(item, t)}
                             </div>
                           ) : null}
-                          {item.last_error_message ? <div className={styles.subtle}>{item.last_error_message}</div> : null}
+                          {item.last_error_message ? (
+                            <div className={styles.subtle}>{item.last_error_message}</div>
+                          ) : null}
                         </td>
-                        <td>{formatDateTime(item.next_recover_at || item.next_retry_after || item.next_refresh_after)}</td>
+                        <td>
+                          {formatDateTime(
+                            item.next_recover_at || item.next_retry_after || item.next_refresh_after
+                          )}
+                        </td>
                         <td>{formatNumber(item.usage?.request_count)}</td>
                         <td>{formatAverage(item.usage?.avg_total_tokens)}</td>
                         <td>
@@ -2009,7 +2444,10 @@ export function CodexAuthPage() {
       ) : null}
 
       {activeTab === 'usage' ? (
-        <Card title={t('codex_management.usage.title')} subtitle={t('codex_management.usage.description')}>
+        <Card
+          title={t('codex_management.usage.title')}
+          subtitle={t('codex_management.usage.description')}
+        >
           <div className={styles.toolbar}>
             <Input
               value={usageSearch}
@@ -2037,12 +2475,16 @@ export function CodexAuthPage() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th aria-sort={getAriaSort(usageSort.key === 'auth_index', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(usageSort.key === 'auth_index', usageSort.direction)}
+                      >
                         <SortButton
                           label={t('codex_management.table.auth_index')}
                           active={usageSort.key === 'auth_index'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'auth_index'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'auth_index'))
+                          }
                         />
                       </th>
                       <th aria-sort={getAriaSort(usageSort.key === 'account', usageSort.direction)}>
@@ -2050,55 +2492,96 @@ export function CodexAuthPage() {
                           label={t('codex_management.table.account')}
                           active={usageSort.key === 'account'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'account'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'account'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(usageSort.key === 'requests', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(usageSort.key === 'requests', usageSort.direction)}
+                      >
                         <SortButton
                           label={t('codex_management.table.requests')}
                           active={usageSort.key === 'requests'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'requests'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'requests'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(usageSort.key === 'input_tokens', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          usageSort.key === 'input_tokens',
+                          usageSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.input_tokens')}
                           active={usageSort.key === 'input_tokens'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'input_tokens'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'input_tokens'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(usageSort.key === 'output_tokens', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          usageSort.key === 'output_tokens',
+                          usageSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.output_tokens')}
                           active={usageSort.key === 'output_tokens'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'output_tokens'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'output_tokens'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(usageSort.key === 'cached_tokens', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          usageSort.key === 'cached_tokens',
+                          usageSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.cached_tokens')}
                           active={usageSort.key === 'cached_tokens'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'cached_tokens'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'cached_tokens'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(usageSort.key === 'total_tokens', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          usageSort.key === 'total_tokens',
+                          usageSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.total_tokens')}
                           active={usageSort.key === 'total_tokens'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'total_tokens'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'total_tokens'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(usageSort.key === 'recovered_tokens', usageSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          usageSort.key === 'recovered_tokens',
+                          usageSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.recovered_tokens')}
                           active={usageSort.key === 'recovered_tokens'}
                           direction={usageSort.direction}
-                          onClick={() => setUsageSort((current) => nextSortState(current, 'recovered_tokens'))}
+                          onClick={() =>
+                            setUsageSort((current) => nextSortState(current, 'recovered_tokens'))
+                          }
                         />
                       </th>
                       <th>{t('codex_management.table.actions')}</th>
@@ -2106,7 +2589,11 @@ export function CodexAuthPage() {
                   </thead>
                   <tbody>
                     {pagedUsage.map((item) => (
-                      <tr key={String(item.auth_index ?? item.auth_id ?? `${item.account}-${item.provider}`)}>
+                      <tr
+                        key={String(
+                          item.auth_index ?? item.auth_id ?? `${item.account}-${item.provider}`
+                        )}
+                      >
                         <td className={styles.mono}>{item.auth_index || '-'}</td>
                         <td>
                           <div>{item.account || '-'}</div>
@@ -2145,7 +2632,10 @@ export function CodexAuthPage() {
       ) : null}
 
       {activeTab === 'events' ? (
-        <Card title={t('codex_management.events.title')} subtitle={t('codex_management.events.description')}>
+        <Card
+          title={t('codex_management.events.title')}
+          subtitle={t('codex_management.events.description')}
+        >
           <div className={styles.toolbar}>
             <Input
               value={eventsSearch}
@@ -2154,7 +2644,11 @@ export function CodexAuthPage() {
             />
             <div className={styles.toolbarField}>
               <label className={styles.fieldLabel}>{t('codex_management.table.auth_index')}</label>
-              <Select value={eventsAuthIndex} options={authIndexOptions} onChange={setEventsAuthIndex} />
+              <Select
+                value={eventsAuthIndex}
+                options={authIndexOptions}
+                onChange={setEventsAuthIndex}
+              />
             </div>
             <div className={styles.toolbarField}>
               <label className={styles.fieldLabel}>{t('codex_management.page_size')}</label>
@@ -2177,60 +2671,100 @@ export function CodexAuthPage() {
                 <table className={styles.dataTable}>
                   <thead>
                     <tr>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'created_at', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          eventsSort.key === 'created_at',
+                          eventsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.created_at')}
                           active={eventsSort.key === 'created_at'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'created_at'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'created_at'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'auth_index', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          eventsSort.key === 'auth_index',
+                          eventsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.auth_index')}
                           active={eventsSort.key === 'auth_index'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'auth_index'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'auth_index'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'event_type', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          eventsSort.key === 'event_type',
+                          eventsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.event_type')}
                           active={eventsSort.key === 'event_type'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'event_type'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'event_type'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'reason', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(eventsSort.key === 'reason', eventsSort.direction)}
+                      >
                         <SortButton
                           label={t('codex_management.table.reason')}
                           active={eventsSort.key === 'reason'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'reason'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'reason'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'requests', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(eventsSort.key === 'requests', eventsSort.direction)}
+                      >
                         <SortButton
                           label={t('codex_management.table.requests')}
                           active={eventsSort.key === 'requests'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'requests'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'requests'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'total_tokens', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(
+                          eventsSort.key === 'total_tokens',
+                          eventsSort.direction
+                        )}
+                      >
                         <SortButton
                           label={t('codex_management.table.total_tokens')}
                           active={eventsSort.key === 'total_tokens'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'total_tokens'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'total_tokens'))
+                          }
                         />
                       </th>
-                      <th aria-sort={getAriaSort(eventsSort.key === 'recover', eventsSort.direction)}>
+                      <th
+                        aria-sort={getAriaSort(eventsSort.key === 'recover', eventsSort.direction)}
+                      >
                         <SortButton
                           label={t('codex_management.table.recover')}
                           active={eventsSort.key === 'recover'}
                           direction={eventsSort.direction}
-                          onClick={() => setEventsSort((current) => nextSortState(current, 'recover'))}
+                          onClick={() =>
+                            setEventsSort((current) => nextSortState(current, 'recover'))
+                          }
                         />
                       </th>
                       <th>{t('codex_management.table.actions')}</th>
@@ -2244,7 +2778,9 @@ export function CodexAuthPage() {
                         <td>{item.event_type || '-'}</td>
                         <td>
                           <div>{item.reason || item.status_message || '-'}</div>
-                          {item.last_error ? <div className={styles.subtle}>{item.last_error}</div> : null}
+                          {item.last_error ? (
+                            <div className={styles.subtle}>{item.last_error}</div>
+                          ) : null}
                         </td>
                         <td>{formatNumber(item.request_count)}</td>
                         <td>{formatNumber(item.total_tokens)}</td>
@@ -2275,21 +2811,277 @@ export function CodexAuthPage() {
         </Card>
       ) : null}
 
+      {activeTab === 'cycles' ? (
+        <Card
+          title={t('codex_management.cycles.title')}
+          subtitle={t('codex_management.cycles.description')}
+        >
+          <div className={styles.toolbar}>
+            <Input
+              value={cyclesSearch}
+              onChange={(event) => setCyclesSearch(event.target.value)}
+              placeholder={t('codex_management.search_placeholder')}
+            />
+            <div className={styles.toolbarField}>
+              <label className={styles.fieldLabel}>{t('codex_management.table.auth_index')}</label>
+              <Select
+                value={cyclesAuthIndex}
+                options={authIndexOptions}
+                onChange={setCyclesAuthIndex}
+              />
+            </div>
+            <div className={styles.toolbarField}>
+              <label className={styles.fieldLabel}>{t('codex_management.page_size')}</label>
+              <Select
+                value={String(cyclesPageSize)}
+                options={PAGE_SIZE_OPTIONS.map((value) => ({ value, label: value }))}
+                onChange={(value) => setCyclesPageSize(Number(value))}
+              />
+            </div>
+          </div>
+
+          {filteredCycles.length === 0 ? (
+            <EmptyState
+              title={t('codex_management.empty.cycles')}
+              description={t('codex_management.empty.cycles_description')}
+            />
+          ) : (
+            <>
+              <div className={styles.tableWrap}>
+                <table className={styles.dataTable}>
+                  <thead>
+                    <tr>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'started_at',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.started_at')}
+                          active={cyclesSort.key === 'started_at'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'started_at'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'auth_index',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.auth_index')}
+                          active={cyclesSort.key === 'auth_index'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'auth_index'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(cyclesSort.key === 'account', cyclesSort.direction)}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.account')}
+                          active={cyclesSort.key === 'account'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'account'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(cyclesSort.key === 'status', cyclesSort.direction)}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.cycle_status')}
+                          active={cyclesSort.key === 'status'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'status'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'quota_window',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.quota_window')}
+                          active={cyclesSort.key === 'quota_window'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'quota_window'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'delta_requests',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.delta_requests')}
+                          active={cyclesSort.key === 'delta_requests'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'delta_requests'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'delta_total_tokens',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.delta_total_tokens')}
+                          active={cyclesSort.key === 'delta_total_tokens'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'delta_total_tokens'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'avg_total',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.avg_total')}
+                          active={cyclesSort.key === 'avg_total'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'avg_total'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          cyclesSort.key === 'requests_per_hour',
+                          cyclesSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.requests_per_hour')}
+                          active={cyclesSort.key === 'requests_per_hour'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'requests_per_hour'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(cyclesSort.key === 'recover', cyclesSort.direction)}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.recovered_at')}
+                          active={cyclesSort.key === 'recover'}
+                          direction={cyclesSort.direction}
+                          onClick={() =>
+                            setCyclesSort((current) => nextSortState(current, 'recover'))
+                          }
+                        />
+                      </th>
+                      <th>{t('codex_management.table.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedCycles.map((item) => (
+                      <tr
+                        key={String(
+                          item.id ?? `${item.auth_index}-${item.started_at}-${item.status}`
+                        )}
+                      >
+                        <td>{formatDateTime(item.started_at)}</td>
+                        <td className={styles.mono}>{item.auth_index || '-'}</td>
+                        <td>
+                          <div>{item.account || '-'}</div>
+                          <div className={styles.subtle}>{item.provider || '-'}</div>
+                        </td>
+                        <td>
+                          <span
+                            className={`${styles.statusChip} ${getCycleStatusTone(item.status)}`}
+                          >
+                            {item.status || '-'}
+                          </span>
+                        </td>
+                        <td>
+                          <div>{item.quota_window || '-'}</div>
+                          <div className={styles.subtle}>
+                            {item.quota_reason || item.quota_model || '-'}
+                          </div>
+                        </td>
+                        <td>{formatNumber(item.delta_request_count)}</td>
+                        <td>{formatNumber(item.delta_total_tokens)}</td>
+                        <td>{formatAverage(item.avg_total_tokens)}</td>
+                        <td>{formatAverage(item.requests_per_hour)}</td>
+                        <td>
+                          <div>{formatDateTime(item.recovered_at || item.recover_at)}</div>
+                          {item.quota_exceeded_at ? (
+                            <div className={styles.subtle}>
+                              {t('codex_management.table.quota_exceeded_at')}：
+                              {formatDateTime(item.quota_exceeded_at)}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void openDetail(String(item.auth_index ?? ''))}
+                            disabled={!item.auth_index}
+                          >
+                            {t('codex_management.detail')}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationBar
+                page={cyclesPage}
+                total={filteredCycles.length}
+                pageSize={cyclesPageSize}
+                onPageChange={setCyclesPage}
+              />
+            </>
+          )}
+        </Card>
+      ) : null}
+
       {activeTab === 'config' ? (
         <div className={styles.configLayout}>
-          <Card title={t('codex_management.config.title')} subtitle={t('codex_management.config.description')}>
+          <Card
+            title={t('codex_management.config.title')}
+            subtitle={t('codex_management.config.description')}
+          >
             <div className={styles.configHeaderGrid}>
               <Input
                 label={t('codex_management.config.user_agent')}
                 value={configEditor.userAgent}
-                onChange={(event) => setConfigEditor((current) => ({ ...current, userAgent: event.target.value }))}
+                onChange={(event) =>
+                  setConfigEditor((current) => ({ ...current, userAgent: event.target.value }))
+                }
                 placeholder="Mozilla/5.0 ..."
                 hint={userAgentHint?.description}
               />
               <Input
                 label={t('codex_management.config.beta_features')}
                 value={configEditor.betaFeatures}
-                onChange={(event) => setConfigEditor((current) => ({ ...current, betaFeatures: event.target.value }))}
+                onChange={(event) =>
+                  setConfigEditor((current) => ({ ...current, betaFeatures: event.target.value }))
+                }
                 placeholder="feature-a, feature-b"
                 hint={betaFeaturesHint?.description}
               />
@@ -2317,14 +3109,22 @@ export function CodexAuthPage() {
                   <div className={styles.contextStats}>
                     <div className={styles.contextStat}>
                       <span>GPT-5</span>
-                      <strong>{formatNumber(configGuide.context_windows.gpt5_max_context_tokens)}</strong>
+                      <strong>
+                        {formatNumber(configGuide.context_windows.gpt5_max_context_tokens)}
+                      </strong>
                     </div>
                     <div className={styles.contextStat}>
                       <span>GPT-4.1</span>
-                      <strong>{formatNumber(configGuide.context_windows.gpt41_max_context_tokens)}</strong>
+                      <strong>
+                        {formatNumber(configGuide.context_windows.gpt41_max_context_tokens)}
+                      </strong>
                     </div>
                     <div className={styles.contextStat}>
-                      <span>{t('codex_management.config.official_one_million_label', { defaultValue: 'GPT-5 官方 1M 上下文' })}</span>
+                      <span>
+                        {t('codex_management.config.official_one_million_label', {
+                          defaultValue: 'GPT-5 官方 1M 上下文',
+                        })}
+                      </span>
                       <strong>
                         {configGuide.context_windows.gpt5_supports_official_one_million
                           ? t('codex_management.config.boolean_true', { defaultValue: '是' })
@@ -2332,8 +3132,14 @@ export function CodexAuthPage() {
                       </strong>
                     </div>
                     <div className={styles.contextStat}>
-                      <span>{t('codex_management.config.recommended_context_family_label', { defaultValue: '建议长上下文系列' })}</span>
-                      <strong>{configGuide.context_windows.official_one_million_recommended_family || '-'}</strong>
+                      <span>
+                        {t('codex_management.config.recommended_context_family_label', {
+                          defaultValue: '建议长上下文系列',
+                        })}
+                      </span>
+                      <strong>
+                        {configGuide.context_windows.official_one_million_recommended_family || '-'}
+                      </strong>
                     </div>
                   </div>
                 ) : null}
@@ -2393,13 +3199,17 @@ export function CodexAuthPage() {
 
           {RULE_SECTION_CONFIG.map((section) => {
             const sectionRules = configEditor[section.key];
-            const sectionFieldHints = guideFieldHints.filter((hint) => hint.rule_targets.includes(section.target));
+            const sectionFieldHints = guideFieldHints.filter((hint) =>
+              hint.rule_targets.includes(section.target)
+            );
             const sectionGroupHints = groupedGuideFields.filter((group) =>
               Array.isArray(group.rule_targets) && group.rule_targets.length > 0
                 ? group.rule_targets.includes(section.target)
                 : true
             );
-            const sectionPresets = guidePresets.filter((preset) => preset.rule_target === section.target);
+            const sectionPresets = guidePresets.filter(
+              (preset) => preset.rule_target === section.target
+            );
 
             return (
               <PayloadRuleGroup
@@ -2412,19 +3222,27 @@ export function CodexAuthPage() {
                 groupHints={sectionGroupHints}
                 presets={sectionPresets}
                 onApplyPreset={handleApplyPreset}
-                onAddRule={() => updateRuleCollection(section.key, (rules) => [...rules, createEditableRule()])}
+                onAddRule={() =>
+                  updateRuleCollection(section.key, (rules) => [...rules, createEditableRule()])
+                }
                 onRemoveRule={(ruleId) =>
-                  updateRuleCollection(section.key, (rules) => rules.filter((rule) => rule.id !== ruleId))
+                  updateRuleCollection(section.key, (rules) =>
+                    rules.filter((rule) => rule.id !== ruleId)
+                  )
                 }
                 onModelsChange={(ruleId, value) =>
                   updateRuleCollection(section.key, (rules) =>
-                    rules.map((rule) => (rule.id === ruleId ? { ...rule, modelsText: value } : rule))
+                    rules.map((rule) =>
+                      rule.id === ruleId ? { ...rule, modelsText: value } : rule
+                    )
                   )
                 }
                 onAddParam={(ruleId) =>
                   updateRuleCollection(section.key, (rules) =>
                     rules.map((rule) =>
-                      rule.id === ruleId ? { ...rule, params: [...rule.params, createEditableParam()] } : rule
+                      rule.id === ruleId
+                        ? { ...rule, params: [...rule.params, createEditableParam()] }
+                        : rule
                     )
                   )
                 }
@@ -2465,9 +3283,13 @@ export function CodexAuthPage() {
             rules={configEditor.filterRules}
             suggestions={guideFilterHints}
             presets={guidePresets.filter((preset) => preset.rule_target === 'filter')}
-            onAddRule={() => updateFilterCollection((rules) => [...rules, createEditableFilterRule()])}
+            onAddRule={() =>
+              updateFilterCollection((rules) => [...rules, createEditableFilterRule()])
+            }
             onApplyPreset={handleApplyPreset}
-            onRemoveRule={(ruleId) => updateFilterCollection((rules) => rules.filter((rule) => rule.id !== ruleId))}
+            onRemoveRule={(ruleId) =>
+              updateFilterCollection((rules) => rules.filter((rule) => rule.id !== ruleId))
+            }
             onChange={(ruleId, key, value) =>
               updateFilterCollection((rules) =>
                 rules.map((rule) => (rule.id === ruleId ? { ...rule, [key]: value } : rule))
@@ -2476,7 +3298,11 @@ export function CodexAuthPage() {
           />
 
           <div className={styles.configActions}>
-            <Button onClick={() => void handleConfigSave()} loading={savingConfig} disabled={disableControls}>
+            <Button
+              onClick={() => void handleConfigSave()}
+              loading={savingConfig}
+              disabled={disableControls}
+            >
               {t('common.save')}
             </Button>
           </div>
@@ -2514,10 +3340,14 @@ export function CodexAuthPage() {
         }
       >
         <div className={styles.batchProxyContent}>
-          <p className={styles.batchProxyDescription}>{t('codex_management.accounts.batch_proxy_description')}</p>
+          <p className={styles.batchProxyDescription}>
+            {t('codex_management.accounts.batch_proxy_description')}
+          </p>
           <div className={styles.batchProxyControls}>
             <div className={styles.toolbarField}>
-              <label className={styles.fieldLabel}>{t('codex_management.accounts.batch_proxy_mode')}</label>
+              <label className={styles.fieldLabel}>
+                {t('codex_management.accounts.batch_proxy_mode')}
+              </label>
               <Select
                 value={batchProxyMode}
                 options={[
@@ -2539,7 +3369,11 @@ export function CodexAuthPage() {
           </div>
           <div className={styles.batchProxySelectedPanel}>
             <div className={styles.batchProxySelectedHeader}>
-              <span>{t('codex_management.accounts.selected_files', { count: selectedAccountFileNames.length })}</span>
+              <span>
+                {t('codex_management.accounts.selected_files', {
+                  count: selectedAccountFileNames.length,
+                })}
+              </span>
             </div>
             <div className={styles.batchProxySelectedList}>
               {selectedAccountFileNames.map((name) => (
@@ -2561,6 +3395,7 @@ export function CodexAuthPage() {
             loading: false,
             snapshot: null,
             events: [],
+            cycles: [],
           })
         }
         width={1080}
@@ -2641,7 +3476,11 @@ export function CodexAuthPage() {
                   </div>
                   <div>
                     <span>{t('codex_management.detail_cards.last_refresh')}</span>
-                    <strong>{formatDateTime(detail.snapshot.last_refreshed_at || detail.snapshot.updated_at)}</strong>
+                    <strong>
+                      {formatDateTime(
+                        detail.snapshot.last_refreshed_at || detail.snapshot.updated_at
+                      )}
+                    </strong>
                   </div>
                 </div>
               </Card>
@@ -2650,13 +3489,59 @@ export function CodexAuthPage() {
             {detail.snapshot.status_message || detail.snapshot.last_error_message ? (
               <Card title={t('codex_management.detail_cards.messages')}>
                 <div className={styles.messageStack}>
-                  {detail.snapshot.status_message ? <div>{detail.snapshot.status_message}</div> : null}
+                  {detail.snapshot.status_message ? (
+                    <div>{detail.snapshot.status_message}</div>
+                  ) : null}
                   {detail.snapshot.last_error_message ? (
                     <div className={styles.errorText}>{detail.snapshot.last_error_message}</div>
                   ) : null}
                 </div>
               </Card>
             ) : null}
+
+            <Card title={t('codex_management.detail_cards.cycles')}>
+              {detail.cycles.length === 0 ? (
+                <EmptyState title={t('codex_management.empty.detail_cycles')} />
+              ) : (
+                <div className={styles.tableWrap}>
+                  <table className={styles.dataTable}>
+                    <thead>
+                      <tr>
+                        <th>{t('codex_management.table.started_at')}</th>
+                        <th>{t('codex_management.table.cycle_status')}</th>
+                        <th>{t('codex_management.table.quota_window')}</th>
+                        <th>{t('codex_management.table.delta_requests')}</th>
+                        <th>{t('codex_management.table.delta_total_tokens')}</th>
+                        <th>{t('codex_management.table.recovered_at')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.cycles.map((cycle) => (
+                        <tr key={String(cycle.id ?? `${cycle.started_at}-${cycle.status}`)}>
+                          <td>{formatDateTime(cycle.started_at)}</td>
+                          <td>
+                            <span
+                              className={`${styles.statusChip} ${getCycleStatusTone(cycle.status)}`}
+                            >
+                              {cycle.status || '-'}
+                            </span>
+                          </td>
+                          <td>
+                            <div>{cycle.quota_window || '-'}</div>
+                            <div className={styles.subtle}>
+                              {cycle.quota_reason || cycle.quota_model || '-'}
+                            </div>
+                          </td>
+                          <td>{formatNumber(cycle.delta_request_count)}</td>
+                          <td>{formatNumber(cycle.delta_total_tokens)}</td>
+                          <td>{formatDateTime(cycle.recovered_at || cycle.recover_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
 
             <Card title={t('codex_management.detail_cards.events')}>
               {detail.events.length === 0 ? (
@@ -2681,7 +3566,9 @@ export function CodexAuthPage() {
                           <td>{event.event_type || '-'}</td>
                           <td>
                             <div>{event.reason || event.status_message || '-'}</div>
-                            {event.last_error ? <div className={styles.subtle}>{event.last_error}</div> : null}
+                            {event.last_error ? (
+                              <div className={styles.subtle}>{event.last_error}</div>
+                            ) : null}
                           </td>
                           <td>{formatNumber(event.request_count)}</td>
                           <td>{formatNumber(event.total_tokens)}</td>
@@ -2695,7 +3582,10 @@ export function CodexAuthPage() {
             </Card>
           </div>
         ) : (
-          <EmptyState title={t('codex_management.empty.detail')} description={t('codex_management.empty.detail_description')} />
+          <EmptyState
+            title={t('codex_management.empty.detail')}
+            description={t('codex_management.empty.detail_description')}
+          />
         )}
       </Modal>
     </div>

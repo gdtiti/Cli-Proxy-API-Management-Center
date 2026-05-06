@@ -1822,7 +1822,8 @@
       "accounts": "Accounts",
       "usage": "Usage",
       "events": "Events",
-      "config": "Config"
+      "config": "Config",
+      "cycles": "Cycles"
     },
     "summary": {
       "accounts": "Accounts",
@@ -1889,14 +1890,23 @@
       "created_at": "Created At",
       "event_type": "Event Type",
       "reason": "Reason",
-      "select": "Select"
+      "select": "Select",
+      "cycle_status": "Cycle Status",
+      "quota_window": "Quota Window",
+      "started_at": "Started At",
+      "quota_exceeded_at": "Quota Exceeded At",
+      "recovered_at": "Recovered At",
+      "delta_requests": "Cycle Requests",
+      "delta_total_tokens": "Cycle Total Tokens",
+      "requests_per_hour": "Requests / Hour"
     },
     "detail_cards": {
       "account": "Account",
       "quota": "Quota",
       "last_refresh": "Last Refresh",
       "messages": "Messages",
-      "events": "Events"
+      "events": "Events",
+      "cycles": "Usage Cycles"
     },
     "empty": {
       "accounts": "No account data",
@@ -1907,7 +1917,14 @@
       "events_description": "No events match the current filters.",
       "detail": "No detail data",
       "detail_description": "This account did not return detail data.",
-      "detail_events": "No events for this account"
+      "detail_events": "No events for this account",
+      "cycles": "No cycle data",
+      "cycles_description": "No cooldown cycles match the current filters.",
+      "detail_cycles": "No cycles for this account"
+    },
+    "cycles": {
+      "title": "Quota Cycles",
+      "description": "Review each cooldown/recovery cycle and quota efficiency per Codex auth account."
     }
   }
 }
