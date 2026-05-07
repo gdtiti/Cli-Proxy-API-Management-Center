@@ -11,11 +11,23 @@ export type VisualConfigFieldPath =
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
   | 'authDefaultMaxConcurrency'
+  | 'authRuntime.unauthorizedDeleteThreshold'
+  | 'authRuntime.unauthorizedDeleteWindowSeconds'
+  | 'authMaintenance.scanIntervalSeconds'
+  | 'authMaintenance.deleteIntervalSeconds'
+  | 'authMaintenance.deleteStatusCodes'
+  | 'authMaintenance.disableStatusCodes'
+  | 'authMaintenance.quotaStrikeThreshold'
+  | 'authMaintenance.codexMaxRequestCount'
+  | 'authMaintenance.codexQuotaCheckRequestInterval'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
 
-export type VisualConfigValidationErrorCode = 'port_range' | 'non_negative_integer';
+export type VisualConfigValidationErrorCode =
+  | 'port_range'
+  | 'non_negative_integer'
+  | 'status_code_list';
 
 export type VisualConfigValidationErrors = Partial<
   Record<VisualConfigFieldPath, VisualConfigValidationErrorCode>
@@ -50,6 +62,24 @@ export interface StreamingConfig {
   keepaliveSeconds: string;
   bootstrapRetries: string;
   nonstreamKeepaliveInterval: string;
+}
+
+export interface AuthRuntimeConfig {
+  unauthorizedDeleteThreshold: string;
+  unauthorizedDeleteWindowSeconds: string;
+}
+
+export interface AuthMaintenanceConfig {
+  enable: boolean;
+  scanIntervalSeconds: string;
+  deleteIntervalSeconds: string;
+  deleteStatusCodes: string;
+  disableStatusCodes: string;
+  deleteQuotaExceeded: boolean;
+  quotaStrikeThreshold: string;
+  disableCodexUsageLimitReached: boolean;
+  codexMaxRequestCount: string;
+  codexQuotaCheckRequestInterval: string;
 }
 
 export type VisualConfigValues = {
@@ -90,6 +120,8 @@ export type VisualConfigValues = {
   payloadOverrideRawRules: PayloadRule[];
   payloadFilterRules: PayloadFilterRule[];
   streaming: StreamingConfig;
+  authRuntime: AuthRuntimeConfig;
+  authMaintenance: AuthMaintenanceConfig;
 
   // 新增超时配置（字符串类型用于输入框）
   apiTimeout: string; // 通用API超时（秒）
@@ -142,6 +174,22 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
     keepaliveSeconds: '',
     bootstrapRetries: '',
     nonstreamKeepaliveInterval: '',
+  },
+  authRuntime: {
+    unauthorizedDeleteThreshold: '3',
+    unauthorizedDeleteWindowSeconds: '600',
+  },
+  authMaintenance: {
+    enable: true,
+    scanIntervalSeconds: '30',
+    deleteIntervalSeconds: '5',
+    deleteStatusCodes: '',
+    disableStatusCodes: '',
+    deleteQuotaExceeded: false,
+    quotaStrikeThreshold: '6',
+    disableCodexUsageLimitReached: true,
+    codexMaxRequestCount: '0',
+    codexQuotaCheckRequestInterval: '0',
   },
 
   // 默认值：30秒通用，60秒认证文件列表
