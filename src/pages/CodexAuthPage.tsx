@@ -98,6 +98,8 @@ type AccountsSortKey =
   | 'requests'
   | 'avg_total';
 
+type AccountsQuickFilter = 'all' | 'healthy' | 'quota' | 'disabled' | 'at_capacity';
+
 type UsageSortKey =
   | 'auth_index'
   | 'account'
@@ -136,6 +138,8 @@ const ACCOUNTS_SORT_KEYS: AccountsSortKey[] = [
   'status',
   'quota',
   'recover',
+  'concurrency',
+  'last_used_at',
   'requests',
   'avg_total',
 ];
@@ -292,6 +296,22 @@ const formatNumber = (value?: number | null) => {
   return value.toLocaleString();
 };
 
+const formatCompactNumber = (value?: number | null) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '0';
+  const absolute = Math.abs(value);
+  if (absolute < 1000) return value.toLocaleString();
+  if (absolute < 1_000_000) return `${(value / 1000).toFixed(absolute >= 100_000 ? 0 : 1)}K`;
+  if (absolute < 1_000_000_000) {
+    return `${(value / 1_000_000).toFixed(absolute >= 100_000_000 ? 0 : 1)}M`;
+  }
+  return `${(value / 1_000_000_000).toFixed(absolute >= 100_000_000_000 ? 0 : 1)}B`;
+};
+
+const formatTokenValue = (value?: number | null) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '0';
+  return formatCompactNumber(value);
+};
+
 const formatAverage = (value?: number | null) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-';
   return value.toLocaleString(undefined, {
@@ -299,6 +319,22 @@ const formatAverage = (value?: number | null) => {
     maximumFractionDigits: value >= 100 ? 0 : 2,
   });
 };
+
+const formatTokenAverage = (value?: number | null) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-';
+  return formatTokenValue(value);
+};
+
+const calculatePercent = (value: number, total: number) => {
+  if (!Number.isFinite(total) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, (value / total) * 100));
+};
+
+const formatPercent = (value: number) =>
+  `${value.toLocaleString(undefined, {
+    minimumFractionDigits: value >= 100 || Number.isInteger(value) ? 0 : 1,
+    maximumFractionDigits: value >= 100 || Number.isInteger(value) ? 0 : 1,
+  })}%`;
 
 const normalizeText = (value: unknown) =>
   String(value ?? '')
@@ -320,6 +356,22 @@ const matchesModelFilter = (item: CodexAuthSnapshot, model: string) => {
   const normalized = model.trim().toLowerCase();
   if (!normalized) return true;
   return getAvailableModelIDs(item).some((modelID) => modelID.toLowerCase().includes(normalized));
+};
+
+const getCurrentConcurrencyValue = (item: Pick<CodexAuthSnapshot, 'current_concurrency'>) =>
+  Math.max(0, Number(item.current_concurrency ?? 0) || 0);
+
+const getMaxConcurrencyValue = (item: Pick<CodexAuthSnapshot, 'max_concurrency'>) => {
+  const value = Number(item.max_concurrency ?? 0) || 0;
+  return value > 0 ? value : 0;
+};
+
+const isAccountAtCapacity = (
+  item: Pick<CodexAuthSnapshot, 'current_concurrency' | 'max_concurrency'>
+) => {
+  const current = getCurrentConcurrencyValue(item);
+  const maximum = getMaxConcurrencyValue(item);
+  return maximum > 0 && current >= maximum;
 };
 
 const paginate = <T,>(items: T[], page: number, pageSize: number) => {
@@ -1280,6 +1332,7 @@ export function CodexAuthPage() {
     return typeof value === 'string' && value.trim() ? value : 'all';
   });
   const [accountsModel, setAccountsModel] = useState(() => persistedUiState?.accountsModel ?? '');
+  const [accountsQuickFilter, setAccountsQuickFilter] = useState<AccountsQuickFilter>('all');
   const [accountsPage, setAccountsPage] = useState(() =>
     clampCodexAuthPage(persistedUiState?.accountsPage, 1)
   );
@@ -1455,7 +1508,14 @@ export function CodexAuthPage() {
 
   useEffect(() => {
     setAccountsPage(1);
-  }, [accountsModel, accountsPageSize, accountsSearch, accountsStatus, accountsSort]);
+  }, [
+    accountsModel,
+    accountsPageSize,
+    accountsQuickFilter,
+    accountsSearch,
+    accountsStatus,
+    accountsSort,
+  ]);
 
   useEffect(() => {
     setUsagePage(1);
@@ -1519,11 +1579,49 @@ export function CodexAuthPage() {
 
   const summary = useMemo(() => {
     const totalRequests = usage.reduce((sum, item) => sum + (item.request_count ?? 0), 0);
+    const totalTokens = usage.reduce((sum, item) => sum + (item.total_tokens ?? 0), 0);
+    const healthyAccounts = accounts.filter((item) => !item.disabled && !item.quota_exceeded).length;
+    const currentConcurrency = accounts.reduce(
+      (sum, item) => sum + getCurrentConcurrencyValue(item),
+      0
+    );
+    const boundedAccounts = accounts.filter((item) => getMaxConcurrencyValue(item) > 0);
+    const boundedMaxConcurrency = boundedAccounts.reduce(
+      (sum, item) => sum + getMaxConcurrencyValue(item),
+      0
+    );
+    const unlimitedAccounts = accounts.length - boundedAccounts.length;
+    const atCapacityAccounts = accounts.filter((item) => isAccountAtCapacity(item)).length;
+    const quotaHealthyPercent = calculatePercent(healthyAccounts, accounts.length);
+    const concurrencyPercent = calculatePercent(currentConcurrency, boundedMaxConcurrency);
+    const topTokenAccounts = [...usage]
+      .sort((left, right) => (right.total_tokens ?? 0) - (left.total_tokens ?? 0))
+      .slice(0, 6)
+      .map((item, index) => ({
+        id: String(item.auth_index ?? item.account ?? item.email ?? `usage-${index}`),
+        label: String(item.account ?? item.email ?? item.auth_index ?? '-'),
+        totalTokens: Number(item.total_tokens ?? 0) || 0,
+      }));
+    const topTokenMax = topTokenAccounts.reduce(
+      (max, item) => Math.max(max, item.totalTokens),
+      0
+    );
+
     return {
       totalAccounts: accounts.length,
       disabledAccounts: accounts.filter((item) => item.disabled).length,
       quotaExceededAccounts: accounts.filter((item) => item.quota_exceeded).length,
       totalRequests,
+      totalTokens,
+      healthyAccounts,
+      currentConcurrency,
+      boundedMaxConcurrency,
+      unlimitedAccounts,
+      atCapacityAccounts,
+      quotaHealthyPercent,
+      concurrencyPercent,
+      topTokenAccounts,
+      topTokenMax,
     };
   }, [accounts, usage]);
 
@@ -1595,15 +1693,33 @@ export function CodexAuthPage() {
     ];
   }, [accounts, cycles, t, usage]);
 
+  const accountsQuickFilterOptions = useMemo(
+    () => [
+      { value: 'all' as const, label: t('codex_management.accounts.quick_filter_all') },
+      { value: 'healthy' as const, label: t('codex_management.accounts.quick_filter_healthy') },
+      { value: 'quota' as const, label: t('codex_management.accounts.quick_filter_quota') },
+      { value: 'disabled' as const, label: t('codex_management.accounts.quick_filter_disabled') },
+      {
+        value: 'at_capacity' as const,
+        label: t('codex_management.accounts.quick_filter_at_capacity'),
+      },
+    ],
+    [t]
+  );
+
   const filteredAccounts = useMemo(() => {
     const keyword = accountsSearch.trim().toLowerCase();
     return accounts.filter((item) => {
       if (accountsStatus !== 'all' && getStatusText(item) !== accountsStatus) return false;
       if (!matchesModelFilter(item, accountsModel)) return false;
+      if (accountsQuickFilter === 'healthy' && (item.disabled || item.quota_exceeded)) return false;
+      if (accountsQuickFilter === 'quota' && !item.quota_exceeded) return false;
+      if (accountsQuickFilter === 'disabled' && !item.disabled) return false;
+      if (accountsQuickFilter === 'at_capacity' && !isAccountAtCapacity(item)) return false;
       if (!keyword) return true;
       return collectSearchableText(item).includes(keyword);
     });
-  }, [accounts, accountsModel, accountsSearch, accountsStatus]);
+  }, [accounts, accountsModel, accountsQuickFilter, accountsSearch, accountsStatus]);
 
   const filteredUsage = useMemo(() => {
     const keyword = usageSearch.trim().toLowerCase();
@@ -2122,10 +2238,22 @@ export function CodexAuthPage() {
         <Card className={styles.summaryCard}>
           <span className={styles.summaryLabel}>{t('codex_management.summary.accounts')}</span>
           <strong className={styles.summaryValue}>{formatNumber(summary.totalAccounts)}</strong>
+          <div className={styles.summaryMeta}>
+            <span>{t('codex_management.summary.healthy')}</span>
+            <strong>{formatNumber(summary.healthyAccounts)}</strong>
+          </div>
         </Card>
         <Card className={styles.summaryCard}>
           <span className={styles.summaryLabel}>{t('codex_management.summary.disabled')}</span>
           <strong className={styles.summaryValue}>{formatNumber(summary.disabledAccounts)}</strong>
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{
+                width: `${calculatePercent(summary.disabledAccounts, summary.totalAccounts)}%`,
+              }}
+            />
+          </div>
         </Card>
         <Card className={styles.summaryCard}>
           <span className={styles.summaryLabel}>
@@ -2134,10 +2262,75 @@ export function CodexAuthPage() {
           <strong className={styles.summaryValue}>
             {formatNumber(summary.quotaExceededAccounts)}
           </strong>
+          <div className={styles.summaryMeta}>
+            <span>{t('codex_management.summary.quota_health')}</span>
+            <strong>{formatPercent(summary.quotaHealthyPercent)}</strong>
+          </div>
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${summary.quotaHealthyPercent}%` }}
+            />
+          </div>
         </Card>
         <Card className={styles.summaryCard}>
           <span className={styles.summaryLabel}>{t('codex_management.summary.requests')}</span>
-          <strong className={styles.summaryValue}>{formatNumber(summary.totalRequests)}</strong>
+          <strong className={styles.summaryValue}>{formatCompactNumber(summary.totalRequests)}</strong>
+          <div className={styles.summaryMeta}>
+            <span>{t('codex_management.summary.tokens')}</span>
+            <strong>{formatTokenValue(summary.totalTokens)}</strong>
+          </div>
+        </Card>
+        <Card className={styles.summaryCard}>
+          <span className={styles.summaryLabel}>{t('codex_management.summary.concurrency')}</span>
+          <strong className={styles.summaryValue}>
+            {formatNumber(summary.currentConcurrency)}
+            <span className={styles.summaryAccent}> / {summary.boundedMaxConcurrency || '∞'}</span>
+          </strong>
+          <div className={styles.summaryMeta}>
+            <span>{t('codex_management.summary.capacity_hint')}</span>
+            <strong>{formatPercent(summary.concurrencyPercent)}</strong>
+          </div>
+          <div className={styles.progressTrack}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${summary.concurrencyPercent}%` }}
+            />
+          </div>
+          {summary.unlimitedAccounts > 0 ? (
+            <div className={styles.subtle}>
+              {t('codex_management.summary.unlimited_hint', {
+                count: summary.unlimitedAccounts,
+              })}
+            </div>
+          ) : null}
+        </Card>
+        <Card className={styles.summaryCard}>
+          <span className={styles.summaryLabel}>{t('codex_management.summary.top_tokens')}</span>
+          <div className={styles.chartBars}>
+            {summary.topTokenAccounts.length === 0 ? (
+              <div className={styles.subtle}>
+                {t('codex_management.summary.top_tokens_hint')}
+              </div>
+            ) : (
+              summary.topTokenAccounts.map((item) => (
+                <div key={item.id} className={styles.chartBarRow}>
+                  <div className={styles.chartBarMeta}>
+                    <span className={styles.chartBarLabel}>{item.label}</span>
+                    <strong>{formatTokenValue(item.totalTokens)}</strong>
+                  </div>
+                  <div className={styles.progressTrack}>
+                    <div
+                      className={styles.progressFill}
+                      style={{
+                        width: `${calculatePercent(item.totalTokens, summary.topTokenMax || 1)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </Card>
       </div>
 
@@ -2187,6 +2380,20 @@ export function CodexAuthPage() {
                 onChange={(value) => setAccountsPageSize(Number(value))}
               />
             </div>
+          </div>
+          <div className={styles.quickFilters}>
+            {accountsQuickFilterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`${styles.quickFilterButton} ${
+                  accountsQuickFilter === option.value ? styles.quickFilterButtonActive : ''
+                }`}
+                onClick={() => setAccountsQuickFilter(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
           <div className={styles.toolbarActions}>
             <span className={styles.selectionSummary}>
@@ -2462,14 +2669,32 @@ export function CodexAuthPage() {
                           )}
                         </td>
                         <td>
-                          {Number(item.current_concurrency ?? 0) || 0}/
-                          {Number(item.max_concurrency ?? 0) > 0
-                            ? Number(item.max_concurrency)
-                            : '∞'}
+                          <div className={styles.tableProgressMeta}>
+                            <span>
+                              {getCurrentConcurrencyValue(item)}/
+                              {getMaxConcurrencyValue(item) > 0
+                                ? getMaxConcurrencyValue(item)
+                                : '∞'}
+                            </span>
+                            {isAccountAtCapacity(item) ? <strong>100%</strong> : null}
+                          </div>
+                          {getMaxConcurrencyValue(item) > 0 ? (
+                            <div className={styles.progressTrack}>
+                              <div
+                                className={styles.progressFill}
+                                style={{
+                                  width: `${calculatePercent(
+                                    getCurrentConcurrencyValue(item),
+                                    getMaxConcurrencyValue(item)
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                          ) : null}
                         </td>
                         <td>{formatDateTime(item.last_used_at ? String(item.last_used_at) : null)}</td>
                         <td>{formatNumber(item.usage?.request_count)}</td>
-                        <td>{formatAverage(item.usage?.avg_total_tokens)}</td>
+                        <td>{formatTokenAverage(item.usage?.avg_total_tokens)}</td>
                         <td>
                           <Button
                             size="sm"
@@ -2653,11 +2878,11 @@ export function CodexAuthPage() {
                           <div className={styles.subtle}>{item.provider || '-'}</div>
                         </td>
                         <td>{formatNumber(item.request_count)}</td>
-                        <td>{formatNumber(item.input_tokens)}</td>
-                        <td>{formatNumber(item.output_tokens)}</td>
-                        <td>{formatNumber(item.cached_tokens)}</td>
-                        <td>{formatNumber(item.total_tokens)}</td>
-                        <td>{formatNumber(item.recovered_tokens)}</td>
+                        <td>{formatTokenValue(item.input_tokens)}</td>
+                        <td>{formatTokenValue(item.output_tokens)}</td>
+                        <td>{formatTokenValue(item.cached_tokens)}</td>
+                        <td>{formatTokenValue(item.total_tokens)}</td>
+                        <td>{formatTokenValue(item.recovered_tokens)}</td>
                         <td>
                           <Button
                             size="sm"
@@ -2836,7 +3061,7 @@ export function CodexAuthPage() {
                           ) : null}
                         </td>
                         <td>{formatNumber(item.request_count)}</td>
-                        <td>{formatNumber(item.total_tokens)}</td>
+                        <td>{formatTokenValue(item.total_tokens)}</td>
                         <td>{formatDateTime(item.recover_at)}</td>
                         <td>
                           <Button
@@ -3075,8 +3300,8 @@ export function CodexAuthPage() {
                           </div>
                         </td>
                         <td>{formatNumber(item.delta_request_count)}</td>
-                        <td>{formatNumber(item.delta_total_tokens)}</td>
-                        <td>{formatAverage(item.avg_total_tokens)}</td>
+                        <td>{formatTokenValue(item.delta_total_tokens)}</td>
+                        <td>{formatTokenAverage(item.avg_total_tokens)}</td>
                         <td>{formatAverage(item.requests_per_hour)}</td>
                         <td>
                           <div>{formatDateTime(item.recovered_at || item.recover_at)}</div>
@@ -3163,13 +3388,13 @@ export function CodexAuthPage() {
                     <div className={styles.contextStat}>
                       <span>GPT-5</span>
                       <strong>
-                        {formatNumber(configGuide.context_windows.gpt5_max_context_tokens)}
+                        {formatTokenValue(configGuide.context_windows.gpt5_max_context_tokens)}
                       </strong>
                     </div>
                     <div className={styles.contextStat}>
                       <span>GPT-4.1</span>
                       <strong>
-                        {formatNumber(configGuide.context_windows.gpt41_max_context_tokens)}
+                        {formatTokenValue(configGuide.context_windows.gpt41_max_context_tokens)}
                       </strong>
                     </div>
                     <div className={styles.contextStat}>
@@ -3586,7 +3811,7 @@ export function CodexAuthPage() {
                             </div>
                           </td>
                           <td>{formatNumber(cycle.delta_request_count)}</td>
-                          <td>{formatNumber(cycle.delta_total_tokens)}</td>
+                          <td>{formatTokenValue(cycle.delta_total_tokens)}</td>
                           <td>{formatDateTime(cycle.recovered_at || cycle.recover_at)}</td>
                         </tr>
                       ))}
@@ -3624,7 +3849,7 @@ export function CodexAuthPage() {
                             ) : null}
                           </td>
                           <td>{formatNumber(event.request_count)}</td>
-                          <td>{formatNumber(event.total_tokens)}</td>
+                          <td>{formatTokenValue(event.total_tokens)}</td>
                           <td>{formatDateTime(event.recover_at)}</td>
                         </tr>
                       ))}

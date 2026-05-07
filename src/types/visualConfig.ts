@@ -10,6 +10,7 @@ export type VisualConfigFieldPath =
   | 'requestRetry'
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
+  | 'authDefaultMaxConcurrency'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
@@ -73,10 +74,16 @@ export type VisualConfigValues = {
   requestRetry: string;
   maxRetryCredentials: string;
   maxRetryInterval: string;
+  authDefaultMaxConcurrency: string;
   quotaSwitchProject: boolean;
   quotaSwitchPreviewModel: boolean;
   routingStrategy: 'round-robin' | 'fill-first' | 'success-rate' | 'simhash';
   wsAuth: boolean;
+  codexImageToolEnabled: boolean;
+  codexImageToolBaseUrl: string;
+  codexImageToolApiKey: string;
+  codexImageToolModel: string;
+  codexImageToolHeadersText: string;
   payloadDefaultRules: PayloadRule[];
   payloadDefaultRawRules: PayloadRule[];
   payloadOverrideRules: PayloadRule[];
@@ -116,10 +123,16 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   requestRetry: '',
   maxRetryCredentials: '',
   maxRetryInterval: '',
+  authDefaultMaxConcurrency: '',
   quotaSwitchProject: true,
   quotaSwitchPreviewModel: true,
   routingStrategy: 'round-robin',
   wsAuth: false,
+  codexImageToolEnabled: false,
+  codexImageToolBaseUrl: '',
+  codexImageToolApiKey: '',
+  codexImageToolModel: 'gpt-image-1',
+  codexImageToolHeadersText: '',
   payloadDefaultRules: [],
   payloadDefaultRawRules: [],
   payloadOverrideRules: [],

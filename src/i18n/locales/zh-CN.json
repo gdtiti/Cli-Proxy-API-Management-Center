@@ -1343,6 +1343,8 @@
           "max_retry_credentials": "最大重试凭据数",
           "max_retry_credentials_hint": "留空表示不设置；设为 0 表示保留 legacy 行为，并尝试所有可用凭据。",
           "max_retry_interval": "最大重试间隔 (秒)",
+          "auth_default_max_concurrency": "全局默认单认证并发上限",
+          "auth_default_max_concurrency_hint": "仅对未显式设置 max_concurrency 的认证文件生效；0 表示默认不限并发。",
           "routing_strategy": "路由策略",
           "routing_strategy_hint": "选择凭据选择策略",
           "strategy_round_robin": "轮询 (Round Robin)",
@@ -1353,6 +1355,17 @@
           "force_model_prefix_desc": "未带前缀的模型请求只使用无前缀凭据",
           "ws_auth": "WebSocket 认证",
           "ws_auth_desc": "启用 WebSocket 连接认证 (/v1/ws)"
+        },
+        "image_tool": {
+          "title": "Codex 外部绘图",
+          "description": "为 Codex 请求注入外部 OpenAI 兼容图片供应商",
+          "enabled": "启用外部绘图路由",
+          "enabled_desc": "将 Codex 的图片生成/编辑请求转发到外部图片服务商",
+          "base_url": "图片供应商 Base URL",
+          "api_key": "图片供应商 API Key",
+          "model": "绘图模型",
+          "headers": "附加请求头",
+          "headers_hint": "每行一个请求头，格式为 Key: Value。保存后会写入 codex-image-tool.headers。"
         },
         "quota": {
           "title": "配额回退",
@@ -1837,7 +1850,16 @@
       "accounts": "账号总数",
       "disabled": "已禁用",
       "quota_exceeded": "额度受限",
-      "requests": "请求总数"
+      "requests": "请求总数",
+      "tokens": "总 Tokens",
+      "healthy": "健康账号",
+      "concurrency": "实时并发",
+      "quota_health": "额度健康度",
+      "quota_health_hint": "未处于 quota exceeded 的账号占比",
+      "capacity_hint": "基于配置了并发上限的认证文件计算",
+      "unlimited_hint": "另有 {{count}} 个账号未设置并发上限",
+      "top_tokens": "Token 消耗 Top",
+      "top_tokens_hint": "按累计 total tokens 排序"
     },
     "accounts": {
       "title": "账号列表",
@@ -1856,7 +1878,12 @@
       "batch_proxy_submit": "保存代理设置",
       "batch_proxy_no_files": "请先选择至少一个认证文件",
       "batch_proxy_missing_proxy": "请输入代理 URL",
-      "batch_proxy_success": "批量代理完成：更新 {{updated}} 个，未变化 {{unchanged}} 个，失败 {{failed}} 个，跳过 {{skipped}} 个"
+      "batch_proxy_success": "批量代理完成：更新 {{updated}} 个，未变化 {{unchanged}} 个，失败 {{failed}} 个，跳过 {{skipped}} 个",
+      "quick_filter_all": "全部",
+      "quick_filter_healthy": "健康",
+      "quick_filter_quota": "额度受限",
+      "quick_filter_disabled": "已禁用",
+      "quick_filter_at_capacity": "满并发"
     },
     "usage": {
       "title": "用量汇总",

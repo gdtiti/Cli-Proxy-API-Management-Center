@@ -34,7 +34,7 @@
 
 .summaryGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: $spacing-md;
 
   @include tablet {
@@ -62,6 +62,73 @@
 .summaryValue {
   font-size: 30px;
   color: var(--text-primary);
+}
+
+.summaryAccent {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.summaryMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  color: var(--text-secondary);
+  font-size: 12px;
+
+  strong {
+    color: var(--text-primary);
+    font-size: 13px;
+  }
+}
+
+.progressTrack {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-color) 70%, var(--bg-secondary));
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--primary-color) 88%, white),
+    color-mix(in srgb, var(--primary-color) 62%, #f59e0b)
+  );
+}
+
+.chartBars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chartBarRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chartBarMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  font-size: 12px;
+
+  strong {
+    color: var(--text-primary);
+  }
+}
+
+.chartBarLabel {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tabs {
@@ -113,6 +180,34 @@
   align-items: center;
   gap: $spacing-sm;
   margin-bottom: $spacing-md;
+}
+
+.quickFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin: 0 0 $spacing-md;
+}
+
+.quickFilterButton {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+
+  &:hover {
+    color: var(--text-primary);
+    border-color: var(--primary-color);
+  }
+}
+
+.quickFilterButtonActive {
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 60%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-primary));
 }
 
 .selectionSummary {
@@ -198,6 +293,20 @@
   color: var(--text-secondary);
   font-size: 12px;
   word-break: break-word;
+}
+
+.tableProgressMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+
+  strong {
+    color: var(--text-primary);
+  }
 }
 
 .statusChip {

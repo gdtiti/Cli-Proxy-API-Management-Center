@@ -1342,14 +1342,29 @@
           "max_retry_credentials": "Максимум учётных данных для повторов",
           "max_retry_credentials_hint": "Оставьте пустым, чтобы не задавать поле. Значение 0 сохраняет legacy-поведение и позволяет перебрать все доступные учётные данные.",
           "max_retry_interval": "Максимальный интервал повтора (сек)",
+          "auth_default_max_concurrency": "Глобальный лимит параллелизма на auth",
+          "auth_default_max_concurrency_hint": "Применяется только к auth-файлам без явного max_concurrency. Значение 0 означает отсутствие лимита по умолчанию.",
           "routing_strategy": "Стратегия маршрутизации",
           "routing_strategy_hint": "Выберите стратегию подбора учётных данных",
           "strategy_round_robin": "По кругу",
           "strategy_fill_first": "Сначала заполнить",
+          "strategy_success_rate": "По уровню успеха",
+          "strategy_simhash": "По SimHash",
           "force_model_prefix": "Принудительный префикс модели",
           "force_model_prefix_desc": "Запросы к моделям без префикса используют только учётные данные без префикса",
           "ws_auth": "Аутентификация WebSocket",
           "ws_auth_desc": "Включить аутентификацию WebSocket (/v1/ws)"
+        },
+        "image_tool": {
+          "title": "Внешний image tool Codex",
+          "description": "Подключение внешнего OpenAI-совместимого image provider для запросов Codex",
+          "enabled": "Включить внешний image routing",
+          "enabled_desc": "Перенаправлять запросы Codex на генерацию и редактирование изображений во внешний сервис",
+          "base_url": "Base URL image provider",
+          "api_key": "API key image provider",
+          "model": "Image model",
+          "headers": "Дополнительные заголовки",
+          "headers_hint": "Один заголовок на строку в формате Key: Value. Сохраняется в codex-image-tool.headers."
         },
         "quota": {
           "title": "Резерв по квоте",
@@ -1827,13 +1842,23 @@
       "accounts": "Аккаунты",
       "usage": "Usage",
       "events": "События",
-      "config": "Config"
+      "config": "Config",
+      "cycles": "Cycles"
     },
     "summary": {
       "accounts": "Аккаунты",
       "disabled": "Отключено",
       "quota_exceeded": "Квота заблокирована",
-      "requests": "Запросы"
+      "requests": "Запросы",
+      "tokens": "Всего tokens",
+      "healthy": "Здоровые аккаунты",
+      "concurrency": "Текущий параллелизм",
+      "quota_health": "Здоровье квоты",
+      "quota_health_hint": "Доля аккаунтов без quota exceeded",
+      "capacity_hint": "Рассчитывается только по auth-файлам с заданным лимитом параллелизма",
+      "unlimited_hint": "Ещё {{count}} аккаунтов без лимита параллелизма",
+      "top_tokens": "Лидеры по tokens",
+      "top_tokens_hint": "Сортировка по cumulative total tokens"
     },
     "accounts": {
       "title": "Аккаунты",
@@ -1852,7 +1877,12 @@
       "batch_proxy_submit": "Сохранить proxy",
       "batch_proxy_no_files": "Сначала выберите хотя бы один auth-файл",
       "batch_proxy_missing_proxy": "Введите proxy URL",
-      "batch_proxy_success": "Пакетный proxy завершён: обновлено {{updated}}, без изменений {{unchanged}}, ошибок {{failed}}, пропущено {{skipped}}"
+      "batch_proxy_success": "Пакетный proxy завершён: обновлено {{updated}}, без изменений {{unchanged}}, ошибок {{failed}}, пропущено {{skipped}}",
+      "quick_filter_all": "Все",
+      "quick_filter_healthy": "Здоровые",
+      "quick_filter_quota": "Квота",
+      "quick_filter_disabled": "Отключённые",
+      "quick_filter_at_capacity": "На лимите"
     },
     "usage": {
       "title": "Usage",

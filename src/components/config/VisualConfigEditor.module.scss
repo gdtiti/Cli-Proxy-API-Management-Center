@@ -519,6 +519,14 @@
   line-height: 1.6;
 }
 
+.multilineInput {
+  min-height: 132px;
+  resize: vertical;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
 .inlinePill {
   position: absolute;
   right: 10px;

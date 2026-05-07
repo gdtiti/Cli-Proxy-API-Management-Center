@@ -1343,6 +1343,8 @@
           "max_retry_credentials": "Max Retry Credentials",
           "max_retry_credentials_hint": "Leave empty to keep it unset. Set to 0 to preserve legacy behavior and try all available credentials.",
           "max_retry_interval": "Max Retry Interval (seconds)",
+          "auth_default_max_concurrency": "Global Default Per-Auth Concurrency",
+          "auth_default_max_concurrency_hint": "Applies only to auth files without an explicit max_concurrency. Set 0 for unlimited by default.",
           "routing_strategy": "Routing Strategy",
           "routing_strategy_hint": "Select credential selection strategy",
           "strategy_round_robin": "Round Robin",
@@ -1353,6 +1355,17 @@
           "force_model_prefix_desc": "Unprefixed model requests only use credentials without prefix",
           "ws_auth": "WebSocket Authentication",
           "ws_auth_desc": "Enable WebSocket authentication (/v1/ws)"
+        },
+        "image_tool": {
+          "title": "Codex External Images",
+          "description": "Attach an external OpenAI-compatible image provider for Codex image requests",
+          "enabled": "Enable external image routing",
+          "enabled_desc": "Forward Codex image generation and edit calls to an external image provider",
+          "base_url": "Image provider base URL",
+          "api_key": "Image provider API key",
+          "model": "Image model",
+          "headers": "Extra request headers",
+          "headers_hint": "One header per line using Key: Value. Saved into codex-image-tool.headers."
         },
         "quota": {
           "title": "Quota Fallback",
@@ -1837,7 +1850,16 @@
       "accounts": "Accounts",
       "disabled": "Disabled",
       "quota_exceeded": "Quota blocked",
-      "requests": "Requests"
+      "requests": "Requests",
+      "tokens": "Total tokens",
+      "healthy": "Healthy accounts",
+      "concurrency": "Live concurrency",
+      "quota_health": "Quota health",
+      "quota_health_hint": "Share of accounts not currently in quota exceeded state",
+      "capacity_hint": "Calculated from auth files with a configured concurrency cap",
+      "unlimited_hint": "{{count}} additional accounts have no concurrency cap",
+      "top_tokens": "Top token consumers",
+      "top_tokens_hint": "Ranked by cumulative total tokens"
     },
     "accounts": {
       "title": "Accounts",
@@ -1856,7 +1878,12 @@
       "batch_proxy_submit": "Save proxy settings",
       "batch_proxy_no_files": "Select at least one auth file first",
       "batch_proxy_missing_proxy": "Enter a proxy URL",
-      "batch_proxy_success": "Batch proxy finished: updated {{updated}}, unchanged {{unchanged}}, failed {{failed}}, skipped {{skipped}}"
+      "batch_proxy_success": "Batch proxy finished: updated {{updated}}, unchanged {{unchanged}}, failed {{failed}}, skipped {{skipped}}",
+      "quick_filter_all": "All",
+      "quick_filter_healthy": "Healthy",
+      "quick_filter_quota": "Quota hit",
+      "quick_filter_disabled": "Disabled",
+      "quick_filter_at_capacity": "At capacity"
     },
     "usage": {
       "title": "Usage",

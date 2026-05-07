@@ -23,6 +23,7 @@ import {
   IconShield,
   IconTimer,
   IconTrendingUp,
+  IconZap,
   type IconProps,
 } from '@/components/ui/icons';
 import { ConfigSection } from '@/components/config/ConfigSection';
@@ -50,6 +51,7 @@ type VisualSectionId =
   | 'auth'
   | 'system'
   | 'network'
+  | 'imageTool'
   | 'quota'
   | 'streaming'
   | 'payload';
@@ -187,6 +189,7 @@ export function VisualConfigEditor({
   const nonstreamKeepaliveInputId = useId();
   const nonstreamKeepaliveHintId = `${nonstreamKeepaliveInputId}-hint`;
   const nonstreamKeepaliveErrorId = `${nonstreamKeepaliveInputId}-error`;
+  const imageHeadersInputId = useId();
   const [activeSectionId, setActiveSectionId] = useState<VisualSectionId>('server');
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const sidebarAnchorRef = useRef<HTMLElement | null>(null);
@@ -204,6 +207,10 @@ export function VisualConfigEditor({
   const requestRetryError = getValidationMessage(t, validationErrors?.requestRetry);
   const maxRetryCredentialsError = getValidationMessage(t, validationErrors?.maxRetryCredentials);
   const maxRetryIntervalError = getValidationMessage(t, validationErrors?.maxRetryInterval);
+  const authDefaultMaxConcurrencyError = getValidationMessage(
+    t,
+    validationErrors?.authDefaultMaxConcurrency
+  );
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
   const bootstrapRetriesError = getValidationMessage(
     t,
@@ -287,7 +294,19 @@ export function VisualConfigEditor({
         title: t('config_management.visual.sections.network.title'),
         description: t('config_management.visual.sections.network.description'),
         icon: IconTrendingUp,
-        errorCount: countErrors(['requestRetry', 'maxRetryCredentials', 'maxRetryInterval']),
+        errorCount: countErrors([
+          'requestRetry',
+          'maxRetryCredentials',
+          'maxRetryInterval',
+          'authDefaultMaxConcurrency',
+        ]),
+      },
+      {
+        id: 'imageTool',
+        title: t('config_management.visual.sections.image_tool.title'),
+        description: t('config_management.visual.sections.image_tool.description'),
+        icon: IconZap,
+        errorCount: 0,
       },
       {
         id: 'quota',
@@ -321,7 +340,10 @@ export function VisualConfigEditor({
   const hasValidationIssues =
     sections.some((section) => section.errorCount > 0) || hasPayloadValidationErrors;
   const focusSections = useMemo(
-    () => sections.filter((section) => ['server', 'network', 'payload'].includes(section.id)),
+    () =>
+      sections.filter((section) =>
+        ['server', 'network', 'imageTool', 'payload'].includes(section.id)
+      ),
     [sections]
   );
 
@@ -787,6 +809,18 @@ export function VisualConfigEditor({
                   disabled={disabled}
                   error={maxRetryIntervalError}
                 />
+                <Input
+                  label={t('config_management.visual.sections.network.auth_default_max_concurrency')}
+                  type="number"
+                  placeholder="0"
+                  value={values.authDefaultMaxConcurrency}
+                  onChange={(e) => onChange({ authDefaultMaxConcurrency: e.target.value })}
+                  disabled={disabled}
+                  hint={t(
+                    'config_management.visual.sections.network.auth_default_max_concurrency_hint'
+                  )}
+                  error={authDefaultMaxConcurrencyError}
+                />
                 <FieldShell
                   label={t('config_management.visual.sections.network.routing_strategy')}
                   labelId={routingStrategyLabelId}
@@ -848,11 +882,70 @@ export function VisualConfigEditor({
           </ConfigSection>
 
           <ConfigSection
+            id="imageTool"
+            ref={(node) => {
+              sectionRefs.current.imageTool = node;
+            }}
+            indexLabel="07"
+            icon={<IconZap size={16} />}
+            title={t('config_management.visual.sections.image_tool.title')}
+            description={t('config_management.visual.sections.image_tool.description')}
+          >
+            <SectionStack>
+              <ToggleRow
+                title={t('config_management.visual.sections.image_tool.enabled')}
+                description={t('config_management.visual.sections.image_tool.enabled_desc')}
+                checked={values.codexImageToolEnabled}
+                disabled={disabled}
+                onChange={(codexImageToolEnabled) => onChange({ codexImageToolEnabled })}
+              />
+              <SectionGrid>
+                <Input
+                  label={t('config_management.visual.sections.image_tool.base_url')}
+                  placeholder="https://your-image-provider.example/v1"
+                  value={values.codexImageToolBaseUrl}
+                  onChange={(e) => onChange({ codexImageToolBaseUrl: e.target.value })}
+                  disabled={disabled}
+                />
+                <Input
+                  label={t('config_management.visual.sections.image_tool.api_key')}
+                  type="password"
+                  placeholder="sk-..."
+                  value={values.codexImageToolApiKey}
+                  onChange={(e) => onChange({ codexImageToolApiKey: e.target.value })}
+                  disabled={disabled}
+                />
+                <Input
+                  label={t('config_management.visual.sections.image_tool.model')}
+                  placeholder="gpt-image-1"
+                  value={values.codexImageToolModel}
+                  onChange={(e) => onChange({ codexImageToolModel: e.target.value })}
+                  disabled={disabled}
+                />
+              </SectionGrid>
+              <FieldShell
+                label={t('config_management.visual.sections.image_tool.headers')}
+                htmlFor={imageHeadersInputId}
+                hint={t('config_management.visual.sections.image_tool.headers_hint')}
+              >
+                <textarea
+                  id={imageHeadersInputId}
+                  className={`input ${styles.multilineInput}`}
+                  value={values.codexImageToolHeadersText}
+                  onChange={(e) => onChange({ codexImageToolHeadersText: e.target.value })}
+                  placeholder={'OpenAI-Organization: org_xxx\nX-Provider-Project: demo'}
+                  disabled={disabled}
+                />
+              </FieldShell>
+            </SectionStack>
+          </ConfigSection>
+
+          <ConfigSection
             id="quota"
             ref={(node) => {
               sectionRefs.current.quota = node;
             }}
-            indexLabel="07"
+            indexLabel="08"
             icon={<IconTimer size={16} />}
             title={t('config_management.visual.sections.quota.title')}
             description={t('config_management.visual.sections.quota.description')}
@@ -880,7 +973,7 @@ export function VisualConfigEditor({
             ref={(node) => {
               sectionRefs.current.streaming = node;
             }}
-            indexLabel="08"
+            indexLabel="09"
             icon={<IconSatellite size={16} />}
             title={t('config_management.visual.sections.streaming.title')}
             description={t('config_management.visual.sections.streaming.description')}
@@ -981,7 +1074,7 @@ export function VisualConfigEditor({
             ref={(node) => {
               sectionRefs.current.payload = node;
             }}
-            indexLabel="09"
+            indexLabel="10"
             icon={<IconCode size={16} />}
             title={t('config_management.visual.sections.payload.title')}
             description={t('config_management.visual.sections.payload.description')}

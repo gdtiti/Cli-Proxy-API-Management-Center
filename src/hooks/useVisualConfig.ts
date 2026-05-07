@@ -48,6 +48,37 @@ function parseApiKeysText(raw: unknown): string {
   return keys.join('\n');
 }
 
+function parseHeadersText(raw: unknown): string {
+  const record = asRecord(raw);
+  if (!record) return '';
+
+  return Object.entries(record)
+    .map(([key, value]) => {
+      const safeKey = String(key ?? '').trim();
+      if (!safeKey) return null;
+      return `${safeKey}: ${String(value ?? '').trim()}`;
+    })
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+}
+
+function parseHeadersMap(raw: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const separatorIndex = line.indexOf(':');
+      if (separatorIndex <= 0) return;
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1).trim();
+      if (!key) return;
+      headers[key] = value;
+    });
+  return headers;
+}
+
 function resolveApiKeysText(parsed: Record<string, unknown>): string {
   if (Object.prototype.hasOwnProperty.call(parsed, 'api-keys')) {
     return parseApiKeysText(parsed['api-keys']);
@@ -162,6 +193,7 @@ export function getVisualConfigValidationErrors(
     requestRetry: getNonNegativeIntegerError(values.requestRetry),
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
+    authDefaultMaxConcurrency: getNonNegativeIntegerError(values.authDefaultMaxConcurrency),
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
     'streaming.nonstreamKeepaliveInterval': getNonNegativeIntegerError(
@@ -485,6 +517,7 @@ export function useVisualConfig() {
       const routing = asRecord(parsed.routing);
       const payload = asRecord(parsed.payload);
       const streaming = asRecord(parsed.streaming);
+      const codexImageTool = asRecord(parsed['codex-image-tool']);
 
       const newValues: VisualConfigValues = {
         host: typeof parsed.host === 'string' ? parsed.host : '',
@@ -521,12 +554,23 @@ export function useVisualConfig() {
         requestRetry: String(parsed['request-retry'] ?? ''),
         maxRetryCredentials: String(parsed['max-retry-credentials'] ?? ''),
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
+        authDefaultMaxConcurrency: String(parsed['auth-default-max-concurrency'] ?? ''),
         wsAuth: Boolean(parsed['ws-auth']),
 
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
         quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
 
         routingStrategy: normalizeRoutingStrategy(routing?.strategy),
+        codexImageToolEnabled: Boolean(codexImageTool?.enabled),
+        codexImageToolBaseUrl:
+          typeof codexImageTool?.['base-url'] === 'string' ? codexImageTool['base-url'] : '',
+        codexImageToolApiKey:
+          typeof codexImageTool?.['api-key'] === 'string' ? codexImageTool['api-key'] : '',
+        codexImageToolModel:
+          typeof codexImageTool?.model === 'string' && codexImageTool.model.trim()
+            ? codexImageTool.model
+            : 'gpt-image-1',
+        codexImageToolHeadersText: parseHeadersText(codexImageTool?.headers),
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadDefaultRawRules: parseRawPayloadRules(payload?.['default-raw']),
@@ -633,6 +677,11 @@ export function useVisualConfig() {
         setIntFromStringInDoc(doc, ['request-retry'], values.requestRetry);
         setIntFromStringInDoc(doc, ['max-retry-credentials'], values.maxRetryCredentials);
         setIntFromStringInDoc(doc, ['max-retry-interval'], values.maxRetryInterval);
+        setIntFromStringInDoc(
+          doc,
+          ['auth-default-max-concurrency'],
+          values.authDefaultMaxConcurrency
+        );
         setBooleanInDoc(doc, ['ws-auth'], values.wsAuth);
 
         if (
@@ -650,6 +699,33 @@ export function useVisualConfig() {
           ensureMapInDoc(doc, ['routing']);
           doc.setIn(['routing', 'strategy'], values.routingStrategy);
           deleteIfMapEmpty(doc, ['routing']);
+        }
+
+        if (
+          docHas(doc, ['codex-image-tool']) ||
+          values.codexImageToolEnabled ||
+          values.codexImageToolBaseUrl.trim() ||
+          values.codexImageToolApiKey.trim() ||
+          (values.codexImageToolModel.trim() &&
+            values.codexImageToolModel.trim() !== 'gpt-image-1') ||
+          values.codexImageToolHeadersText.trim()
+        ) {
+          ensureMapInDoc(doc, ['codex-image-tool']);
+          doc.setIn(['codex-image-tool', 'enabled'], values.codexImageToolEnabled);
+          setStringInDoc(doc, ['codex-image-tool', 'base-url'], values.codexImageToolBaseUrl);
+          setStringInDoc(doc, ['codex-image-tool', 'api-key'], values.codexImageToolApiKey);
+          setStringInDoc(
+            doc,
+            ['codex-image-tool', 'model'],
+            values.codexImageToolModel.trim() || 'gpt-image-1'
+          );
+          const headers = parseHeadersMap(values.codexImageToolHeadersText);
+          if (Object.keys(headers).length > 0) {
+            doc.setIn(['codex-image-tool', 'headers'], headers);
+          } else if (docHas(doc, ['codex-image-tool', 'headers'])) {
+            doc.deleteIn(['codex-image-tool', 'headers']);
+          }
+          deleteIfMapEmpty(doc, ['codex-image-tool']);
         }
 
         const keepaliveSeconds =
