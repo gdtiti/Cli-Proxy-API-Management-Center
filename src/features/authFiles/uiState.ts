@@ -2,6 +2,8 @@ export const AUTH_FILES_SORT_MODES = [
   'default',
   'az',
   'priority',
+  'concurrency',
+  'last_used_at',
   'quota',
   'expires_at',
   'cooldown',

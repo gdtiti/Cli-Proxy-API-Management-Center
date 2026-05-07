@@ -804,6 +804,14 @@ export function VisualConfigEditor({
                         value: 'fill-first',
                         label: t('config_management.visual.sections.network.strategy_fill_first'),
                       },
+                      {
+                        value: 'success-rate',
+                        label: t('config_management.visual.sections.network.strategy_success_rate'),
+                      },
+                      {
+                        value: 'simhash',
+                        label: t('config_management.visual.sections.network.strategy_simhash'),
+                      },
                     ]}
                     id={`${routingStrategyLabelId}-select`}
                     disabled={disabled}

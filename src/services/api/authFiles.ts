@@ -76,6 +76,7 @@ export interface AuthFilesFieldsBatchPayload {
   headers?: Record<string, string>;
   priority?: number;
   note?: string;
+  maxConcurrency?: number;
   dryRun?: boolean;
   stopOnError?: boolean;
 }
@@ -427,6 +428,9 @@ export const authFilesApi = {
     }
     if (payload.note !== undefined) {
       body.note = payload.note;
+    }
+    if (payload.maxConcurrency !== undefined) {
+      body.max_concurrency = payload.maxConcurrency;
     }
 
     return apiClient.patch<AuthFilesFieldsBatchResponse>('/auth-files/fields/batch', body);

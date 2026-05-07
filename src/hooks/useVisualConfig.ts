@@ -65,6 +65,18 @@ function resolveApiKeysText(parsed: Record<string, unknown>): string {
   return parseApiKeysText(configApiKeyProvider['api-keys']);
 }
 
+function normalizeRoutingStrategy(raw: unknown): VisualConfigValues['routingStrategy'] {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  switch (value) {
+    case 'fill-first':
+    case 'success-rate':
+    case 'simhash':
+      return value as VisualConfigValues['routingStrategy'];
+    default:
+      return 'round-robin';
+  }
+}
+
 type YamlDocument = ReturnType<typeof parseDocument>;
 type YamlPath = string[];
 
@@ -514,7 +526,7 @@ export function useVisualConfig() {
         quotaSwitchProject: Boolean(quotaExceeded?.['switch-project'] ?? true),
         quotaSwitchPreviewModel: Boolean(quotaExceeded?.['switch-preview-model'] ?? true),
 
-        routingStrategy: routing?.strategy === 'fill-first' ? 'fill-first' : 'round-robin',
+        routingStrategy: normalizeRoutingStrategy(routing?.strategy),
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadDefaultRawRules: parseRawPayloadRules(payload?.['default-raw']),

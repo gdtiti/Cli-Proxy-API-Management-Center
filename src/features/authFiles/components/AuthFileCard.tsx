@@ -131,6 +131,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
     Boolean(rawStatusMessage) && !HEALTHY_STATUS_MESSAGES.has(rawStatusMessage.toLowerCase());
 
   const priorityValue = parsePriorityValue(file.priority ?? file['priority']);
+  const currentConcurrency = Number(file.current_concurrency ?? file.currentConcurrency ?? 0) || 0;
+  const maxConcurrency = Number(file.max_concurrency ?? file.maxConcurrency ?? 0) || 0;
   const noteValue = typeof file.note === 'string' ? file.note.trim() : '';
   const stateLabel = isRuntimeOnly
     ? t('auth_files.type_virtual', { defaultValue: 'Virtual auth file' })
@@ -228,6 +230,12 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 </span>
               </div>
             )}
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>{t('auth_files.concurrency_display')}</span>
+              <span className={styles.metaValue}>
+                {currentConcurrency}/{maxConcurrency > 0 ? maxConcurrency : '∞'}
+              </span>
+            </div>
           </div>
 
           {rawStatusMessage && hasStatusWarning && (

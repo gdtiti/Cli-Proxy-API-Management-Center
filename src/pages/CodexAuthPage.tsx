@@ -93,6 +93,8 @@ type AccountsSortKey =
   | 'status'
   | 'quota'
   | 'recover'
+  | 'concurrency'
+  | 'last_used_at'
   | 'requests'
   | 'avg_total';
 
@@ -415,6 +417,10 @@ const mergeCodexSnapshotWithAuthFile = (
     next_recover_at:
       snapshot?.next_recover_at ?? (String(authFile?.next_recover_at ?? '').trim() || undefined),
     last_refreshed_at: snapshot?.last_refreshed_at,
+    last_used_at: snapshot?.last_used_at ?? authFile?.last_used_at ?? authFile?.lastUsedAt,
+    max_concurrency: snapshot?.max_concurrency ?? authFile?.max_concurrency ?? authFile?.maxConcurrency,
+    current_concurrency:
+      snapshot?.current_concurrency ?? authFile?.current_concurrency ?? authFile?.currentConcurrency,
     next_refresh_after: snapshot?.next_refresh_after,
     next_retry_after:
       snapshot?.next_retry_after ?? (String(authFile?.next_retry_after ?? '').trim() || undefined),
@@ -1658,6 +1664,16 @@ export function CodexAuthPage() {
             ),
             accountsSort.direction
           );
+        case 'concurrency':
+          return applySortDirection(
+            compareNumber(left.current_concurrency, right.current_concurrency),
+            accountsSort.direction
+          );
+        case 'last_used_at':
+          return applySortDirection(
+            compareDate(left.last_used_at, right.last_used_at),
+            accountsSort.direction
+          );
         case 'requests':
           return applySortDirection(
             compareNumber(left.usage?.request_count, right.usage?.request_count),
@@ -2320,6 +2336,36 @@ export function CodexAuthPage() {
                       </th>
                       <th
                         aria-sort={getAriaSort(
+                          accountsSort.key === 'concurrency',
+                          accountsSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.concurrency')}
+                          active={accountsSort.key === 'concurrency'}
+                          direction={accountsSort.direction}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'concurrency'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
+                          accountsSort.key === 'last_used_at',
+                          accountsSort.direction
+                        )}
+                      >
+                        <SortButton
+                          label={t('codex_management.table.last_used_at')}
+                          active={accountsSort.key === 'last_used_at'}
+                          direction={accountsSort.direction}
+                          onClick={() =>
+                            setAccountsSort((current) => nextSortState(current, 'last_used_at'))
+                          }
+                        />
+                      </th>
+                      <th
+                        aria-sort={getAriaSort(
                           accountsSort.key === 'requests',
                           accountsSort.direction
                         )}
@@ -2415,6 +2461,13 @@ export function CodexAuthPage() {
                             item.next_recover_at || item.next_retry_after || item.next_refresh_after
                           )}
                         </td>
+                        <td>
+                          {Number(item.current_concurrency ?? 0) || 0}/
+                          {Number(item.max_concurrency ?? 0) > 0
+                            ? Number(item.max_concurrency)
+                            : '∞'}
+                        </td>
+                        <td>{formatDateTime(item.last_used_at ? String(item.last_used_at) : null)}</td>
                         <td>{formatNumber(item.usage?.request_count)}</td>
                         <td>{formatAverage(item.usage?.avg_total_tokens)}</td>
                         <td>

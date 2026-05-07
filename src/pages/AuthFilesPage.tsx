@@ -580,6 +580,8 @@ export function AuthFilesPage() {
       { value: 'default', label: t('auth_files.sort_default') },
       { value: 'az', label: t('auth_files.sort_az') },
       { value: 'priority', label: t('auth_files.sort_priority') },
+      { value: 'concurrency', label: t('auth_files.sort_concurrency') },
+      { value: 'last_used_at', label: t('auth_files.sort_last_used_at') },
       { value: 'quota', label: t('auth_files.sort_quota') },
       { value: 'expires_at', label: t('auth_files.sort_expires_at') },
       { value: 'cooldown', label: t('auth_files.sort_cooldown') },
@@ -775,6 +777,22 @@ export function AuthFilesPage() {
         const pa = parsePriorityValue(a.priority ?? a['priority']) ?? 0;
         const pb = parsePriorityValue(b.priority ?? b['priority']) ?? 0;
         return pb - pa;
+      });
+    } else if (sortMode === 'concurrency') {
+      copy.sort((a, b) => {
+        const ca = Number(a.current_concurrency ?? a.currentConcurrency ?? 0) || 0;
+        const cb = Number(b.current_concurrency ?? b.currentConcurrency ?? 0) || 0;
+        if (cb !== ca) return cb - ca;
+        return a.name.localeCompare(b.name);
+      });
+    } else if (sortMode === 'last_used_at') {
+      copy.sort((a, b) => {
+        const usedCompare = compareOptionalNumber(
+          getTimestamp(a.last_used_at ?? a.lastUsedAt),
+          getTimestamp(b.last_used_at ?? b.lastUsedAt)
+        );
+        if (usedCompare !== 0) return usedCompare;
+        return a.name.localeCompare(b.name);
       });
     } else if (sortMode === 'quota') {
       copy.sort((a, b) => {

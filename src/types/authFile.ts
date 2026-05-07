@@ -34,6 +34,12 @@ export interface AuthFileItem {
   status_message?: string;
   lastRefresh?: string | number | null;
   last_refresh?: string | number | null;
+  lastUsedAt?: string | number | null;
+  last_used_at?: string | number | null;
+  maxConcurrency?: number | string | null;
+  max_concurrency?: number | string | null;
+  currentConcurrency?: number | string | null;
+  current_concurrency?: number | string | null;
   modified?: number;
   modtime?: number | string;
   email?: string;

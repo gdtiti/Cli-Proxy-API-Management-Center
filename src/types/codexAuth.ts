@@ -53,6 +53,9 @@ export interface CodexAuthSnapshot {
   model_last_error?: string;
   next_recover_at?: string;
   last_refreshed_at?: string;
+  last_used_at?: string | number | null;
+  max_concurrency?: number | string | null;
+  current_concurrency?: number | string | null;
   next_refresh_after?: string;
   next_retry_after?: string;
   updated_at?: string;

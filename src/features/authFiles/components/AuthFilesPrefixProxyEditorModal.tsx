@@ -126,6 +126,14 @@ export function AuthFilesPrefixProxyEditorModal(props: AuthFilesPrefixProxyEdito
                   disabled={disableControls || editor.saving || !editor.json}
                   onChange={(e) => onChange('priority', e.target.value)}
                 />
+                <Input
+                  label={t('auth_files.max_concurrency_label')}
+                  value={editor.maxConcurrency}
+                  placeholder={t('auth_files.max_concurrency_placeholder')}
+                  hint={t('auth_files.max_concurrency_hint')}
+                  disabled={disableControls || editor.saving || !editor.json}
+                  onChange={(e) => onChange('maxConcurrency', e.target.value)}
+                />
                 <div className="form-group">
                   <label>{t('auth_files.excluded_models_label')}</label>
                   <textarea
