@@ -44,6 +44,11 @@ interface SequentialQuotaProgress {
   error: number;
 }
 
+interface SequentialQuotaOptions<TState> {
+  onProgress?: (progress: SequentialQuotaProgress) => void;
+  onSuccess?: (file: AuthFileItem, state: TState) => void;
+}
+
 export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>) {
   const { t } = useTranslation();
   const quota = useQuotaStore(config.storeSelector);
@@ -171,7 +176,7 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
       targets: AuthFileItem[],
       scope: QuotaScope,
       setLoading: (loading: boolean, scope?: QuotaScope | null) => void,
-      onProgress?: (progress: SequentialQuotaProgress) => void
+      options: SequentialQuotaOptions<TState> = {}
     ) => {
       if (loadingRef.current) return;
       loadingRef.current = true;
@@ -180,7 +185,7 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
 
       try {
         if (targets.length === 0) {
-          onProgress?.({ total: 0, completed: 0, success: 0, error: 0 });
+          options.onProgress?.({ total: 0, completed: 0, success: 0, error: 0 });
           return;
         }
 
@@ -210,6 +215,7 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
               ...prev,
               [file.name]: successState,
             }));
+            options.onSuccess?.(file, successState);
             success += 1;
           } catch (err: unknown) {
             if (requestId !== requestIdRef.current) return;
@@ -224,7 +230,7 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
           }
 
           completed += 1;
-          onProgress?.({ total, completed, success, error });
+          options.onProgress?.({ total, completed, success, error });
         }
       } finally {
         if (requestId === requestIdRef.current) {

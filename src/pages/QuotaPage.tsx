@@ -34,6 +34,14 @@ export function QuotaPage() {
     setFiles((prev) => prev.filter((file) => file.name !== name));
   }, []);
 
+  const handleFilesDisabled = useCallback((names: string[]) => {
+    if (names.length === 0) return;
+    const disabledNames = new Set(names);
+    setFiles((prev) =>
+      prev.map((file) => (disabledNames.has(file.name) ? { ...file, disabled: true } : file))
+    );
+  }, []);
+
   const loadFiles = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -73,6 +81,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
+        onFilesDisabled={handleFilesDisabled}
       />
       <QuotaSection
         config={ANTIGRAVITY_CONFIG}
@@ -80,6 +89,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
+        onFilesDisabled={handleFilesDisabled}
       />
       <QuotaSection
         config={KIRO_CONFIG}
@@ -87,6 +97,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
+        onFilesDisabled={handleFilesDisabled}
       />
       <QuotaSection
         config={CODEX_CONFIG}
@@ -94,6 +105,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
+        onFilesDisabled={handleFilesDisabled}
       />
       <QuotaSection
         config={GEMINI_CLI_CONFIG}
@@ -101,6 +113,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
+        onFilesDisabled={handleFilesDisabled}
       />
       <QuotaSection
         config={KIMI_CONFIG}
@@ -108,6 +121,7 @@ export function QuotaPage() {
         loading={loading}
         disabled={disableControls}
         onFileDeleted={handleFileDeleted}
+        onFilesDisabled={handleFilesDisabled}
       />
     </div>
   );

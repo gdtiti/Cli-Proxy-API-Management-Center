@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { triggerHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import type {
@@ -18,6 +19,8 @@ import type {
   ClaudeQuotaState,
   CodexQuotaState,
   GeminiCliQuotaState,
+  KimiQuotaState,
+  KiroQuotaState,
   ResolvedTheme,
 } from '@/types';
 import { authFilesApi } from '@/services/api';
@@ -49,6 +52,7 @@ const PAGE_SIZE_OPTIONS = [10, 50, 100, 200, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_REFRESH_CONCURRENCY = 10;
 const MAX_REFRESH_CONCURRENCY = 1000;
+const LOW_QUOTA_AUTO_DISABLE_THRESHOLD = 5;
 
 interface QuotaPaginationState<T> {
   pageSize: number;
@@ -131,6 +135,7 @@ interface QuotaSectionProps<TState extends QuotaStatusState, TData> {
   loading: boolean;
   disabled: boolean;
   onFileDeleted?: (name: string) => void;
+  onFilesDisabled?: (names: string[]) => void;
 }
 
 interface QuotaSummaryRow {
@@ -162,12 +167,61 @@ const isUnavailableFile = (file: AuthFileItem): boolean => {
   return normalizeSearchText(file.status_message ?? file.statusMessage).length > 0;
 };
 
+const clampPercent = (value: number): number => Math.max(0, Math.min(100, value));
+
+const getRemainingPercents = (state: QuotaStatusState): number[] => {
+  if (state.status !== 'success') return [];
+
+  if ('groups' in state && Array.isArray((state as AntigravityQuotaState).groups)) {
+    return (state as AntigravityQuotaState).groups
+      .map((group) => group.remainingFraction)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      .map((value) => clampPercent(value * 100));
+  }
+
+  if ('windows' in state && Array.isArray((state as CodexQuotaState | ClaudeQuotaState).windows)) {
+    return (state as CodexQuotaState | ClaudeQuotaState).windows
+      .map((window) => window.usedPercent)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      .map((value) => clampPercent(100 - value));
+  }
+
+  if ('buckets' in state && Array.isArray((state as GeminiCliQuotaState).buckets)) {
+    return (state as GeminiCliQuotaState).buckets
+      .map((bucket) => bucket.remainingFraction)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      .map((value) => clampPercent(value * 100));
+  }
+
+  if ('baseQuota' in state || 'freeTrialQuota' in state) {
+    const kiroState = state as KiroQuotaState;
+    return [kiroState.baseQuota, kiroState.freeTrialQuota]
+      .filter((quota): quota is NonNullable<typeof quota> => Boolean(quota))
+      .filter((quota) => quota.limit > 0)
+      .map((quota) => clampPercent(((quota.limit - quota.used) / quota.limit) * 100));
+  }
+
+  if ('rows' in state && Array.isArray((state as KimiQuotaState).rows)) {
+    return (state as KimiQuotaState).rows
+      .filter((row) => row.limit > 0)
+      .map((row) => clampPercent(((row.limit - row.used) / row.limit) * 100));
+  }
+
+  return [];
+};
+
+const isLowQuotaState = (state: QuotaStatusState): boolean => {
+  const values = getRemainingPercents(state);
+  return values.length > 0 && Math.min(...values) < LOW_QUOTA_AUTO_DISABLE_THRESHOLD;
+};
+
 export function QuotaSection<TState extends QuotaStatusState, TData>({
   config,
   files,
   loading,
   disabled,
   onFileDeleted,
+  onFilesDisabled,
 }: QuotaSectionProps<TState, TData>) {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -218,6 +272,20 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const [refreshProgress, setRefreshProgress] = useState<QuotaLoadProgress | null>(null);
   const [authStatusFilter, setAuthStatusFilter] = useState<AuthStatusFilter>('enabled');
   const [resultSearch, setResultSearch] = useState('');
+  const autoDisableStorageKey = `quota_auto_disable_low_${config.type}`;
+  const [autoDisableLowQuota, setAutoDisableLowQuotaState] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(autoDisableStorageKey) === 'true';
+  });
+  const setAutoDisableLowQuota = useCallback(
+    (value: boolean) => {
+      setAutoDisableLowQuotaState(value);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(autoDisableStorageKey, String(value));
+      }
+    },
+    [autoDisableStorageKey]
+  );
 
   const providerFiles = useMemo(
     () => files.filter((file) => config.filterFn(file)),
@@ -750,6 +818,61 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
     };
   }, [filteredFiles, quota, summaryRows]);
 
+  const disableLowQuotaFiles = useCallback(
+    async (lowQuotaFiles: AuthFileItem[]) => {
+      const targets = lowQuotaFiles.filter(
+        (file) => !isDisabledFile(file) && !isRuntimeOnlyAuthFile(file)
+      );
+      if (targets.length === 0) return;
+
+      const results = await Promise.allSettled(
+        targets.map((file) => authFilesApi.setStatus(file.name, true))
+      );
+
+      const disabledNames: string[] = [];
+      let failedCount = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.disabled === true) {
+          disabledNames.push(targets[index].name);
+        } else {
+          failedCount += 1;
+        }
+      });
+
+      if (disabledNames.length > 0) {
+        onFilesDisabled?.(disabledNames);
+      }
+
+      if (failedCount === 0) {
+        showNotification(
+          t('quota_management.auto_disable_low_success', {
+            count: disabledNames.length,
+            threshold: LOW_QUOTA_AUTO_DISABLE_THRESHOLD,
+          }),
+          'success'
+        );
+      } else if (disabledNames.length > 0) {
+        showNotification(
+          t('quota_management.auto_disable_low_partial', {
+            success: disabledNames.length,
+            failed: failedCount,
+            threshold: LOW_QUOTA_AUTO_DISABLE_THRESHOLD,
+          }),
+          'warning'
+        );
+      } else {
+        showNotification(
+          t('quota_management.auto_disable_low_failed', {
+            threshold: LOW_QUOTA_AUTO_DISABLE_THRESHOLD,
+          }),
+          'error'
+        );
+      }
+    },
+    [onFilesDisabled, showNotification, t]
+  );
+
   const handleCheckAll = useCallback(() => {
     if (disabled || isBusy) return;
     if (displayFiles.length === 0) return;
@@ -762,8 +885,31 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       success: 0,
       error: 0,
     });
-    void loadQuotaSequential(targets, 'all', setLoading, setBatchProgress);
-  }, [disabled, displayFiles, isBusy, loadQuotaSequential, setLoading]);
+    void (async () => {
+      const lowQuotaFiles = new Map<string, AuthFileItem>();
+
+      await loadQuotaSequential(targets, 'all', setLoading, {
+        onProgress: setBatchProgress,
+        onSuccess: (file, state) => {
+          if (isLowQuotaState(state)) {
+            lowQuotaFiles.set(file.name, file);
+          }
+        },
+      });
+
+      if (autoDisableLowQuota && lowQuotaFiles.size > 0) {
+        await disableLowQuotaFiles(Array.from(lowQuotaFiles.values()));
+      }
+    })();
+  }, [
+    autoDisableLowQuota,
+    disableLowQuotaFiles,
+    disabled,
+    displayFiles,
+    isBusy,
+    loadQuotaSequential,
+    setLoading,
+  ]);
 
   const batchPercent = useMemo(() => {
     if (!batchProgress) return 0;
@@ -920,6 +1066,20 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                 </div>
               </>
             )}
+
+            <div className={styles.autoDisableLowQuota}>
+              <ToggleSwitch
+                checked={autoDisableLowQuota}
+                onChange={setAutoDisableLowQuota}
+                disabled={disabled || isBusy}
+                ariaLabel={t('quota_management.auto_disable_low_label', {
+                  threshold: LOW_QUOTA_AUTO_DISABLE_THRESHOLD,
+                })}
+                label={t('quota_management.auto_disable_low_label', {
+                  threshold: LOW_QUOTA_AUTO_DISABLE_THRESHOLD,
+                })}
+              />
+            </div>
 
             <Button
               variant="secondary"
