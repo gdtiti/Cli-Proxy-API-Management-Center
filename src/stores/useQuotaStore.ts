@@ -30,11 +30,32 @@ interface QuotaStoreState {
   clearQuotaCache: () => void;
 }
 
-const resolveUpdater = <T>(updater: QuotaUpdater<T>, prev: T): T => {
-  if (typeof updater === 'function') {
-    return (updater as (value: T) => T)(prev);
+const shallowEqualRecord = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  if (
+    typeof left !== 'object' ||
+    left === null ||
+    typeof right !== 'object' ||
+    right === null ||
+    Array.isArray(left) ||
+    Array.isArray(right)
+  ) {
+    return false;
   }
-  return updater;
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every((key) => Object.is(leftRecord[key], rightRecord[key]));
+};
+
+const resolveUpdater = <T>(updater: QuotaUpdater<T>, prev: T): T => {
+  const next =
+    typeof updater === 'function' ? (updater as (value: T) => T)(prev) : updater;
+  return shallowEqualRecord(prev, next) ? prev : next;
 };
 
 export const useQuotaStore = create<QuotaStoreState>((set) => ({

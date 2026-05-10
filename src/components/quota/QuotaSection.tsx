@@ -533,7 +533,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   useEffect(() => {
     if (loading) return;
     if (filteredFiles.length === 0) {
-      setQuota({});
+      setQuota((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
 
