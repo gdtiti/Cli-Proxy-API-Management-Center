@@ -30,7 +30,16 @@ interface QuotaStoreState {
   clearQuotaCache: () => void;
 }
 
-const shallowEqualRecord = (left: unknown, right: unknown): boolean => {
+const quotaValueEqual = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+};
+
+const equalQuotaRecord = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
   if (
     typeof left !== 'object' ||
@@ -49,13 +58,13 @@ const shallowEqualRecord = (left: unknown, right: unknown): boolean => {
   const rightKeys = Object.keys(rightRecord);
   if (leftKeys.length !== rightKeys.length) return false;
 
-  return leftKeys.every((key) => Object.is(leftRecord[key], rightRecord[key]));
+  return leftKeys.every((key) => quotaValueEqual(leftRecord[key], rightRecord[key]));
 };
 
 const resolveUpdater = <T>(updater: QuotaUpdater<T>, prev: T): T => {
   const next =
     typeof updater === 'function' ? (updater as (value: T) => T)(prev) : updater;
-  return shallowEqualRecord(prev, next) ? prev : next;
+  return equalQuotaRecord(prev, next) ? prev : next;
 };
 
 export const useQuotaStore = create<QuotaStoreState>((set) => ({
@@ -66,29 +75,35 @@ export const useQuotaStore = create<QuotaStoreState>((set) => ({
   kiroQuota: {},
   kimiQuota: {},
   setAntigravityQuota: (updater) =>
-    set((state) => ({
-      antigravityQuota: resolveUpdater(updater, state.antigravityQuota),
-    })),
+    set((state) => {
+      const next = resolveUpdater(updater, state.antigravityQuota);
+      return Object.is(next, state.antigravityQuota) ? state : { antigravityQuota: next };
+    }),
   setClaudeQuota: (updater) =>
-    set((state) => ({
-      claudeQuota: resolveUpdater(updater, state.claudeQuota),
-    })),
+    set((state) => {
+      const next = resolveUpdater(updater, state.claudeQuota);
+      return Object.is(next, state.claudeQuota) ? state : { claudeQuota: next };
+    }),
   setCodexQuota: (updater) =>
-    set((state) => ({
-      codexQuota: resolveUpdater(updater, state.codexQuota),
-    })),
+    set((state) => {
+      const next = resolveUpdater(updater, state.codexQuota);
+      return Object.is(next, state.codexQuota) ? state : { codexQuota: next };
+    }),
   setGeminiCliQuota: (updater) =>
-    set((state) => ({
-      geminiCliQuota: resolveUpdater(updater, state.geminiCliQuota),
-    })),
+    set((state) => {
+      const next = resolveUpdater(updater, state.geminiCliQuota);
+      return Object.is(next, state.geminiCliQuota) ? state : { geminiCliQuota: next };
+    }),
   setKiroQuota: (updater) =>
-    set((state) => ({
-      kiroQuota: resolveUpdater(updater, state.kiroQuota),
-    })),
+    set((state) => {
+      const next = resolveUpdater(updater, state.kiroQuota);
+      return Object.is(next, state.kiroQuota) ? state : { kiroQuota: next };
+    }),
   setKimiQuota: (updater) =>
-    set((state) => ({
-      kimiQuota: resolveUpdater(updater, state.kimiQuota),
-    })),
+    set((state) => {
+      const next = resolveUpdater(updater, state.kimiQuota);
+      return Object.is(next, state.kimiQuota) ? state : { kimiQuota: next };
+    }),
   clearQuotaCache: () =>
     set({
       antigravityQuota: {},
