@@ -24,6 +24,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { copyToClipboard } from '@/utils/clipboard';
 import {
+  extractTotalTokens,
+  normalizeAuthIndex,
+  type UsageDetail,
+} from '@/utils/usage';
+import {
   MAX_CARD_PAGE_SIZE,
   MIN_CARD_PAGE_SIZE,
   QUOTA_PROVIDER_TYPES,
@@ -58,12 +63,14 @@ import {
   isAuthFilesQuotaFilter,
   isAuthFilesSortMode,
   isAuthFilesStatusFilter,
+  isAuthFilesUsageTimeRange,
   readAuthFilesUiState,
   writeAuthFilesUiState,
   type AuthFilesExpiryFilter,
   type AuthFilesQuotaFilter,
   type AuthFilesSortMode,
   type AuthFilesStatusFilter,
+  type AuthFilesUsageTimeRange,
 } from '@/features/authFiles/uiState';
 import { authFilesApi } from '@/services/api/authFiles';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
@@ -77,6 +84,11 @@ const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
 const EXPIRY_SOON_MS = 7 * 24 * 60 * 60 * 1000;
+const USAGE_TIME_RANGE_MS: Record<Exclude<AuthFilesUsageTimeRange, 'all'>, number> = {
+  '7h': 7 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+};
 const QUOTA_LEVEL_RANK = {
   unchecked: 0,
   low: 1,
@@ -85,6 +97,16 @@ const QUOTA_LEVEL_RANK = {
   full: 4,
 } as const;
 type DerivedQuotaLevel = keyof typeof QUOTA_LEVEL_RANK;
+type AuthFileUsageSummary = {
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+};
 
 type BatchEditableField = 'prefix' | 'priority' | 'note' | 'headers';
 
@@ -247,6 +269,76 @@ const compareOptionalNumber = (left: number | null, right: number | null) => {
   return left - right;
 };
 
+const createEmptyUsageSummary = (): AuthFileUsageSummary => ({
+  requestCount: 0,
+  successCount: 0,
+  failureCount: 0,
+  totalTokens: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  cachedTokens: 0,
+  reasoningTokens: 0,
+});
+
+const getUsageWindowStart = (usageTimeRange: AuthFilesUsageTimeRange, now: number) => {
+  if (usageTimeRange === 'all') return null;
+  return now - USAGE_TIME_RANGE_MS[usageTimeRange];
+};
+
+const isUsageDetailInRange = (
+  detail: UsageDetail,
+  usageTimeRange: AuthFilesUsageTimeRange,
+  now: number
+) => {
+  const windowStart = getUsageWindowStart(usageTimeRange, now);
+  if (windowStart === null) return true;
+  const timestamp =
+    typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+  return Number.isFinite(timestamp) && timestamp >= windowStart && timestamp <= now;
+};
+
+const buildUsageSummaryByAuthIndex = (
+  usageDetails: UsageDetail[],
+  usageTimeRange: AuthFilesUsageTimeRange
+) => {
+  const now = Date.now();
+  const summaryByAuthIndex = new Map<string, AuthFileUsageSummary>();
+
+  usageDetails.forEach((detail) => {
+    if (!isUsageDetailInRange(detail, usageTimeRange, now)) return;
+    const authIndexKey = normalizeAuthIndex(detail.auth_index);
+    if (!authIndexKey) return;
+
+    const current = summaryByAuthIndex.get(authIndexKey) ?? createEmptyUsageSummary();
+    current.requestCount += 1;
+    if (detail.failed) {
+      current.failureCount += 1;
+    } else {
+      current.successCount += 1;
+    }
+    current.totalTokens += extractTotalTokens(detail);
+    current.inputTokens += Math.max(Number(detail.tokens?.input_tokens) || 0, 0);
+    current.outputTokens += Math.max(Number(detail.tokens?.output_tokens) || 0, 0);
+    current.cachedTokens += Math.max(
+      Number(detail.tokens?.cached_tokens) || 0,
+      Number(detail.tokens?.cache_tokens) || 0,
+      0
+    );
+    current.reasoningTokens += Math.max(Number(detail.tokens?.reasoning_tokens) || 0, 0);
+    summaryByAuthIndex.set(authIndexKey, current);
+  });
+
+  return summaryByAuthIndex;
+};
+
+const getAuthFileUsageSummary = (
+  file: AuthFileItem,
+  summaryByAuthIndex: Map<string, AuthFileUsageSummary>
+) => {
+  const authIndexKey = normalizeAuthIndex(file['auth_index'] ?? file.authIndex);
+  return authIndexKey ? summaryByAuthIndex.get(authIndexKey) : undefined;
+};
+
 export function AuthFilesPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -264,6 +356,7 @@ export function AuthFilesPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<AuthFilesStatusFilter>('all');
   const [quotaFilter, setQuotaFilter] = useState<AuthFilesQuotaFilter>('all');
+  const [usageTimeRange, setUsageTimeRange] = useState<AuthFilesUsageTimeRange>('24h');
   const [expiryFilter, setExpiryFilter] = useState<AuthFilesExpiryFilter>('all');
   const [modelFilter, setModelFilter] = useState('');
   const [refreshingModels, setRefreshingModels] = useState(false);
@@ -274,6 +367,7 @@ export function AuthFilesPage() {
   const [pageSizeInput, setPageSizeInput] = useState('9');
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
   const [reloadingFromStore, setReloadingFromStore] = useState(false);
+  const [restoringDisabled, setRestoringDisabled] = useState(false);
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const [batchFieldsEditorOpen, setBatchFieldsEditorOpen] = useState(false);
@@ -317,6 +411,10 @@ export function AuthFilesPage() {
   } = useAuthFilesData({ refreshKeyStats });
 
   const statusBarCache = useAuthFilesStatusBarCache(files, usageDetails);
+  const usageSummaryByAuthIndex = useMemo(
+    () => buildUsageSummaryByAuthIndex(usageDetails, usageTimeRange),
+    [usageDetails, usageTimeRange]
+  );
 
   const {
     excluded,
@@ -413,6 +511,9 @@ export function AuthFilesPage() {
     if (isAuthFilesQuotaFilter(persisted.quotaFilter)) {
       setQuotaFilter(persisted.quotaFilter);
     }
+    if (isAuthFilesUsageTimeRange(persisted.usageTimeRange)) {
+      setUsageTimeRange(persisted.usageTimeRange);
+    }
     if (isAuthFilesExpiryFilter(persisted.expiryFilter)) {
       setExpiryFilter(persisted.expiryFilter);
     }
@@ -434,6 +535,7 @@ export function AuthFilesPage() {
       sortMode,
       statusFilter,
       quotaFilter,
+      usageTimeRange,
       expiryFilter,
       modelFilter,
     });
@@ -450,6 +552,7 @@ export function AuthFilesPage() {
     search,
     sortMode,
     statusFilter,
+    usageTimeRange,
   ]);
 
   useEffect(() => {
@@ -514,6 +617,10 @@ export function AuthFilesPage() {
     await Promise.all([loadFiles(), refreshKeyStats(), loadExcluded(), loadModelAlias()]);
   }, [loadFiles, refreshKeyStats, loadExcluded, loadModelAlias]);
 
+  const handleQuotaRefreshed = useCallback(async () => {
+    await loadFiles();
+  }, [loadFiles]);
+
   const handleReloadFromStore = useCallback(async () => {
     setReloadingFromStore(true);
     try {
@@ -540,6 +647,28 @@ export function AuthFilesPage() {
       showNotification(t('auth_files.reload_from_store_failed', { message }), 'error');
     } finally {
       setReloadingFromStore(false);
+    }
+  }, [loadFiles, refreshKeyStats, showNotification, t]);
+
+  const handleRestoreDisabled = useCallback(async () => {
+    if (!window.confirm(t('auth_files.restore_disabled_confirm'))) return;
+
+    setRestoringDisabled(true);
+    try {
+      const result = await authFilesApi.restoreDisabled();
+      await Promise.all([loadFiles(), refreshKeyStats()]);
+      showNotification(
+        t('auth_files.restore_disabled_success', {
+          restored: result.restored,
+          failed: result.failed,
+        }),
+        result.failed > 0 ? 'warning' : 'success'
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('notification.refresh_failed');
+      showNotification(t('auth_files.restore_disabled_failed', { message }), 'error');
+    } finally {
+      setRestoringDisabled(false);
     }
   }, [loadFiles, refreshKeyStats, showNotification, t]);
 
@@ -581,6 +710,7 @@ export function AuthFilesPage() {
       { value: 'az', label: t('auth_files.sort_az') },
       { value: 'priority', label: t('auth_files.sort_priority') },
       { value: 'concurrency', label: t('auth_files.sort_concurrency') },
+      { value: 'usage_count', label: t('auth_files.sort_usage_count') },
       { value: 'last_used_at', label: t('auth_files.sort_last_used_at') },
       { value: 'quota', label: t('auth_files.sort_quota') },
       { value: 'expires_at', label: t('auth_files.sort_expires_at') },
@@ -608,6 +738,23 @@ export function AuthFilesPage() {
       { value: 'full', label: t('auth_files.quota_filter_full') },
     ],
     [t]
+  );
+
+  const usageTimeRangeOptions = useMemo(
+    () => [
+      { value: '7h', label: t('auth_files.usage_range_7h') },
+      { value: '24h', label: t('auth_files.usage_range_24h') },
+      { value: '7d', label: t('auth_files.usage_range_7d') },
+      { value: 'all', label: t('auth_files.usage_range_all') },
+    ],
+    [t]
+  );
+
+  const usageTimeRangeLabel = useMemo(
+    () =>
+      usageTimeRangeOptions.find((option) => option.value === usageTimeRange)?.label ??
+      t('auth_files.usage_range_24h'),
+    [t, usageTimeRange, usageTimeRangeOptions]
   );
 
   const expiryFilterOptions = useMemo(
@@ -785,6 +932,13 @@ export function AuthFilesPage() {
         if (cb !== ca) return cb - ca;
         return a.name.localeCompare(b.name);
       });
+    } else if (sortMode === 'usage_count') {
+      copy.sort((a, b) => {
+        const usageA = getAuthFileUsageSummary(a, usageSummaryByAuthIndex)?.requestCount ?? 0;
+        const usageB = getAuthFileUsageSummary(b, usageSummaryByAuthIndex)?.requestCount ?? 0;
+        if (usageB !== usageA) return usageB - usageA;
+        return a.name.localeCompare(b.name);
+      });
     } else if (sortMode === 'last_used_at') {
       copy.sort((a, b) => {
         const usedCompare = compareOptionalNumber(
@@ -816,7 +970,7 @@ export function AuthFilesPage() {
       });
     }
     return copy;
-  }, [filtered, sortMode]);
+  }, [filtered, sortMode, usageSummaryByAuthIndex]);
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
@@ -1252,10 +1406,19 @@ export function AuthFilesPage() {
               variant="secondary"
               size="sm"
               onClick={() => void handleReloadFromStore()}
-              disabled={disableControls || loading || uploading || reloadingFromStore}
+              disabled={disableControls || loading || uploading || reloadingFromStore || restoringDisabled}
               loading={reloadingFromStore}
             >
               {t('auth_files.reload_from_store_button')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleRestoreDisabled()}
+              disabled={disableControls || loading || uploading || restoringDisabled || reloadingFromStore}
+              loading={restoringDisabled}
+            >
+              {t('auth_files.restore_disabled_button')}
             </Button>
             <Button
               variant="secondary"
@@ -1416,6 +1579,21 @@ export function AuthFilesPage() {
                   />
                 </div>
                 <div className={styles.filterItem}>
+                  <label>{t('auth_files.usage_range_label')}</label>
+                  <Select
+                    className={styles.sortSelect}
+                    value={usageTimeRange}
+                    options={usageTimeRangeOptions}
+                    onChange={(value) => {
+                      if (!isAuthFilesUsageTimeRange(value)) return;
+                      setUsageTimeRange(value);
+                      setPage(1);
+                    }}
+                    ariaLabel={t('auth_files.usage_range_label')}
+                    fullWidth
+                  />
+                </div>
+                <div className={styles.filterItem}>
                   <label>{t('auth_files.expiry_filter_label')}</label>
                   <Select
                     className={styles.sortSelect}
@@ -1502,7 +1680,10 @@ export function AuthFilesPage() {
                     statusUpdating={statusUpdating}
                     quotaFilterType={quotaFilterType}
                     keyStats={keyStats}
+                    usageSummary={getAuthFileUsageSummary(file, usageSummaryByAuthIndex)}
+                    usageTimeRangeLabel={usageTimeRangeLabel}
                     statusBarCache={statusBarCache}
+                    onQuotaRefreshed={handleQuotaRefreshed}
                     onShowModels={showModels}
                     onDownload={handleDownload}
                     onOpenPrefixProxyEditor={openPrefixProxyEditor}

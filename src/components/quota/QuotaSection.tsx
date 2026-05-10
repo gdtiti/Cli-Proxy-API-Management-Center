@@ -36,6 +36,8 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 type ViewMode = 'paged' | 'all';
 type QuotaPanelTab = 'summary' | 'credentials';
 type RefreshScope = 'page' | 'all';
+type AuthStatusFilter = 'all' | 'enabled' | 'disabled' | 'unavailable' | 'error';
+type QuotaResultFilter = 'all' | 'idle' | 'success' | 'error';
 
 interface PendingQuotaRefreshRequest {
   scope: RefreshScope;
@@ -144,6 +146,22 @@ interface QuotaSummaryItem extends QuotaSummaryRow {
   averageRemaining: number | null;
 }
 
+const normalizeSearchText = (value: unknown): string => String(value ?? '').trim().toLowerCase();
+
+const isDisabledFile = (file: AuthFileItem): boolean => {
+  const value = file.disabled;
+  if (typeof value === 'boolean') return value;
+  return false;
+};
+
+const isUnavailableFile = (file: AuthFileItem): boolean => {
+  if (isDisabledFile(file)) return false;
+  if (file.unavailable === true) return true;
+  const status = normalizeSearchText(file.status ?? file.state);
+  if (['error', 'failed', 'unavailable'].includes(status)) return true;
+  return normalizeSearchText(file.status_message ?? file.statusMessage).length > 0;
+};
+
 export function QuotaSection<TState extends QuotaStatusState, TData>({
   config,
   files,
@@ -198,8 +216,10 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   );
   const [refreshConcurrencyError, setRefreshConcurrencyError] = useState('');
   const [refreshProgress, setRefreshProgress] = useState<QuotaLoadProgress | null>(null);
+  const [authStatusFilter, setAuthStatusFilter] = useState<AuthStatusFilter>('enabled');
+  const [resultSearch, setResultSearch] = useState('');
 
-  const filteredFiles = useMemo(
+  const providerFiles = useMemo(
     () => files.filter((file) => config.filterFn(file)),
     [files, config]
   );
@@ -207,15 +227,55 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
   const { quota, loadQuota, loadQuotaSequential } = useQuotaLoader(config);
 
   // Status filter: all | idle | success | error
-  const [statusFilter, setStatusFilter] = useState<'all' | 'idle' | 'success' | 'error'>('all');
+  const [statusFilter, setStatusFilter] = useState<QuotaResultFilter>('all');
+
+  const filteredFiles = useMemo(() => {
+    return providerFiles.filter((file) => {
+      if (authStatusFilter === 'enabled' && isDisabledFile(file)) return false;
+      if (authStatusFilter === 'disabled' && !isDisabledFile(file)) return false;
+      if (authStatusFilter === 'unavailable' && !isUnavailableFile(file)) return false;
+      if (authStatusFilter === 'error') {
+        const state = quota[file.name]?.status;
+        if (state !== 'error' && !isUnavailableFile(file)) return false;
+      }
+      return true;
+    });
+  }, [authStatusFilter, providerFiles, quota]);
 
   const displayFiles = useMemo(() => {
-    if (statusFilter === 'all') return filteredFiles;
-    return filteredFiles.filter((file) => {
-      const state = quota[file.name]?.status ?? 'idle';
-      return state === statusFilter;
+    const term = resultSearch.trim().toLowerCase();
+    const byStatus =
+      statusFilter === 'all'
+        ? filteredFiles
+        : filteredFiles.filter((file) => {
+            const state = quota[file.name]?.status ?? 'idle';
+            return state === statusFilter;
+          });
+    if (!term) return byStatus;
+    return byStatus.filter((file) => {
+      const state = quota[file.name] as Record<string, unknown> | undefined;
+      const values = [
+        file.name,
+        file.email,
+        file.account,
+        file.label,
+        file.type,
+        file.provider,
+        file.status,
+        file.state,
+        file.status_message,
+        file.statusMessage,
+        file.quota_level,
+        file.quota_reason,
+        file.status_display,
+        state?.status,
+        state?.error,
+        state?.statusDisplay,
+        state?.quotaLevel,
+      ];
+      return values.some((value) => normalizeSearchText(value).includes(term));
     });
-  }, [filteredFiles, quota, statusFilter]);
+  }, [filteredFiles, quota, resultSearch, statusFilter]);
 
   const failedDisplayFiles = useMemo(
     () =>
@@ -692,10 +752,10 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
 
   const handleCheckAll = useCallback(() => {
     if (disabled || isBusy) return;
-    if (filteredFiles.length === 0) return;
+    if (displayFiles.length === 0) return;
 
     setRefreshProgress(null);
-    const targets = filteredFiles;
+    const targets = displayFiles;
     setBatchProgress({
       total: targets.length,
       completed: 0,
@@ -703,7 +763,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
       error: 0,
     });
     void loadQuotaSequential(targets, 'all', setLoading, setBatchProgress);
-  }, [disabled, filteredFiles, isBusy, loadQuotaSequential, setLoading]);
+  }, [disabled, displayFiles, isBusy, loadQuotaSequential, setLoading]);
 
   const batchPercent = useMemo(() => {
     if (!batchProgress) return 0;
@@ -786,10 +846,21 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               <>
                 <select
                   className={styles.statusFilter}
+                  value={authStatusFilter}
+                  onChange={(event) => setAuthStatusFilter(event.target.value as AuthStatusFilter)}
+                  aria-label={t('quota_management.auth_status_filter_label')}
+                >
+                  <option value="enabled">{t('quota_management.filter_enabled')}</option>
+                  <option value="all">{t('quota_management.filter_all')}</option>
+                  <option value="disabled">{t('quota_management.filter_disabled')}</option>
+                  <option value="unavailable">{t('quota_management.filter_unavailable')}</option>
+                  <option value="error">{t('quota_management.filter_error')}</option>
+                </select>
+
+                <select
+                  className={styles.statusFilter}
                   value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as 'all' | 'idle' | 'success' | 'error')
-                  }
+                  onChange={(event) => setStatusFilter(event.target.value as QuotaResultFilter)}
                   aria-label={t('quota_management.status_filter_label')}
                 >
                   <option value="all">{t('quota_management.filter_all')}</option>
@@ -797,6 +868,14 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                   <option value="success">{t('quota_management.filter_success')}</option>
                   <option value="error">{t('quota_management.filter_error')}</option>
                 </select>
+
+                <Input
+                  className={styles.resultSearch}
+                  value={resultSearch}
+                  onChange={(event) => setResultSearch(event.target.value)}
+                  placeholder={t('quota_management.result_search_placeholder')}
+                  aria-label={t('quota_management.result_search_label')}
+                />
 
                 <div className={styles.pageSizeControl}>
                   <span className={styles.pageSizeLabel}>
@@ -846,7 +925,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
               variant="secondary"
               size="sm"
               onClick={handleCheckAll}
-              disabled={disabled || isBusy || filteredFiles.length === 0}
+              disabled={disabled || isBusy || displayFiles.length === 0}
               loading={
                 sectionLoading && !!batchProgress && batchProgress.completed < batchProgress.total
               }

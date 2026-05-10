@@ -392,7 +392,7 @@
   display: grid;
   grid-template-columns:
     minmax(240px, 1.4fr)
-    repeat(5, minmax(140px, 0.8fr))
+    repeat(7, minmax(140px, 0.8fr))
     minmax(220px, auto);
   gap: $spacing-md;
   align-items: flex-end;
@@ -668,6 +668,24 @@
   padding-top: $spacing-sm;
   margin-top: 2px;
   border-top: 1px dashed color-mix(in srgb, var(--border-color) 82%, transparent);
+}
+
+.quotaSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quotaSectionTitle {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.quotaRefreshButton {
+  flex: 0 0 auto;
 }
 
 .quotaRow {
@@ -1466,6 +1484,10 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 .statValue {
@@ -1485,6 +1507,59 @@
   background: var(--failure-badge-bg);
   color: var(--failure-badge-text);
   border-color: var(--failure-badge-border);
+}
+
+.statUsage {
+  background: color-mix(in srgb, var(--info-color, #3b82f6) 13%, var(--bg-secondary));
+  color: var(--info-text, #1d4ed8);
+  border-color: color-mix(in srgb, var(--info-color, #3b82f6) 28%, transparent);
+}
+
+.statTokens {
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-secondary));
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 28%, transparent);
+}
+
+.statRange {
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.tokenSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+
+  @include mobile {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tokenSummaryItem {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-secondary) 86%, transparent);
+
+  span {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  strong {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
 }
 
 .statusPanel {

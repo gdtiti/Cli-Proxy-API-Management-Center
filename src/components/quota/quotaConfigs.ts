@@ -78,7 +78,6 @@ import {
   isAntigravityFile,
   isClaudeFile,
   isCodexFile,
-  isDisabledAuthFile,
   isGeminiCliFile,
   isKiroFile,
   isKimiFile,
@@ -127,6 +126,7 @@ export interface QuotaConfig<TState, TData> {
   shouldReplaceWithInitialState?: (current: TState, file: AuthFileItem) => boolean;
   buildLoadingState: () => TState;
   buildSuccessState: (data: TData) => TState;
+  persistSuccessState?: (file: AuthFileItem, data: TData, state: TState) => Promise<void>;
   buildErrorState: (message: string, status?: number) => TState;
   cardClassName: string;
   controlsClassName: string;
@@ -449,6 +449,52 @@ const fetchCodexQuota = async (
   const planTypeFromUsage = normalizePlanType(payload.plan_type ?? payload.planType);
   const windows = buildCodexQuotaWindows(payload, t);
   return { planType: planTypeFromUsage ?? planTypeFromFile, windows };
+};
+
+const resolveCodexQuotaLevel = (windows: CodexQuotaWindow[]): string => {
+  const remainingValues = windows
+    .map((window) =>
+      typeof window.usedPercent === 'number' && Number.isFinite(window.usedPercent)
+        ? Math.max(0, Math.min(100, 100 - window.usedPercent))
+        : null
+    )
+    .filter((value): value is number => value !== null);
+  if (remainingValues.length === 0) return 'unchecked';
+  const minRemaining = Math.min(...remainingValues);
+  if (minRemaining <= 0) return 'low';
+  if (minRemaining >= 80) return 'full';
+  if (minRemaining >= 50) return 'high';
+  if (minRemaining >= 20) return 'medium';
+  return 'low';
+};
+
+const persistCodexQuota = async (
+  file: AuthFileItem,
+  data: { planType: string | null; windows: CodexQuotaWindow[] }
+) => {
+  const quotaLevel = resolveCodexQuotaLevel(data.windows);
+  const quotaExceeded = data.windows.some(
+    (window) => typeof window.usedPercent === 'number' && window.usedPercent >= 100
+  );
+  const quotaWindows = data.windows.map((window) => ({
+    id: window.id,
+    label: window.label,
+    labelKey: window.labelKey,
+    labelParams: window.labelParams,
+    usedPercent: window.usedPercent,
+    resetLabel: window.resetLabel,
+  }));
+
+  await authFilesApi.persistQuota({
+    name: file.name,
+    quota_checked: true,
+    quota_level: quotaLevel,
+    quota_exceeded: quotaExceeded,
+    quota_reason: quotaExceeded ? 'quota exceeded' : 'live quota refresh',
+    status_display: quotaExceeded ? 'quota exceeded' : 'live quota refreshed',
+    plan_type: data.planType,
+    quota_windows: quotaWindows,
+  });
 };
 
 const GEMINI_CLI_G1_CREDIT_TYPE = 'GOOGLE_ONE_AI';
@@ -1199,10 +1245,32 @@ const buildPersistedCodexQuotaState = (
     normalizeStringValue(file.status_message ?? file.statusMessage) ??
     levelLabel ??
     t('codex_quota.persisted_snapshot_label', { defaultValue: '已持久化配额状态' });
+  const windows = Array.isArray(file.quota_windows)
+    ? file.quota_windows
+        .map((item): CodexQuotaWindow | null => {
+          if (!item || typeof item !== 'object') return null;
+          const record = item as Record<string, unknown>;
+          const id = normalizeStringValue(record.id);
+          const label = normalizeStringValue(record.label);
+          if (!id || !label) return null;
+          return {
+            id,
+            label,
+            labelKey: normalizeStringValue(record.labelKey) ?? undefined,
+            labelParams:
+              record.labelParams && typeof record.labelParams === 'object'
+                ? (record.labelParams as Record<string, string | number>)
+                : undefined,
+            usedPercent: normalizeNumberValue(record.usedPercent),
+            resetLabel: normalizeStringValue(record.resetLabel) ?? '',
+          };
+        })
+        .filter((item): item is CodexQuotaWindow => item !== null)
+    : [];
 
   return {
     status: 'success',
-    windows: [],
+    windows,
     planType: resolveCodexPlanType(file),
     source: 'persisted',
     quotaLevel,
@@ -1218,7 +1286,7 @@ export const CLAUDE_CONFIG: QuotaConfig<
   type: 'claude',
   i18nPrefix: 'claude_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isClaudeFile(file) && !isDisabledAuthFile(file),
+  filterFn: (file) => isClaudeFile(file),
   fetchQuota: fetchClaudeQuota,
   storeSelector: (state) => state.claudeQuota,
   storeSetter: 'setClaudeQuota',
@@ -1246,7 +1314,7 @@ export const ANTIGRAVITY_CONFIG: QuotaConfig<AntigravityQuotaState, AntigravityQ
   type: 'antigravity',
   i18nPrefix: 'antigravity_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isAntigravityFile(file) && !isDisabledAuthFile(file),
+  filterFn: (file) => isAntigravityFile(file),
   fetchQuota: fetchAntigravityQuota,
   storeSelector: (state) => state.antigravityQuota,
   storeSetter: 'setAntigravityQuota',
@@ -1272,7 +1340,7 @@ export const CODEX_CONFIG: QuotaConfig<
   type: 'codex',
   i18nPrefix: 'codex_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isCodexFile(file) && !isDisabledAuthFile(file),
+  filterFn: (file) => isCodexFile(file),
   fetchQuota: fetchCodexQuota,
   storeSelector: (state) => state.codexQuota,
   storeSetter: 'setCodexQuota',
@@ -1285,6 +1353,7 @@ export const CODEX_CONFIG: QuotaConfig<
     planType: data.planType,
     source: 'live',
   }),
+  persistSuccessState: persistCodexQuota,
   buildErrorState: (message, status) => ({
     status: 'error',
     windows: [],
@@ -1313,8 +1382,7 @@ export const GEMINI_CLI_CONFIG: QuotaConfig<
   type: 'gemini-cli',
   i18nPrefix: 'gemini_cli_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) =>
-    isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file) && !isDisabledAuthFile(file),
+  filterFn: (file) => isGeminiCliFile(file) && !isRuntimeOnlyAuthFile(file),
   fetchQuota: fetchGeminiCliQuota,
   storeSelector: (state) => state.geminiCliQuota,
   storeSetter: 'setGeminiCliQuota',
@@ -1528,7 +1596,7 @@ export const KIRO_CONFIG: QuotaConfig<KiroQuotaState, KiroQuotaData> = {
   type: 'kiro',
   i18nPrefix: 'kiro_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isKiroFile(file) && !isDisabledAuthFile(file),
+  filterFn: (file) => isKiroFile(file),
   fetchQuota: fetchKiroQuota,
   storeSelector: (state) => state.kiroQuota,
   storeSetter: 'setKiroQuota',
@@ -1644,7 +1712,7 @@ export const KIMI_CONFIG: QuotaConfig<KimiQuotaState, KimiQuotaRow[]> = {
   type: 'kimi',
   i18nPrefix: 'kimi_quota',
   cardIdleMessageKey: 'quota_management.card_idle_hint',
-  filterFn: (file) => isKimiFile(file) && !isDisabledAuthFile(file),
+  filterFn: (file) => isKimiFile(file),
   fetchQuota: fetchKimiQuota,
   storeSelector: (state) => state.kimiQuota,
   storeSetter: 'setKimiQuota',

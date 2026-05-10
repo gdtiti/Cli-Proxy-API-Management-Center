@@ -1,6 +1,7 @@
 import { useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { Button } from '@/components/ui/Button';
 import {
   ANTIGRAVITY_CONFIG,
   CLAUDE_CONFIG,
@@ -174,10 +175,11 @@ export type AuthFileQuotaSectionProps = {
   file: AuthFileItem;
   quotaType: QuotaProviderType | null;
   disableControls: boolean;
+  onQuotaRefreshed?: () => Promise<void>;
 };
 
 export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
-  const { file, quotaType, disableControls } = props;
+  const { file, quotaType, disableControls, onQuotaRefreshed } = props;
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
 
@@ -211,6 +213,7 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
       fetchQuota: (file: AuthFileItem, t: TFunction) => Promise<unknown>;
       buildLoadingState: () => unknown;
       buildSuccessState: (data: unknown) => unknown;
+      persistSuccessState?: (file: AuthFileItem, data: unknown, state: unknown) => Promise<void>;
       buildErrorState: (message: string, status?: number) => unknown;
       renderQuotaItems: (quota: unknown, t: TFunction, helpers: unknown) => unknown;
     };
@@ -222,10 +225,15 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
 
     try {
       const data = await config.fetchQuota(file, t);
+      const successState = config.buildSuccessState(data);
+      if (config.persistSuccessState) {
+        await config.persistSuccessState(file, data, successState);
+      }
       updateQuotaState((prev: Record<string, unknown>) => ({
         ...prev,
-        [file.name]: config.buildSuccessState(data),
+        [file.name]: successState,
       }));
+      await onQuotaRefreshed?.();
       showNotification(t('auth_files.quota_refresh_success', { name: file.name }), 'success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('common.unknown_error');
@@ -239,12 +247,22 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
         'error'
       );
     }
-  }, [disableControls, file, quota?.status, quotaType, showNotification, t, updateQuotaState]);
+  }, [
+    disableControls,
+    file,
+    onQuotaRefreshed,
+    quota?.status,
+    quotaType,
+    showNotification,
+    t,
+    updateQuotaState,
+  ]);
 
   const persistedQuotaItems = buildPersistedQuotaItems(file, t);
   const config = quotaType
-    ? (getQuotaConfig(quotaType) as unknown as {
+      ? (getQuotaConfig(quotaType) as unknown as {
         i18nPrefix: string;
+        persistSuccessState?: (file: AuthFileItem, data: unknown, state: unknown) => Promise<void>;
         renderQuotaItems: (quota: unknown, t: TFunction, helpers: unknown) => unknown;
       })
     : null;
@@ -259,17 +277,25 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
   return (
     <div className={styles.quotaSection}>
       {config ? (
+        <div className={styles.quotaSectionHeader}>
+          <span className={styles.quotaSectionTitle}>{t('auth_files.quota_card_title')}</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void refreshQuotaForFile()}
+            disabled={!canRefreshQuota || quotaStatus === 'loading'}
+            loading={quotaStatus === 'loading'}
+            className={styles.quotaRefreshButton}
+          >
+            {t('auth_files.quota_refresh_single')}
+          </Button>
+        </div>
+      ) : null}
+      {config ? (
         quotaStatus === 'loading' ? (
           <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.loading`)}</div>
         ) : quotaStatus === 'idle' ? (
-          <button
-            type="button"
-            className={`${styles.quotaMessage} ${styles.quotaMessageAction}`}
-            onClick={() => void refreshQuotaForFile()}
-            disabled={!canRefreshQuota}
-          >
-            {t(`${config.i18nPrefix}.idle`)}
-          </button>
+          <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.idle`)}</div>
         ) : quotaStatus === 'error' ? (
           <div className={styles.quotaError}>
             {t(`${config.i18nPrefix}.load_failed`, {

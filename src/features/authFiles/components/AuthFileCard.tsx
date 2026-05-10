@@ -13,7 +13,12 @@ import {
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import type { AuthFileItem } from '@/types';
 import { resolveAuthProvider } from '@/utils/quota';
-import { calculateStatusBarData, normalizeAuthIndex, type KeyStats } from '@/utils/usage';
+import {
+  calculateStatusBarData,
+  formatCompactNumber,
+  normalizeAuthIndex,
+  type KeyStats,
+} from '@/utils/usage';
 import { formatFileSize } from '@/utils/format';
 import {
   QUOTA_PROVIDER_TYPES,
@@ -44,13 +49,27 @@ export type AuthFileCardProps = {
   statusUpdating: Record<string, boolean>;
   quotaFilterType: QuotaProviderType | null;
   keyStats: KeyStats;
+  usageSummary?: AuthFileUsageSummary;
+  usageTimeRangeLabel: string;
   statusBarCache: Map<string, AuthFileStatusBarData>;
+  onQuotaRefreshed: () => Promise<void>;
   onShowModels: (file: AuthFileItem) => void;
   onDownload: (name: string) => void;
   onOpenPrefixProxyEditor: (file: AuthFileItem) => void;
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
+};
+
+export type AuthFileUsageSummary = {
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
 };
 
 const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
@@ -83,7 +102,10 @@ export function AuthFileCard(props: AuthFileCardProps) {
     statusUpdating,
     quotaFilterType,
     keyStats,
+    usageSummary,
+    usageTimeRangeLabel,
     statusBarCache,
+    onQuotaRefreshed,
     onShowModels,
     onDownload,
     onOpenPrefixProxyEditor,
@@ -93,6 +115,16 @@ export function AuthFileCard(props: AuthFileCardProps) {
   } = props;
 
   const fileStats = resolveAuthFileStats(file, keyStats);
+  const usage = usageSummary ?? {
+    requestCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    totalTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedTokens: 0,
+    reasoningTokens: 0,
+  };
   const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
   const isAistudio = (file.type || '').toLowerCase() === 'aistudio';
   const showModelsButton = !isRuntimeOnly || isAistudio;
@@ -255,7 +287,42 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 <span className={styles.statLabel}>{t('stats.failure')}</span>
                 <span className={styles.statValue}>{fileStats.failure}</span>
               </div>
+              <div className={`${styles.statPill} ${styles.statUsage}`}>
+                <span className={styles.statLabel}>
+                  {t('auth_files.usage_count_label')}
+                  <span className={styles.statRange}>{usageTimeRangeLabel}</span>
+                </span>
+                <span className={styles.statValue}>{formatCompactNumber(usage.requestCount)}</span>
+              </div>
+              <div className={`${styles.statPill} ${styles.statTokens}`}>
+                <span className={styles.statLabel}>
+                  {t('auth_files.token_total_label')}
+                  <span className={styles.statRange}>{usageTimeRangeLabel}</span>
+                </span>
+                <span className={styles.statValue}>{formatCompactNumber(usage.totalTokens)}</span>
+              </div>
             </div>
+
+            {!compact && (
+              <div className={styles.tokenSummaryGrid}>
+                <div className={styles.tokenSummaryItem}>
+                  <span>{t('auth_files.token_input_label')}</span>
+                  <strong>{formatCompactNumber(usage.inputTokens)}</strong>
+                </div>
+                <div className={styles.tokenSummaryItem}>
+                  <span>{t('auth_files.token_output_label')}</span>
+                  <strong>{formatCompactNumber(usage.outputTokens)}</strong>
+                </div>
+                <div className={styles.tokenSummaryItem}>
+                  <span>{t('auth_files.token_cached_label')}</span>
+                  <strong>{formatCompactNumber(usage.cachedTokens)}</strong>
+                </div>
+                <div className={styles.tokenSummaryItem}>
+                  <span>{t('auth_files.token_reasoning_label')}</span>
+                  <strong>{formatCompactNumber(usage.reasoningTokens)}</strong>
+                </div>
+              </div>
+            )}
 
             <div className={`${styles.statusPanel} ${compact ? styles.statusPanelCompact : ''}`}>
               <div className={styles.statusPanelLabel}>
@@ -269,6 +336,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 file={file}
                 quotaType={quotaType}
                 disableControls={disableControls}
+                onQuotaRefreshed={onQuotaRefreshed}
               />
             )}
           </div>

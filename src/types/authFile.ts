@@ -58,6 +58,9 @@ export interface AuthFileItem {
   quota_exceeded?: boolean | null;
   quota_reason?: string;
   quota_backoff_level?: number | null;
+  quota_updated_at?: string | number | null;
+  quota_windows?: unknown[] | null;
+  status_display?: string;
   available_models?: AuthFileModelItem[];
   available_model_count?: number;
   model_refresh_status?: string;

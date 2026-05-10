@@ -22,6 +22,27 @@ export interface ReloadAuthFilesFromStoreResponse {
   removed: number;
   unchanged: number;
 }
+
+export interface RestoreDisabledAuthFilesResponse {
+  status: string;
+  total: number;
+  restored: number;
+  failed: number;
+  failed_items?: Array<{ name: string; error: string }>;
+}
+
+export interface PersistAuthFileQuotaPayload {
+  name: string;
+  quota_checked?: boolean;
+  quota_level?: string;
+  quota_exceeded?: boolean;
+  quota_reason?: string;
+  quota_backoff_level?: number;
+  next_recover_at?: string;
+  status_display?: string;
+  plan_type?: string | null;
+  quota_windows?: Array<Record<string, unknown>>;
+}
 export interface AuthFilesProxyURLBatchSummary {
   total: number;
   updated: number;
@@ -367,6 +388,12 @@ export const authFilesApi = {
 
   reloadFromStore: () =>
     apiClient.post<ReloadAuthFilesFromStoreResponse>('/auth-files/reload-from-store'),
+
+  restoreDisabled: () =>
+    apiClient.post<RestoreDisabledAuthFilesResponse>('/auth-files/restore-disabled'),
+
+  persistQuota: (payload: PersistAuthFileQuotaPayload) =>
+    apiClient.patch<{ status: string }>('/auth-files/quota', payload),
 
   // Remove a specific project from a multi-project credential
   removeProject: (name: string, projectId: string) =>

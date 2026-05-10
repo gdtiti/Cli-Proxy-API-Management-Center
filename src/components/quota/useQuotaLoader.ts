@@ -119,6 +119,8 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
             let result: LoadQuotaResult<TData>;
             try {
               const data = await config.fetchQuota(file, t);
+              const successState = config.buildSuccessState(data);
+              await config.persistSuccessState?.(file, data, successState);
               result = { name: file.name, status: 'success', data };
             } catch (err: unknown) {
               const message = err instanceof Error ? err.message : t('common.unknown_error');
@@ -200,11 +202,13 @@ export function useQuotaLoader<TState, TData>(config: QuotaConfig<TState, TData>
 
           try {
             const data = await config.fetchQuota(file, t);
+            const successState = config.buildSuccessState(data);
+            await config.persistSuccessState?.(file, data, successState);
             if (requestId !== requestIdRef.current) return;
 
             setQuota((prev) => ({
               ...prev,
-              [file.name]: config.buildSuccessState(data),
+              [file.name]: successState,
             }));
             success += 1;
           } catch (err: unknown) {
