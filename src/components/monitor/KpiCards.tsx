@@ -63,7 +63,7 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
 
     let totalRequests = typeof data.total_requests === 'number' ? data.total_requests : summaryFromModels.totalRequests;
     let successRequests = typeof data.success_count === 'number' ? data.success_count : summaryFromModels.successRequests;
-    let failedRequests = typeof data.failure_count === 'number' ? data.failure_count : summaryFromModels.failedRequests;
+    const failedRequests = typeof data.failure_count === 'number' ? data.failure_count : summaryFromModels.failedRequests;
     let totalTokens =
       typeof data.total_tokens === 'number'
         ? data.total_tokens

@@ -79,6 +79,23 @@ function parseHeadersMap(raw: string): Record<string, string> {
   return headers;
 }
 
+function parseStringListText(raw: unknown, fallback = ''): string {
+  if (!Array.isArray(raw)) return fallback;
+  const values = raw
+    .map((item) =>
+      typeof item === 'string' || typeof item === 'number' ? String(item).trim() : ''
+    )
+    .filter(Boolean);
+  return values.length > 0 ? values.join('\n') : fallback;
+}
+
+function parseStringListFromText(raw: string): string[] {
+  return raw
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function resolveApiKeysText(parsed: Record<string, unknown>): string {
   if (Object.prototype.hasOwnProperty.call(parsed, 'api-keys')) {
     return parseApiKeysText(parsed['api-keys']);
@@ -169,6 +186,25 @@ function setIntFromStringInDoc(doc: YamlDocument, path: YamlPath, value: unknown
   }
 }
 
+function setStringListFromTextInDoc(
+  doc: YamlDocument,
+  path: YamlPath,
+  value: unknown,
+  fallback: string[]
+): void {
+  const safe = typeof value === 'string' ? value : '';
+  const values = parseStringListFromText(safe);
+  if (values.length > 0) {
+    doc.setIn(path, values);
+    return;
+  }
+  if (fallback.length > 0) {
+    doc.setIn(path, fallback);
+    return;
+  }
+  if (docHas(doc, path)) doc.deleteIn(path);
+}
+
 function parseStatusCodesText(raw: unknown): string {
   if (!Array.isArray(raw)) return '';
   return raw
@@ -238,6 +274,15 @@ export function getVisualConfigValidationErrors(
     maxRetryCredentials: getNonNegativeIntegerError(values.maxRetryCredentials),
     maxRetryInterval: getNonNegativeIntegerError(values.maxRetryInterval),
     authDefaultMaxConcurrency: getNonNegativeIntegerError(values.authDefaultMaxConcurrency),
+    codexWebImageGlobalMaxConcurrency: getNonNegativeIntegerError(
+      values.codexWebImageGlobalMaxConcurrency
+    ),
+    codexWebImagePerAccountMaxConcurrency: getNonNegativeIntegerError(
+      values.codexWebImagePerAccountMaxConcurrency
+    ),
+    codexWebImageQuotaRefreshConcurrency: getNonNegativeIntegerError(
+      values.codexWebImageQuotaRefreshConcurrency
+    ),
     'authRuntime.unauthorizedDeleteThreshold': getNonNegativeIntegerError(
       values.authRuntime.unauthorizedDeleteThreshold
     ),
@@ -264,6 +309,15 @@ export function getVisualConfigValidationErrors(
     ),
     'authMaintenance.codexQuotaCheckRequestInterval': getNonNegativeIntegerError(
       values.authMaintenance.codexQuotaCheckRequestInterval
+    ),
+    'authMaintenance.circuitBreakerFailureThreshold': getNonNegativeIntegerError(
+      values.authMaintenance.circuitBreakerFailureThreshold
+    ),
+    'authMaintenance.circuitBreakerWindowSeconds': getNonNegativeIntegerError(
+      values.authMaintenance.circuitBreakerWindowSeconds
+    ),
+    'authMaintenance.manualInspectionTimeoutSeconds': getNonNegativeIntegerError(
+      values.authMaintenance.manualInspectionTimeoutSeconds
     ),
     'streaming.keepaliveSeconds': getNonNegativeIntegerError(values.streaming.keepaliveSeconds),
     'streaming.bootstrapRetries': getNonNegativeIntegerError(values.streaming.bootstrapRetries),
@@ -591,6 +645,7 @@ export function useVisualConfig() {
       const payload = asRecord(parsed.payload);
       const streaming = asRecord(parsed.streaming);
       const codexImageTool = asRecord(parsed['codex-image-tool']);
+      const codexWebImage = asRecord(parsed['codex-web-image']);
       const authRuntime = asRecord(parsed['auth-runtime']);
       const authMaintenance = asRecord(parsed['auth-maintenance']);
 
@@ -646,6 +701,18 @@ export function useVisualConfig() {
             ? codexImageTool.model
             : 'gpt-image-1',
         codexImageToolHeadersText: parseHeadersText(codexImageTool?.headers),
+        codexWebImageEnabled: Boolean(codexWebImage?.enabled),
+        codexWebImageRouteModelsText: parseStringListText(
+          codexWebImage?.['route-models'],
+          'gpt-image-2'
+        ),
+        codexWebImageGlobalMaxConcurrency: String(codexWebImage?.['global-max-concurrency'] ?? ''),
+        codexWebImagePerAccountMaxConcurrency: String(
+          codexWebImage?.['per-account-max-concurrency'] ?? ''
+        ),
+        codexWebImageQuotaRefreshConcurrency: String(
+          codexWebImage?.['quota-refresh-concurrency'] ?? '4'
+        ),
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadDefaultRawRules: parseRawPayloadRules(payload?.['default-raw']),
@@ -680,6 +747,19 @@ export function useVisualConfig() {
           codexMaxRequestCount: String(authMaintenance?.['codex-max-request-count'] ?? '0'),
           codexQuotaCheckRequestInterval: String(
             authMaintenance?.['codex-quota-check-request-interval'] ?? '0'
+          ),
+          unauthorizedDeleteEnabled: Boolean(
+            authMaintenance?.['unauthorized-delete-enabled'] ?? true
+          ),
+          circuitBreakerEnabled: Boolean(authMaintenance?.['circuit-breaker-enabled'] ?? true),
+          circuitBreakerFailureThreshold: String(
+            authMaintenance?.['circuit-breaker-failure-threshold'] ?? '5'
+          ),
+          circuitBreakerWindowSeconds: String(
+            authMaintenance?.['circuit-breaker-window-seconds'] ?? '600'
+          ),
+          manualInspectionTimeoutSeconds: String(
+            authMaintenance?.['manual-inspection-timeout-seconds'] ?? '300'
           ),
         },
 
@@ -827,6 +907,40 @@ export function useVisualConfig() {
           deleteIfMapEmpty(doc, ['codex-image-tool']);
         }
 
+        if (
+          docHas(doc, ['codex-web-image']) ||
+          values.codexWebImageEnabled ||
+          values.codexWebImageRouteModelsText.trim() !== 'gpt-image-2' ||
+          values.codexWebImageGlobalMaxConcurrency.trim() ||
+          values.codexWebImagePerAccountMaxConcurrency.trim() ||
+          values.codexWebImageQuotaRefreshConcurrency.trim() !== '4'
+        ) {
+          ensureMapInDoc(doc, ['codex-web-image']);
+          doc.setIn(['codex-web-image', 'enabled'], values.codexWebImageEnabled);
+          setStringListFromTextInDoc(
+            doc,
+            ['codex-web-image', 'route-models'],
+            values.codexWebImageRouteModelsText,
+            ['gpt-image-2']
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['codex-web-image', 'global-max-concurrency'],
+            values.codexWebImageGlobalMaxConcurrency
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['codex-web-image', 'per-account-max-concurrency'],
+            values.codexWebImagePerAccountMaxConcurrency
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['codex-web-image', 'quota-refresh-concurrency'],
+            values.codexWebImageQuotaRefreshConcurrency
+          );
+          deleteIfMapEmpty(doc, ['codex-web-image']);
+        }
+
         const authRuntimeDefined =
           docHas(doc, ['auth-runtime']) ||
           values.authRuntime.unauthorizedDeleteThreshold.trim() !== '3' ||
@@ -857,7 +971,12 @@ export function useVisualConfig() {
           values.authMaintenance.quotaStrikeThreshold.trim() !== '6' ||
           values.authMaintenance.disableCodexUsageLimitReached !== true ||
           values.authMaintenance.codexMaxRequestCount.trim() !== '0' ||
-          values.authMaintenance.codexQuotaCheckRequestInterval.trim() !== '0';
+          values.authMaintenance.codexQuotaCheckRequestInterval.trim() !== '0' ||
+          values.authMaintenance.unauthorizedDeleteEnabled !== true ||
+          values.authMaintenance.circuitBreakerEnabled !== true ||
+          values.authMaintenance.circuitBreakerFailureThreshold.trim() !== '5' ||
+          values.authMaintenance.circuitBreakerWindowSeconds.trim() !== '600' ||
+          values.authMaintenance.manualInspectionTimeoutSeconds.trim() !== '300';
         if (authMaintenanceDefined) {
           ensureMapInDoc(doc, ['auth-maintenance']);
           setBooleanInDoc(doc, ['auth-maintenance', 'enable'], values.authMaintenance.enable);
@@ -905,6 +1024,31 @@ export function useVisualConfig() {
             doc,
             ['auth-maintenance', 'codex-quota-check-request-interval'],
             values.authMaintenance.codexQuotaCheckRequestInterval
+          );
+          setBooleanInDoc(
+            doc,
+            ['auth-maintenance', 'unauthorized-delete-enabled'],
+            values.authMaintenance.unauthorizedDeleteEnabled
+          );
+          setBooleanInDoc(
+            doc,
+            ['auth-maintenance', 'circuit-breaker-enabled'],
+            values.authMaintenance.circuitBreakerEnabled
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'circuit-breaker-failure-threshold'],
+            values.authMaintenance.circuitBreakerFailureThreshold
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'circuit-breaker-window-seconds'],
+            values.authMaintenance.circuitBreakerWindowSeconds
+          );
+          setIntFromStringInDoc(
+            doc,
+            ['auth-maintenance', 'manual-inspection-timeout-seconds'],
+            values.authMaintenance.manualInspectionTimeoutSeconds
           );
           deleteIfMapEmpty(doc, ['auth-maintenance']);
         }

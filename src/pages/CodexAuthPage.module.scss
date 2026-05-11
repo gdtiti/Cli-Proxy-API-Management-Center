@@ -32,6 +32,82 @@
   gap: $spacing-sm;
 }
 
+.inspectionPanel {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.inspectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-md;
+  flex-wrap: wrap;
+}
+
+.inspectionTitle {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.inspectionDescription {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  max-width: 760px;
+}
+
+.inspectionProgressRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspectionProgressMeta,
+.inspectionFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  color: var(--text-secondary);
+  font-size: 13px;
+
+  strong {
+    color: var(--text-primary);
+  }
+}
+
+.inspectionStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: $spacing-sm;
+
+  @include tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inspectionStat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-sm;
+  color: var(--text-secondary);
+  font-size: 13px;
+
+  strong {
+    color: var(--text-primary);
+  }
+}
+
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -196,7 +272,10 @@
   background: var(--bg-primary);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
 
   &:hover {
     color: var(--text-primary);
@@ -688,7 +767,10 @@
   background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-primary));
   color: var(--text-primary);
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
 
   &:hover {
     color: var(--primary-color);

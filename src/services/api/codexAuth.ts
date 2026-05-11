@@ -7,6 +7,7 @@ import type {
   CodexAuthEvent,
   CodexAuthSnapshot,
   CodexUsageRollup,
+  AuthMaintenanceInspectionStatus,
 } from '@/types';
 
 interface CodexQuotaResponse {
@@ -95,5 +96,13 @@ export const codexAuthApi = {
 
   updateConfig(payload: CodexAuthConfigPayload) {
     return apiClient.put('/codex-auth-config', payload);
+  },
+
+  startMaintenanceInspection(): Promise<AuthMaintenanceInspectionStatus> {
+    return apiClient.post<AuthMaintenanceInspectionStatus>('/auth-maintenance/inspection');
+  },
+
+  getMaintenanceInspection(): Promise<AuthMaintenanceInspectionStatus> {
+    return apiClient.get<AuthMaintenanceInspectionStatus>('/auth-maintenance/inspection');
   },
 };

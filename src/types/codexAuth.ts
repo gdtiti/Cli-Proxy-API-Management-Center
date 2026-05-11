@@ -250,6 +250,21 @@ export interface CodexAuthConfigPayload {
   };
 }
 
+export interface AuthMaintenanceInspectionStatus {
+  id?: string;
+  running: boolean;
+  started_at?: string;
+  finished_at?: string;
+  total: number;
+  processed: number;
+  recovered: number;
+  deleted: number;
+  kept_disabled: number;
+  errors: number;
+  current_auth?: string;
+  last_message?: string;
+}
+
 export interface CodexAuthDetail {
   snapshot?: CodexAuthSnapshot;
   events?: CodexAuthEvent[];

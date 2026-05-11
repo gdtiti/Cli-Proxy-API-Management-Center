@@ -190,6 +190,7 @@ export function VisualConfigEditor({
   const nonstreamKeepaliveHintId = `${nonstreamKeepaliveInputId}-hint`;
   const nonstreamKeepaliveErrorId = `${nonstreamKeepaliveInputId}-error`;
   const imageHeadersInputId = useId();
+  const webImageRouteModelsInputId = useId();
   const [activeSectionId, setActiveSectionId] = useState<VisualSectionId>('server');
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const sidebarAnchorRef = useRef<HTMLElement | null>(null);
@@ -210,6 +211,18 @@ export function VisualConfigEditor({
   const authDefaultMaxConcurrencyError = getValidationMessage(
     t,
     validationErrors?.authDefaultMaxConcurrency
+  );
+  const codexWebImageGlobalMaxConcurrencyError = getValidationMessage(
+    t,
+    validationErrors?.codexWebImageGlobalMaxConcurrency
+  );
+  const codexWebImagePerAccountMaxConcurrencyError = getValidationMessage(
+    t,
+    validationErrors?.codexWebImagePerAccountMaxConcurrency
+  );
+  const codexWebImageQuotaRefreshConcurrencyError = getValidationMessage(
+    t,
+    validationErrors?.codexWebImageQuotaRefreshConcurrency
   );
   const unauthorizedDeleteThresholdError = getValidationMessage(
     t,
@@ -246,6 +259,18 @@ export function VisualConfigEditor({
   const codexQuotaCheckRequestIntervalError = getValidationMessage(
     t,
     validationErrors?.['authMaintenance.codexQuotaCheckRequestInterval']
+  );
+  const circuitBreakerFailureThresholdError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.circuitBreakerFailureThreshold']
+  );
+  const circuitBreakerWindowSecondsError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.circuitBreakerWindowSeconds']
+  );
+  const manualInspectionTimeoutSecondsError = getValidationMessage(
+    t,
+    validationErrors?.['authMaintenance.manualInspectionTimeoutSeconds']
   );
   const keepaliveError = getValidationMessage(t, validationErrors?.['streaming.keepaliveSeconds']);
   const bootstrapRetriesError = getValidationMessage(
@@ -326,6 +351,9 @@ export function VisualConfigEditor({
           'authMaintenance.quotaStrikeThreshold',
           'authMaintenance.codexMaxRequestCount',
           'authMaintenance.codexQuotaCheckRequestInterval',
+          'authMaintenance.circuitBreakerFailureThreshold',
+          'authMaintenance.circuitBreakerWindowSeconds',
+          'authMaintenance.manualInspectionTimeoutSeconds',
         ]),
       },
       {
@@ -352,7 +380,11 @@ export function VisualConfigEditor({
         title: t('config_management.visual.sections.image_tool.title'),
         description: t('config_management.visual.sections.image_tool.description'),
         icon: IconZap,
-        errorCount: 0,
+        errorCount: countErrors([
+          'codexWebImageGlobalMaxConcurrency',
+          'codexWebImagePerAccountMaxConcurrency',
+          'codexWebImageQuotaRefreshConcurrency',
+        ]),
       },
       {
         id: 'quota',
@@ -831,6 +863,38 @@ export function VisualConfigEditor({
                     }
                   />
                   <ToggleRow
+                    title={t('config_management.visual.sections.auth.unauthorized_delete_enabled')}
+                    description={t(
+                      'config_management.visual.sections.auth.unauthorized_delete_enabled_desc'
+                    )}
+                    checked={values.authMaintenance.unauthorizedDeleteEnabled}
+                    disabled={disabled}
+                    onChange={(unauthorizedDeleteEnabled) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          unauthorizedDeleteEnabled,
+                        },
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    title={t('config_management.visual.sections.auth.circuit_breaker_enabled')}
+                    description={t(
+                      'config_management.visual.sections.auth.circuit_breaker_enabled_desc'
+                    )}
+                    checked={values.authMaintenance.circuitBreakerEnabled}
+                    disabled={disabled}
+                    onChange={(circuitBreakerEnabled) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          circuitBreakerEnabled,
+                        },
+                      })
+                    }
+                  />
+                  <ToggleRow
                     title={t(
                       'config_management.visual.sections.auth.disable_codex_usage_limit_reached'
                     )}
@@ -934,6 +998,63 @@ export function VisualConfigEditor({
                     disabled={disabled}
                     hint={t('config_management.visual.sections.auth.zero_disabled_hint')}
                     error={codexQuotaCheckRequestIntervalError}
+                  />
+                  <Input
+                    label={t(
+                      'config_management.visual.sections.auth.circuit_breaker_failure_threshold'
+                    )}
+                    type="number"
+                    placeholder="5"
+                    value={values.authMaintenance.circuitBreakerFailureThreshold}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          circuitBreakerFailureThreshold: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    hint={t(
+                      'config_management.visual.sections.auth.circuit_breaker_failure_threshold_hint'
+                    )}
+                    error={circuitBreakerFailureThresholdError}
+                  />
+                  <Input
+                    label={t(
+                      'config_management.visual.sections.auth.circuit_breaker_window_seconds'
+                    )}
+                    type="number"
+                    placeholder="600"
+                    value={values.authMaintenance.circuitBreakerWindowSeconds}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          circuitBreakerWindowSeconds: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    error={circuitBreakerWindowSecondsError}
+                  />
+                  <Input
+                    label={t(
+                      'config_management.visual.sections.auth.manual_inspection_timeout_seconds'
+                    )}
+                    type="number"
+                    placeholder="300"
+                    value={values.authMaintenance.manualInspectionTimeoutSeconds}
+                    onChange={(e) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          manualInspectionTimeoutSeconds: e.target.value,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                    error={manualInspectionTimeoutSecondsError}
                   />
                   <Input
                     label={t('config_management.visual.sections.auth.delete_status_codes')}
@@ -1205,6 +1326,69 @@ export function VisualConfigEditor({
                   disabled={disabled}
                 />
               </FieldShell>
+              <ToggleRow
+                title={t('config_management.visual.sections.image_tool.web_enabled')}
+                description={t('config_management.visual.sections.image_tool.web_enabled_desc')}
+                checked={values.codexWebImageEnabled}
+                disabled={disabled}
+                onChange={(codexWebImageEnabled) => onChange({ codexWebImageEnabled })}
+              />
+              <FieldShell
+                label={t('config_management.visual.sections.image_tool.web_route_models')}
+                htmlFor={webImageRouteModelsInputId}
+                hint={t('config_management.visual.sections.image_tool.web_route_models_hint')}
+              >
+                <textarea
+                  id={webImageRouteModelsInputId}
+                  className={`input ${styles.multilineInput}`}
+                  value={values.codexWebImageRouteModelsText}
+                  onChange={(e) => onChange({ codexWebImageRouteModelsText: e.target.value })}
+                  placeholder={'gpt-image-2\ncustom-image-alias'}
+                  disabled={disabled}
+                />
+              </FieldShell>
+              <SectionGrid>
+                <Input
+                  label={t('config_management.visual.sections.image_tool.web_global_concurrency')}
+                  type="number"
+                  placeholder="0"
+                  value={values.codexWebImageGlobalMaxConcurrency}
+                  onChange={(e) => onChange({ codexWebImageGlobalMaxConcurrency: e.target.value })}
+                  disabled={disabled}
+                  hint={t(
+                    'config_management.visual.sections.image_tool.web_global_concurrency_hint'
+                  )}
+                  error={codexWebImageGlobalMaxConcurrencyError}
+                />
+                <Input
+                  label={t('config_management.visual.sections.image_tool.web_account_concurrency')}
+                  type="number"
+                  placeholder="0"
+                  value={values.codexWebImagePerAccountMaxConcurrency}
+                  onChange={(e) =>
+                    onChange({ codexWebImagePerAccountMaxConcurrency: e.target.value })
+                  }
+                  disabled={disabled}
+                  hint={t(
+                    'config_management.visual.sections.image_tool.web_account_concurrency_hint'
+                  )}
+                  error={codexWebImagePerAccountMaxConcurrencyError}
+                />
+                <Input
+                  label={t('config_management.visual.sections.image_tool.web_quota_concurrency')}
+                  type="number"
+                  placeholder="4"
+                  value={values.codexWebImageQuotaRefreshConcurrency}
+                  onChange={(e) =>
+                    onChange({ codexWebImageQuotaRefreshConcurrency: e.target.value })
+                  }
+                  disabled={disabled}
+                  hint={t(
+                    'config_management.visual.sections.image_tool.web_quota_concurrency_hint'
+                  )}
+                  error={codexWebImageQuotaRefreshConcurrencyError}
+                />
+              </SectionGrid>
             </SectionStack>
           </ConfigSection>
 

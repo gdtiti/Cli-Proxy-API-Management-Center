@@ -18,6 +18,7 @@ import { authFilesApi, codexAuthApi } from '@/services/api';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import type {
   AuthFileItem,
+  AuthMaintenanceInspectionStatus,
   CodexAuthConfig,
   CodexAuthConfigPayload,
   CodexAuthCycle,
@@ -470,9 +471,12 @@ const mergeCodexSnapshotWithAuthFile = (
       snapshot?.next_recover_at ?? (String(authFile?.next_recover_at ?? '').trim() || undefined),
     last_refreshed_at: snapshot?.last_refreshed_at,
     last_used_at: snapshot?.last_used_at ?? authFile?.last_used_at ?? authFile?.lastUsedAt,
-    max_concurrency: snapshot?.max_concurrency ?? authFile?.max_concurrency ?? authFile?.maxConcurrency,
+    max_concurrency:
+      snapshot?.max_concurrency ?? authFile?.max_concurrency ?? authFile?.maxConcurrency,
     current_concurrency:
-      snapshot?.current_concurrency ?? authFile?.current_concurrency ?? authFile?.currentConcurrency,
+      snapshot?.current_concurrency ??
+      authFile?.current_concurrency ??
+      authFile?.currentConcurrency,
     next_refresh_after: snapshot?.next_refresh_after,
     next_retry_after:
       snapshot?.next_retry_after ?? (String(authFile?.next_retry_after ?? '').trim() || undefined),
@@ -639,6 +643,16 @@ const buildConfigEditor = (config: CodexAuthConfig): ConfigEditorState => ({
   filterRules: buildEditableFilterRules(config.payload?.filter),
   notes: config.notes ?? {},
 });
+
+const emptyInspectionStatus: AuthMaintenanceInspectionStatus = {
+  running: false,
+  total: 0,
+  processed: 0,
+  recovered: 0,
+  deleted: 0,
+  kept_disabled: 0,
+  errors: 0,
+};
 
 const buildEditableRuleFromPreset = (
   preset: CodexPayloadPreset,
@@ -1412,6 +1426,9 @@ export function CodexAuthPage() {
     events: [],
     cycles: [],
   });
+  const [inspectionStatus, setInspectionStatus] =
+    useState<AuthMaintenanceInspectionStatus>(emptyInspectionStatus);
+  const [inspectionLoading, setInspectionLoading] = useState(false);
 
   const disableControls = connectionStatus !== 'connected';
 
@@ -1452,6 +1469,12 @@ export function CodexAuthPage() {
     setCycles(response);
   }, []);
 
+  const loadInspectionStatus = useCallback(async () => {
+    const response = await codexAuthApi.getMaintenanceInspection();
+    setInspectionStatus(response ?? emptyInspectionStatus);
+    return response;
+  }, []);
+
   const refreshAll = useCallback(
     async (silent = false) => {
       if (!silent) setRefreshing(true);
@@ -1463,6 +1486,7 @@ export function CodexAuthPage() {
           loadUsage(),
           loadEvents(eventsAuthIndex),
           loadCycles(cyclesAuthIndex),
+          loadInspectionStatus(),
         ]);
       } catch (error) {
         const message = error instanceof Error ? error.message : t('notification.refresh_failed');
@@ -1480,6 +1504,7 @@ export function CodexAuthPage() {
       loadConfig,
       loadCycles,
       loadEvents,
+      loadInspectionStatus,
       loadUsage,
       showNotification,
       t,
@@ -1505,6 +1530,14 @@ export function CodexAuthPage() {
       showNotification(message, 'error');
     });
   }, [cyclesAuthIndex, loadCycles, loading, showNotification, t]);
+
+  useEffect(() => {
+    if (!inspectionStatus.running || disableControls) return undefined;
+    const timer = window.setInterval(() => {
+      void loadInspectionStatus().catch(() => undefined);
+    }, 1200);
+    return () => window.clearInterval(timer);
+  }, [disableControls, inspectionStatus.running, loadInspectionStatus]);
 
   useEffect(() => {
     setAccountsPage(1);
@@ -1580,7 +1613,9 @@ export function CodexAuthPage() {
   const summary = useMemo(() => {
     const totalRequests = usage.reduce((sum, item) => sum + (item.request_count ?? 0), 0);
     const totalTokens = usage.reduce((sum, item) => sum + (item.total_tokens ?? 0), 0);
-    const healthyAccounts = accounts.filter((item) => !item.disabled && !item.quota_exceeded).length;
+    const healthyAccounts = accounts.filter(
+      (item) => !item.disabled && !item.quota_exceeded
+    ).length;
     const currentConcurrency = accounts.reduce(
       (sum, item) => sum + getCurrentConcurrencyValue(item),
       0
@@ -1602,10 +1637,7 @@ export function CodexAuthPage() {
         label: String(item.account ?? item.email ?? item.auth_index ?? '-'),
         totalTokens: Number(item.total_tokens ?? 0) || 0,
       }));
-    const topTokenMax = topTokenAccounts.reduce(
-      (max, item) => Math.max(max, item.totalTokens),
-      0
-    );
+    const topTokenMax = topTokenAccounts.reduce((max, item) => Math.max(max, item.totalTokens), 0);
 
     return {
       totalAccounts: accounts.length,
@@ -2205,12 +2237,51 @@ export function CodexAuthPage() {
     }
   };
 
+  const handleStartInspection = async () => {
+    setInspectionLoading(true);
+    try {
+      const response = await codexAuthApi.startMaintenanceInspection();
+      setInspectionStatus(response ?? emptyInspectionStatus);
+      showNotification(
+        t('codex_management.inspection.started', { defaultValue: 'Auth inspection started' }),
+        'success'
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('notification.save_failed');
+      showNotification(message, 'error');
+    } finally {
+      setInspectionLoading(false);
+    }
+  };
+
   const tabs = [
     { key: 'accounts' as const, label: t('codex_management.tabs.accounts') },
     { key: 'usage' as const, label: t('codex_management.tabs.usage') },
     { key: 'events' as const, label: t('codex_management.tabs.events') },
     { key: 'cycles' as const, label: t('codex_management.tabs.cycles') },
     { key: 'config' as const, label: t('codex_management.tabs.config') },
+  ];
+  const inspectionProgress = calculatePercent(
+    inspectionStatus.processed,
+    inspectionStatus.total || inspectionStatus.processed
+  );
+  const inspectionSummary = [
+    {
+      label: t('codex_management.inspection.recovered', { defaultValue: 'Recovered' }),
+      value: inspectionStatus.recovered,
+    },
+    {
+      label: t('codex_management.inspection.deleted', { defaultValue: 'Deleted' }),
+      value: inspectionStatus.deleted,
+    },
+    {
+      label: t('codex_management.inspection.kept_disabled', { defaultValue: 'Kept disabled' }),
+      value: inspectionStatus.kept_disabled,
+    },
+    {
+      label: t('codex_management.inspection.errors', { defaultValue: 'Errors' }),
+      value: inspectionStatus.errors,
+    },
   ];
 
   return (
@@ -2233,6 +2304,57 @@ export function CodexAuthPage() {
       </div>
 
       {pageError ? <div className="error-box">{pageError}</div> : null}
+
+      <Card className={styles.inspectionPanel}>
+        <div className={styles.inspectionHeader}>
+          <div>
+            <h2 className={styles.inspectionTitle}>
+              {t('codex_management.inspection.title', {
+                defaultValue: 'Auth maintenance inspection',
+              })}
+            </h2>
+            <p className={styles.inspectionDescription}>
+              {t('codex_management.inspection.description', {
+                defaultValue:
+                  'Scan disabled, quota-limited, and cooled-down Codex accounts, then recover or delete them based on live upstream status.',
+              })}
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => void handleStartInspection()}
+            loading={inspectionLoading}
+            disabled={disableControls || inspectionStatus.running}
+          >
+            {inspectionStatus.running
+              ? t('codex_management.inspection.running', { defaultValue: 'Inspecting' })
+              : t('codex_management.inspection.start', { defaultValue: 'Run inspection' })}
+          </Button>
+        </div>
+        <div className={styles.inspectionProgressRow}>
+          <div className={styles.inspectionProgressMeta}>
+            <span>
+              {formatNumber(inspectionStatus.processed)} / {formatNumber(inspectionStatus.total)}
+            </span>
+            <strong>{formatPercent(inspectionProgress)}</strong>
+          </div>
+          <div className={styles.progressTrack}>
+            <div className={styles.progressFill} style={{ width: `${inspectionProgress}%` }} />
+          </div>
+        </div>
+        <div className={styles.inspectionStats}>
+          {inspectionSummary.map((item) => (
+            <div key={item.label} className={styles.inspectionStat}>
+              <span>{item.label}</span>
+              <strong>{formatNumber(item.value)}</strong>
+            </div>
+          ))}
+        </div>
+        <div className={styles.inspectionFooter}>
+          <span>{inspectionStatus.last_message || '-'}</span>
+          {inspectionStatus.current_auth ? <strong>{inspectionStatus.current_auth}</strong> : null}
+        </div>
+      </Card>
 
       <div className={styles.summaryGrid}>
         <Card className={styles.summaryCard}>
@@ -2275,7 +2397,9 @@ export function CodexAuthPage() {
         </Card>
         <Card className={styles.summaryCard}>
           <span className={styles.summaryLabel}>{t('codex_management.summary.requests')}</span>
-          <strong className={styles.summaryValue}>{formatCompactNumber(summary.totalRequests)}</strong>
+          <strong className={styles.summaryValue}>
+            {formatCompactNumber(summary.totalRequests)}
+          </strong>
           <div className={styles.summaryMeta}>
             <span>{t('codex_management.summary.tokens')}</span>
             <strong>{formatTokenValue(summary.totalTokens)}</strong>
@@ -2309,9 +2433,7 @@ export function CodexAuthPage() {
           <span className={styles.summaryLabel}>{t('codex_management.summary.top_tokens')}</span>
           <div className={styles.chartBars}>
             {summary.topTokenAccounts.length === 0 ? (
-              <div className={styles.subtle}>
-                {t('codex_management.summary.top_tokens_hint')}
-              </div>
+              <div className={styles.subtle}>{t('codex_management.summary.top_tokens_hint')}</div>
             ) : (
               summary.topTokenAccounts.map((item) => (
                 <div key={item.id} className={styles.chartBarRow}>
@@ -2692,7 +2814,9 @@ export function CodexAuthPage() {
                             </div>
                           ) : null}
                         </td>
-                        <td>{formatDateTime(item.last_used_at ? String(item.last_used_at) : null)}</td>
+                        <td>
+                          {formatDateTime(item.last_used_at ? String(item.last_used_at) : null)}
+                        </td>
                         <td>{formatNumber(item.usage?.request_count)}</td>
                         <td>{formatTokenAverage(item.usage?.avg_total_tokens)}</td>
                         <td>

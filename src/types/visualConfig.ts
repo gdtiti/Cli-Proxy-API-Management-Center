@@ -11,6 +11,9 @@ export type VisualConfigFieldPath =
   | 'maxRetryCredentials'
   | 'maxRetryInterval'
   | 'authDefaultMaxConcurrency'
+  | 'codexWebImageGlobalMaxConcurrency'
+  | 'codexWebImagePerAccountMaxConcurrency'
+  | 'codexWebImageQuotaRefreshConcurrency'
   | 'authRuntime.unauthorizedDeleteThreshold'
   | 'authRuntime.unauthorizedDeleteWindowSeconds'
   | 'authMaintenance.scanIntervalSeconds'
@@ -20,6 +23,9 @@ export type VisualConfigFieldPath =
   | 'authMaintenance.quotaStrikeThreshold'
   | 'authMaintenance.codexMaxRequestCount'
   | 'authMaintenance.codexQuotaCheckRequestInterval'
+  | 'authMaintenance.circuitBreakerFailureThreshold'
+  | 'authMaintenance.circuitBreakerWindowSeconds'
+  | 'authMaintenance.manualInspectionTimeoutSeconds'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
@@ -80,6 +86,11 @@ export interface AuthMaintenanceConfig {
   disableCodexUsageLimitReached: boolean;
   codexMaxRequestCount: string;
   codexQuotaCheckRequestInterval: string;
+  unauthorizedDeleteEnabled: boolean;
+  circuitBreakerEnabled: boolean;
+  circuitBreakerFailureThreshold: string;
+  circuitBreakerWindowSeconds: string;
+  manualInspectionTimeoutSeconds: string;
 }
 
 export type VisualConfigValues = {
@@ -114,6 +125,11 @@ export type VisualConfigValues = {
   codexImageToolApiKey: string;
   codexImageToolModel: string;
   codexImageToolHeadersText: string;
+  codexWebImageEnabled: boolean;
+  codexWebImageRouteModelsText: string;
+  codexWebImageGlobalMaxConcurrency: string;
+  codexWebImagePerAccountMaxConcurrency: string;
+  codexWebImageQuotaRefreshConcurrency: string;
   payloadDefaultRules: PayloadRule[];
   payloadDefaultRawRules: PayloadRule[];
   payloadOverrideRules: PayloadRule[];
@@ -165,6 +181,11 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   codexImageToolApiKey: '',
   codexImageToolModel: 'gpt-image-1',
   codexImageToolHeadersText: '',
+  codexWebImageEnabled: false,
+  codexWebImageRouteModelsText: 'gpt-image-2',
+  codexWebImageGlobalMaxConcurrency: '',
+  codexWebImagePerAccountMaxConcurrency: '',
+  codexWebImageQuotaRefreshConcurrency: '4',
   payloadDefaultRules: [],
   payloadDefaultRawRules: [],
   payloadOverrideRules: [],
@@ -190,6 +211,11 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
     disableCodexUsageLimitReached: true,
     codexMaxRequestCount: '0',
     codexQuotaCheckRequestInterval: '0',
+    unauthorizedDeleteEnabled: true,
+    circuitBreakerEnabled: true,
+    circuitBreakerFailureThreshold: '5',
+    circuitBreakerWindowSeconds: '600',
+    manualInspectionTimeoutSeconds: '300',
   },
 
   // 默认值：30秒通用，60秒认证文件列表
