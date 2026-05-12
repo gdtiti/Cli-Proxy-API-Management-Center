@@ -129,6 +129,7 @@ export type VisualConfigValues = {
   codexImageToolHeadersText: string;
   codexWebImageEnabled: boolean;
   codexWebImageRouteModelsText: string;
+  codexWebImageModelMappingsText: string;
   codexWebImageGlobalMaxConcurrency: string;
   codexWebImagePerAccountMaxConcurrency: string;
   codexWebImageQuotaRefreshConcurrency: string;
@@ -190,6 +191,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   codexImageToolHeadersText: '',
   codexWebImageEnabled: false,
   codexWebImageRouteModelsText: 'gpt-image-2',
+  codexWebImageModelMappingsText: 'gpt-image-2: gpt-5-3',
   codexWebImageGlobalMaxConcurrency: '',
   codexWebImagePerAccountMaxConcurrency: '',
   codexWebImageQuotaRefreshConcurrency: '4',

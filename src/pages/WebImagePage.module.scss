@@ -30,6 +30,40 @@
   flex-wrap: wrap;
 }
 
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metricCard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.metricCard span,
+.metricCard small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.metricCard strong {
+  display: block;
+  margin: 6px 0;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.twoColumn {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+  align-items: start;
+}
+
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -95,6 +129,7 @@
   color: var(--text);
   font-size: 12px;
   white-space: nowrap;
+  margin: 0 4px 4px 0;
 }
 
 .error {
@@ -109,7 +144,84 @@
   white-space: nowrap;
 }
 
+.analyticsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.analyticsGrid h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.distRow {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.45fr) minmax(120px, 1fr) 44px;
+  gap: 8px;
+  align-items: center;
+  min-height: 24px;
+}
+
+.distLabel {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distBar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.distBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
+.fileBlock {
+  display: grid;
+  grid-template-columns: 44px minmax(180px, 1fr);
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+}
+
+.fileBlock code,
+.fileList code,
+.table code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+}
+
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 @media (max-width: 720px) {
+  .metricGrid,
+  .twoColumn,
+  .analyticsGrid {
+    grid-template-columns: 1fr;
+  }
+
   .formGrid {
     grid-template-columns: 1fr;
   }

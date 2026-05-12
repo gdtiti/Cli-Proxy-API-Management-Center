@@ -191,6 +191,7 @@ export function VisualConfigEditor({
   const nonstreamKeepaliveErrorId = `${nonstreamKeepaliveInputId}-error`;
   const imageHeadersInputId = useId();
   const webImageRouteModelsInputId = useId();
+  const webImageModelMappingsInputId = useId();
   const [activeSectionId, setActiveSectionId] = useState<VisualSectionId>('server');
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const sidebarAnchorRef = useRef<HTMLElement | null>(null);
@@ -1362,6 +1363,20 @@ export function VisualConfigEditor({
                   value={values.codexWebImageRouteModelsText}
                   onChange={(e) => onChange({ codexWebImageRouteModelsText: e.target.value })}
                   placeholder={'gpt-image-2\ncustom-image-alias'}
+                  disabled={disabled}
+                />
+              </FieldShell>
+              <FieldShell
+                label={t('config_management.visual.sections.image_tool.web_model_mappings')}
+                htmlFor={webImageModelMappingsInputId}
+                hint={t('config_management.visual.sections.image_tool.web_model_mappings_hint')}
+              >
+                <textarea
+                  id={webImageModelMappingsInputId}
+                  className={`input ${styles.multilineInput}`}
+                  value={values.codexWebImageModelMappingsText}
+                  onChange={(e) => onChange({ codexWebImageModelMappingsText: e.target.value })}
+                  placeholder={'gpt-image-2: gpt-5-3\ncustom-image-alias: custom-web-slug'}
                   disabled={disabled}
                 />
               </FieldShell>

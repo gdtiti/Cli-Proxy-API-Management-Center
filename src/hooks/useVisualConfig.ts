@@ -79,6 +79,38 @@ function parseHeadersMap(raw: string): Record<string, string> {
   return headers;
 }
 
+function parseStringMapText(raw: unknown, fallback = ''): string {
+  const record = asRecord(raw);
+  if (!record) return fallback;
+
+  const lines = Object.entries(record)
+    .map(([key, value]) => {
+      const safeKey = String(key ?? '').trim();
+      const safeValue = String(value ?? '').trim();
+      if (!safeKey || !safeValue) return null;
+      return `${safeKey}: ${safeValue}`;
+    })
+    .filter((line): line is string => Boolean(line));
+  return lines.length > 0 ? lines.join('\n') : fallback;
+}
+
+function parseStringMapFromText(raw: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const separatorIndex = line.indexOf(':');
+      if (separatorIndex <= 0) return;
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1).trim();
+      if (!key || !value) return;
+      values[key] = value;
+    });
+  return values;
+}
+
 function parseStringListText(raw: unknown, fallback = ''): string {
   if (!Array.isArray(raw)) return fallback;
   const values = raw
@@ -204,6 +236,26 @@ function setStringListFromTextInDoc(
   }
   if (docHas(doc, path)) doc.deleteIn(path);
 }
+
+function setStringMapFromTextInDoc(
+  doc: YamlDocument,
+  path: YamlPath,
+  value: unknown,
+  fallback: Record<string, string>
+): void {
+  const safe = typeof value === 'string' ? value : '';
+  const values = parseStringMapFromText(safe);
+  if (Object.keys(values).length > 0) {
+    doc.setIn(path, values);
+    return;
+  }
+  if (Object.keys(fallback).length > 0) {
+    doc.setIn(path, fallback);
+    return;
+  }
+  if (docHas(doc, path)) doc.deleteIn(path);
+}
+
 
 function parseStatusCodesText(raw: unknown): string {
   if (!Array.isArray(raw)) return '';
@@ -706,6 +758,10 @@ export function useVisualConfig() {
           codexWebImage?.['route-models'],
           'gpt-image-2'
         ),
+        codexWebImageModelMappingsText: parseStringMapText(
+          codexWebImage?.['model-mappings'],
+          'gpt-image-2: gpt-5-3'
+        ),
         codexWebImageGlobalMaxConcurrency: String(codexWebImage?.['global-max-concurrency'] ?? ''),
         codexWebImagePerAccountMaxConcurrency: String(
           codexWebImage?.['per-account-max-concurrency'] ?? ''
@@ -924,6 +980,7 @@ export function useVisualConfig() {
           docHas(doc, ['codex-web-image']) ||
           values.codexWebImageEnabled ||
           values.codexWebImageRouteModelsText.trim() !== 'gpt-image-2' ||
+          values.codexWebImageModelMappingsText.trim() !== 'gpt-image-2: gpt-5-3' ||
           values.codexWebImageGlobalMaxConcurrency.trim() ||
           values.codexWebImagePerAccountMaxConcurrency.trim() ||
           values.codexWebImageQuotaRefreshConcurrency.trim() !== '4' ||
@@ -940,6 +997,12 @@ export function useVisualConfig() {
             ['codex-web-image', 'route-models'],
             values.codexWebImageRouteModelsText,
             ['gpt-image-2']
+          );
+          setStringMapFromTextInDoc(
+            doc,
+            ['codex-web-image', 'model-mappings'],
+            values.codexWebImageModelMappingsText,
+            { 'gpt-image-2': 'gpt-5-3' }
           );
           setIntFromStringInDoc(
             doc,
