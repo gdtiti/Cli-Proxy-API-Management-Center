@@ -1354,6 +1354,8 @@
           "delete_quota_exceeded_desc": "Удалять файл учётных данных после достижения порога срабатываний квоты.",
           "disable_codex_usage_limit_reached": "Отключать учётные данные Codex с лимитом usage",
           "disable_codex_usage_limit_reached_desc": "Автоматически отключать учётные данные, когда Codex возвращает usage_limit_reached.",
+          "codex_recovery_require_quota_available": "Требовать квоту Codex перед восстановлением",
+          "codex_recovery_require_quota_available_desc": "Автовосстановление и ручная проверка учитывают 5-часовое/недельное окно квоты; при 100% и ожидании reset учётные данные остаются отключёнными.",
           "scan_interval_seconds": "Интервал сканирования (сек.)",
           "delete_interval_seconds": "Интервал удаления/отключения (сек.)",
           "quota_strike_threshold": "Порог срабатываний квоты",

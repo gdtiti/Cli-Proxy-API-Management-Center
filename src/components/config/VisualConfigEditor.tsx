@@ -912,6 +912,24 @@ export function VisualConfigEditor({
                       })
                     }
                   />
+                  <ToggleRow
+                    title={t(
+                      'config_management.visual.sections.auth.codex_recovery_require_quota_available'
+                    )}
+                    description={t(
+                      'config_management.visual.sections.auth.codex_recovery_require_quota_available_desc'
+                    )}
+                    checked={values.authMaintenance.codexRecoveryRequireQuotaAvailable}
+                    disabled={disabled}
+                    onChange={(codexRecoveryRequireQuotaAvailable) =>
+                      onChange({
+                        authMaintenance: {
+                          ...values.authMaintenance,
+                          codexRecoveryRequireQuotaAvailable,
+                        },
+                      })
+                    }
+                  />
                 </SectionGrid>
                 <SectionGrid>
                   <Input

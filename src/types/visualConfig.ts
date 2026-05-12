@@ -26,6 +26,7 @@ export type VisualConfigFieldPath =
   | 'authMaintenance.circuitBreakerFailureThreshold'
   | 'authMaintenance.circuitBreakerWindowSeconds'
   | 'authMaintenance.manualInspectionTimeoutSeconds'
+  | 'authMaintenance.codexRecoveryRequireQuotaAvailable'
   | 'streaming.keepaliveSeconds'
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
@@ -91,6 +92,7 @@ export interface AuthMaintenanceConfig {
   circuitBreakerFailureThreshold: string;
   circuitBreakerWindowSeconds: string;
   manualInspectionTimeoutSeconds: string;
+  codexRecoveryRequireQuotaAvailable: boolean;
 }
 
 export type VisualConfigValues = {
@@ -216,6 +218,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
     circuitBreakerFailureThreshold: '5',
     circuitBreakerWindowSeconds: '600',
     manualInspectionTimeoutSeconds: '300',
+    codexRecoveryRequireQuotaAvailable: true,
   },
 
   // 默认值：30秒通用，60秒认证文件列表

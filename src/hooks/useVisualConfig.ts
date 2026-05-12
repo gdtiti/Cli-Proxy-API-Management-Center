@@ -761,6 +761,9 @@ export function useVisualConfig() {
           manualInspectionTimeoutSeconds: String(
             authMaintenance?.['manual-inspection-timeout-seconds'] ?? '300'
           ),
+          codexRecoveryRequireQuotaAvailable: Boolean(
+            authMaintenance?.['codex-recovery-require-quota-available'] ?? true
+          ),
         },
 
         // 新增超时配置
@@ -976,7 +979,8 @@ export function useVisualConfig() {
           values.authMaintenance.circuitBreakerEnabled !== true ||
           values.authMaintenance.circuitBreakerFailureThreshold.trim() !== '5' ||
           values.authMaintenance.circuitBreakerWindowSeconds.trim() !== '600' ||
-          values.authMaintenance.manualInspectionTimeoutSeconds.trim() !== '300';
+          values.authMaintenance.manualInspectionTimeoutSeconds.trim() !== '300' ||
+          values.authMaintenance.codexRecoveryRequireQuotaAvailable !== true;
         if (authMaintenanceDefined) {
           ensureMapInDoc(doc, ['auth-maintenance']);
           setBooleanInDoc(doc, ['auth-maintenance', 'enable'], values.authMaintenance.enable);
@@ -1049,6 +1053,11 @@ export function useVisualConfig() {
             doc,
             ['auth-maintenance', 'manual-inspection-timeout-seconds'],
             values.authMaintenance.manualInspectionTimeoutSeconds
+          );
+          setBooleanInDoc(
+            doc,
+            ['auth-maintenance', 'codex-recovery-require-quota-available'],
+            values.authMaintenance.codexRecoveryRequireQuotaAvailable
           );
           deleteIfMapEmpty(doc, ['auth-maintenance']);
         }
