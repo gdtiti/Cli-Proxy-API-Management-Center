@@ -1406,7 +1406,81 @@ export function VisualConfigEditor({
                   )}
                   error={codexWebImageQuotaRefreshConcurrencyError}
                 />
+                <Input
+                  label={t('config_management.visual.sections.image_tool.web_storage_dir', {
+                    defaultValue: '绘图记录目录',
+                  })}
+                  placeholder="/data/images/"
+                  value={values.codexWebImageStorageDir}
+                  onChange={(e) => onChange({ codexWebImageStorageDir: e.target.value })}
+                  disabled={disabled}
+                  hint={t('config_management.visual.sections.image_tool.web_storage_dir_hint', {
+                    defaultValue: '启用任务记录后，每天创建日期目录保存上传、输出和请求日志。',
+                  })}
+                />
               </SectionGrid>
+              <ToggleRow
+                title={t('config_management.visual.sections.image_tool.web_record_tasks', {
+                  defaultValue: '记录绘图任务',
+                })}
+                description={t(
+                  'config_management.visual.sections.image_tool.web_record_tasks_desc',
+                  {
+                    defaultValue: '保存任务 JSON、请求摘要、上传图片和生成图片。',
+                  }
+                )}
+                checked={values.codexWebImageRecordTasks}
+                disabled={disabled}
+                onChange={(codexWebImageRecordTasks) => onChange({ codexWebImageRecordTasks })}
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.image_tool.web_save_uploads', {
+                  defaultValue: '保存上传图片',
+                })}
+                description={t(
+                  'config_management.visual.sections.image_tool.web_save_uploads_desc',
+                  {
+                    defaultValue: '图片编辑和参考图会写入 uploads 目录。',
+                  }
+                )}
+                checked={values.codexWebImageSaveUploadedImages}
+                disabled={disabled}
+                onChange={(codexWebImageSaveUploadedImages) =>
+                  onChange({ codexWebImageSaveUploadedImages })
+                }
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.image_tool.web_save_outputs', {
+                  defaultValue: '保存生成图片',
+                })}
+                description={t(
+                  'config_management.visual.sections.image_tool.web_save_outputs_desc',
+                  {
+                    defaultValue: '生成结果会写入 outputs 目录。',
+                  }
+                )}
+                checked={values.codexWebImageSaveGeneratedImages}
+                disabled={disabled}
+                onChange={(codexWebImageSaveGeneratedImages) =>
+                  onChange({ codexWebImageSaveGeneratedImages })
+                }
+              />
+              <ToggleRow
+                title={t('config_management.visual.sections.image_tool.web_save_request_log', {
+                  defaultValue: '保存请求日志',
+                })}
+                description={t(
+                  'config_management.visual.sections.image_tool.web_save_request_log_desc',
+                  {
+                    defaultValue: '保存脱敏后的模型、参数和任务摘要。',
+                  }
+                )}
+                checked={values.codexWebImageSaveRequestLog}
+                disabled={disabled}
+                onChange={(codexWebImageSaveRequestLog) =>
+                  onChange({ codexWebImageSaveRequestLog })
+                }
+              />
             </SectionStack>
           </ConfigSection>
 

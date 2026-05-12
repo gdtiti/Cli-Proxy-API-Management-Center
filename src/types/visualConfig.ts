@@ -132,6 +132,11 @@ export type VisualConfigValues = {
   codexWebImageGlobalMaxConcurrency: string;
   codexWebImagePerAccountMaxConcurrency: string;
   codexWebImageQuotaRefreshConcurrency: string;
+  codexWebImageStorageDir: string;
+  codexWebImageRecordTasks: boolean;
+  codexWebImageSaveUploadedImages: boolean;
+  codexWebImageSaveGeneratedImages: boolean;
+  codexWebImageSaveRequestLog: boolean;
   payloadDefaultRules: PayloadRule[];
   payloadDefaultRawRules: PayloadRule[];
   payloadOverrideRules: PayloadRule[];
@@ -188,6 +193,11 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   codexWebImageGlobalMaxConcurrency: '',
   codexWebImagePerAccountMaxConcurrency: '',
   codexWebImageQuotaRefreshConcurrency: '4',
+  codexWebImageStorageDir: '',
+  codexWebImageRecordTasks: false,
+  codexWebImageSaveUploadedImages: true,
+  codexWebImageSaveGeneratedImages: true,
+  codexWebImageSaveRequestLog: true,
   payloadDefaultRules: [],
   payloadDefaultRawRules: [],
   payloadOverrideRules: [],

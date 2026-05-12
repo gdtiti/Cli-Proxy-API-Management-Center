@@ -713,6 +713,16 @@ export function useVisualConfig() {
         codexWebImageQuotaRefreshConcurrency: String(
           codexWebImage?.['quota-refresh-concurrency'] ?? '4'
         ),
+        codexWebImageStorageDir:
+          typeof codexWebImage?.['storage-dir'] === 'string' ? codexWebImage['storage-dir'] : '',
+        codexWebImageRecordTasks: Boolean(codexWebImage?.['record-tasks']),
+        codexWebImageSaveUploadedImages: Boolean(
+          codexWebImage?.['save-uploaded-images'] ?? true
+        ),
+        codexWebImageSaveGeneratedImages: Boolean(
+          codexWebImage?.['save-generated-images'] ?? true
+        ),
+        codexWebImageSaveRequestLog: Boolean(codexWebImage?.['save-request-log'] ?? true),
 
         payloadDefaultRules: parsePayloadRules(payload?.default),
         payloadDefaultRawRules: parseRawPayloadRules(payload?.['default-raw']),
@@ -916,7 +926,12 @@ export function useVisualConfig() {
           values.codexWebImageRouteModelsText.trim() !== 'gpt-image-2' ||
           values.codexWebImageGlobalMaxConcurrency.trim() ||
           values.codexWebImagePerAccountMaxConcurrency.trim() ||
-          values.codexWebImageQuotaRefreshConcurrency.trim() !== '4'
+          values.codexWebImageQuotaRefreshConcurrency.trim() !== '4' ||
+          values.codexWebImageStorageDir.trim() ||
+          values.codexWebImageRecordTasks ||
+          !values.codexWebImageSaveUploadedImages ||
+          !values.codexWebImageSaveGeneratedImages ||
+          !values.codexWebImageSaveRequestLog
         ) {
           ensureMapInDoc(doc, ['codex-web-image']);
           doc.setIn(['codex-web-image', 'enabled'], values.codexWebImageEnabled);
@@ -941,6 +956,17 @@ export function useVisualConfig() {
             ['codex-web-image', 'quota-refresh-concurrency'],
             values.codexWebImageQuotaRefreshConcurrency
           );
+          setStringInDoc(doc, ['codex-web-image', 'storage-dir'], values.codexWebImageStorageDir);
+          doc.setIn(['codex-web-image', 'record-tasks'], values.codexWebImageRecordTasks);
+          doc.setIn(
+            ['codex-web-image', 'save-uploaded-images'],
+            values.codexWebImageSaveUploadedImages
+          );
+          doc.setIn(
+            ['codex-web-image', 'save-generated-images'],
+            values.codexWebImageSaveGeneratedImages
+          );
+          doc.setIn(['codex-web-image', 'save-request-log'], values.codexWebImageSaveRequestLog);
           deleteIfMapEmpty(doc, ['codex-web-image']);
         }
 
