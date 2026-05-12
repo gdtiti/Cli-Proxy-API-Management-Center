@@ -34,6 +34,7 @@ export interface WebImageTask {
   quality?: string;
   output_format?: string;
   status?: string;
+  stage?: string;
   error?: string;
   http_status?: number;
   input_count?: number;
@@ -44,6 +45,12 @@ export interface WebImageTask {
   started_at?: string;
   completed_at?: string;
   duration_millis?: number;
+  events?: Array<{
+    at?: string;
+    stage?: string;
+    status?: string;
+    message?: string;
+  }>;
 }
 
 export interface WebImageQuotaRefreshResult {

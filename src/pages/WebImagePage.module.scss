@@ -330,6 +330,33 @@
   gap: 4px;
 }
 
+.eventList {
+  display: flex;
+  min-width: 180px;
+  max-width: 280px;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eventItem {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.eventItem small {
+  color: var(--text-muted);
+}
+
+.eventItem code {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
+
 .pagination {
   display: flex;
   align-items: center;

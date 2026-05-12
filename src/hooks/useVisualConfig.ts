@@ -771,8 +771,10 @@ export function useVisualConfig() {
         ),
         codexWebImageProbeBeforeUse: Boolean(codexWebImage?.['probe-before-use']),
         codexWebImageStorageDir:
-          typeof codexWebImage?.['storage-dir'] === 'string' ? codexWebImage['storage-dir'] : '',
-        codexWebImageRecordTasks: Boolean(codexWebImage?.['record-tasks']),
+          typeof codexWebImage?.['storage-dir'] === 'string'
+            ? codexWebImage['storage-dir']
+            : 'data/images',
+        codexWebImageRecordTasks: Boolean(codexWebImage?.['record-tasks'] ?? true),
         codexWebImageSaveUploadedImages: Boolean(
           codexWebImage?.['save-uploaded-images'] ?? true
         ),

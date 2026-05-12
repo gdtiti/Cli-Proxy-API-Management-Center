@@ -123,6 +123,22 @@ const fileList = (files?: string[]) => {
   );
 };
 
+const eventList = (task: WebImageTask) => {
+  const events = task.events?.slice(-5) ?? [];
+  if (!events.length) return <span className={styles.muted}>{task.stage || '-'}</span>;
+  return (
+    <div className={styles.eventList}>
+      {events.map((event, index) => (
+        <div key={`${event.at ?? ''}-${event.stage ?? ''}-${index}`} className={styles.eventItem}>
+          <span>{event.stage || '-'}</span>
+          <small>{event.status || task.status || '-'}</small>
+          {event.message ? <code>{event.message}</code> : null}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
 
 export function WebImagePage() {
@@ -143,7 +159,22 @@ export function WebImagePage() {
   const [pageSize, setPageSize] = useState(20);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchText, setBatchText] = useState('');
+  const [taskRefreshError, setTaskRefreshError] = useState<string | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
+
+  const loadTasks = useCallback(async (notify = false) => {
+    try {
+      const nextTasks = await webImageApi.listTasks();
+      setTasks(nextTasks);
+      setTaskRefreshError(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setTaskRefreshError(message);
+      if (notify) {
+        showNotification(message, 'error');
+      }
+    }
+  }, [showNotification]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +186,7 @@ export function WebImagePage() {
       ]);
       setAccounts(nextAccounts);
       setTasks(nextTasks);
+      setTaskRefreshError(null);
       if (nextStatus) setRefreshStatus(nextStatus);
     } catch (error: unknown) {
       showNotification(error instanceof Error ? error.message : String(error), 'error');
@@ -167,6 +199,24 @@ export function WebImagePage() {
     void load();
     return () => streamAbortRef.current?.abort();
   }, [load]);
+
+  const hasRunningTasks = useMemo(() => tasks.some(isRunningTask), [tasks]);
+
+  useEffect(() => {
+    if (activeTab === 'tasks' || activeTab === 'analytics') {
+      void loadTasks();
+    }
+  }, [activeTab, loadTasks]);
+
+  useEffect(() => {
+    if (activeTab !== 'tasks' && activeTab !== 'analytics' && !hasRunningTasks) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      void loadTasks();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [activeTab, hasRunningTasks, loadTasks]);
 
   useEffect(() => {
     setPage(1);
@@ -581,6 +631,11 @@ export function WebImagePage() {
 
   const renderTasksTab = () => (
     <Card title={t('web_image.tasks', { defaultValue: '绘图任务、使用情况与文件记录' })}>
+      {taskRefreshError ? (
+        <div className={styles.error}>
+          {t('web_image.task_refresh_failed', { defaultValue: '任务记录刷新失败' })}: {taskRefreshError}
+        </div>
+      ) : null}
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
@@ -590,6 +645,7 @@ export function WebImagePage() {
               <th>Account</th>
               <th>Prompt</th>
               <th>Status</th>
+              <th>Process</th>
               <th>Usage</th>
               <th>Files</th>
               <th>Started</th>
@@ -611,8 +667,10 @@ export function WebImagePage() {
                 <td className={styles.prompt}>{task.prompt || '-'}</td>
                 <td>
                   <span className={styles.badge}>{task.status || '-'}</span>
+                  {task.stage ? <span className={styles.badge}>{task.stage}</span> : null}
                   {task.http_status ? <span className={styles.badge}>HTTP {task.http_status}</span> : null}
                 </td>
+                <td>{eventList(task)}</td>
                 <td>
                   <div>{task.input_count ?? 0} input / {task.output_count ?? task.output_files?.length ?? 0} output</div>
                   <div className={styles.muted}>{formatDuration(task.duration_millis)}</div>
@@ -631,7 +689,7 @@ export function WebImagePage() {
             ))}
             {tasks.length === 0 ? (
               <tr>
-                <td colSpan={9} className={styles.muted}>
+                <td colSpan={10} className={styles.muted}>
                   {t('web_image.empty_tasks', { defaultValue: '暂无绘图任务记录' })}
                 </td>
               </tr>
@@ -678,6 +736,11 @@ export function WebImagePage() {
       </div>
 
       <Card title={t('web_image.statistics_analysis', { defaultValue: '绘图统计分析' })}>
+        {taskRefreshError ? (
+          <div className={styles.error}>
+            {t('web_image.task_refresh_failed', { defaultValue: '任务记录刷新失败' })}: {taskRefreshError}
+          </div>
+        ) : null}
         <div className={styles.analyticsGrid}>
           <section><h3>按状态</h3>{renderDistribution(analytics.byStatus)}</section>
           <section><h3>按模型</h3>{renderDistribution(analytics.byModel)}</section>
