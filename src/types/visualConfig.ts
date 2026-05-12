@@ -133,6 +133,7 @@ export type VisualConfigValues = {
   codexWebImageGlobalMaxConcurrency: string;
   codexWebImagePerAccountMaxConcurrency: string;
   codexWebImageQuotaRefreshConcurrency: string;
+  codexWebImageProbeBeforeUse: boolean;
   codexWebImageStorageDir: string;
   codexWebImageRecordTasks: boolean;
   codexWebImageSaveUploadedImages: boolean;
@@ -195,6 +196,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   codexWebImageGlobalMaxConcurrency: '',
   codexWebImagePerAccountMaxConcurrency: '',
   codexWebImageQuotaRefreshConcurrency: '4',
+  codexWebImageProbeBeforeUse: false,
   codexWebImageStorageDir: '',
   codexWebImageRecordTasks: false,
   codexWebImageSaveUploadedImages: true,

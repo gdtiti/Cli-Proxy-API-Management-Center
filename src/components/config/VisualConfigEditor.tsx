@@ -1435,6 +1435,23 @@ export function VisualConfigEditor({
                 />
               </SectionGrid>
               <ToggleRow
+                title={t('config_management.visual.sections.image_tool.web_probe_before_use', {
+                  defaultValue: '使用前远程探测',
+                })}
+                description={t(
+                  'config_management.visual.sections.image_tool.web_probe_before_use_desc',
+                  {
+                    defaultValue:
+                      '每次绘图前先刷新一次 Web 绘图额度。默认关闭，避免额外请求 ChatGPT 接口。',
+                  }
+                )}
+                checked={values.codexWebImageProbeBeforeUse}
+                disabled={disabled}
+                onChange={(codexWebImageProbeBeforeUse) =>
+                  onChange({ codexWebImageProbeBeforeUse })
+                }
+              />
+              <ToggleRow
                 title={t('config_management.visual.sections.image_tool.web_record_tasks', {
                   defaultValue: '记录绘图任务',
                 })}

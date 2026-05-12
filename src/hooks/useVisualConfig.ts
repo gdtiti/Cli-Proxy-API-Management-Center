@@ -769,6 +769,7 @@ export function useVisualConfig() {
         codexWebImageQuotaRefreshConcurrency: String(
           codexWebImage?.['quota-refresh-concurrency'] ?? '4'
         ),
+        codexWebImageProbeBeforeUse: Boolean(codexWebImage?.['probe-before-use']),
         codexWebImageStorageDir:
           typeof codexWebImage?.['storage-dir'] === 'string' ? codexWebImage['storage-dir'] : '',
         codexWebImageRecordTasks: Boolean(codexWebImage?.['record-tasks']),
@@ -984,6 +985,7 @@ export function useVisualConfig() {
           values.codexWebImageGlobalMaxConcurrency.trim() ||
           values.codexWebImagePerAccountMaxConcurrency.trim() ||
           values.codexWebImageQuotaRefreshConcurrency.trim() !== '4' ||
+          values.codexWebImageProbeBeforeUse ||
           values.codexWebImageStorageDir.trim() ||
           values.codexWebImageRecordTasks ||
           !values.codexWebImageSaveUploadedImages ||
@@ -1019,6 +1021,7 @@ export function useVisualConfig() {
             ['codex-web-image', 'quota-refresh-concurrency'],
             values.codexWebImageQuotaRefreshConcurrency
           );
+          doc.setIn(['codex-web-image', 'probe-before-use'], values.codexWebImageProbeBeforeUse);
           setStringInDoc(doc, ['codex-web-image', 'storage-dir'], values.codexWebImageStorageDir);
           doc.setIn(['codex-web-image', 'record-tasks'], values.codexWebImageRecordTasks);
           doc.setIn(
