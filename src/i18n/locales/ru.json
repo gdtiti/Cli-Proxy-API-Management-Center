@@ -1355,7 +1355,7 @@
           "disable_codex_usage_limit_reached": "Отключать учётные данные Codex с лимитом usage",
           "disable_codex_usage_limit_reached_desc": "Автоматически отключать учётные данные, когда Codex возвращает usage_limit_reached.",
           "codex_recovery_require_quota_available": "Требовать квоту Codex перед восстановлением",
-          "codex_recovery_require_quota_available_desc": "Автовосстановление и ручная проверка учитывают 5-часовое/недельное окно квоты; при 100% и ожидании reset учётные данные остаются отключёнными.",
+          "codex_recovery_require_quota_available_desc": "Автовосстановление и ручная проверка требуют истечения cooldown и подтверждённой доступной квоты в 5-часовом и недельном окнах; отсутствующие или исчерпанные окна оставляют учётные данные отключёнными с записью причины.",
           "scan_interval_seconds": "Интервал сканирования (сек.)",
           "delete_interval_seconds": "Интервал удаления/отключения (сек.)",
           "quota_strike_threshold": "Порог срабатываний квоты",

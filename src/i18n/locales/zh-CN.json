@@ -1357,7 +1357,7 @@
           "disable_codex_usage_limit_reached": "禁用 Codex 用量耗尽认证",
           "disable_codex_usage_limit_reached_desc": "Codex 返回 usage_limit_reached 时自动禁用认证。",
           "codex_recovery_require_quota_available": "恢复前要求 Codex 额度可用",
-          "codex_recovery_require_quota_available_desc": "自动恢复和手动巡检会检查 5 小时/周额度窗口；仍为 100% 且未到 reset 时间时保持禁用。",
+          "codex_recovery_require_quota_available_desc": "自动恢复和手动巡检会要求冷却已到期，并确认 5 小时和周额度窗口都还有额度；窗口缺失或任一窗口满额都会保持禁用并记录原因。",
           "scan_interval_seconds": "扫描间隔（秒）",
           "delete_interval_seconds": "删除/禁用节流间隔（秒）",
           "quota_strike_threshold": "额度连续命中阈值",

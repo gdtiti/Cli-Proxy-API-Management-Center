@@ -1357,7 +1357,7 @@
           "disable_codex_usage_limit_reached": "Disable Codex usage-limit credentials",
           "disable_codex_usage_limit_reached_desc": "Automatically disable credentials when Codex returns usage_limit_reached.",
           "codex_recovery_require_quota_available": "Require Codex quota before recovery",
-          "codex_recovery_require_quota_available_desc": "Automatic recovery and manual inspection check 5-hour/weekly quota windows; keep disabled when a window is still 100% and waiting for reset.",
+          "codex_recovery_require_quota_available_desc": "Automatic recovery and manual inspection require cooldown expiry and confirmed available quota in both 5-hour and weekly windows; missing or exhausted windows stay disabled with a recorded reason.",
           "scan_interval_seconds": "Scan interval (seconds)",
           "delete_interval_seconds": "Delete/disable throttle interval (seconds)",
           "quota_strike_threshold": "Quota strike threshold",
