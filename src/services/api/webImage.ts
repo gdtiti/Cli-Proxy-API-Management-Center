@@ -46,6 +46,29 @@ export interface WebImageTask {
   duration_millis?: number;
 }
 
+export interface WebImageQuotaRefreshResult {
+  auth_id?: string;
+  auth_index?: string;
+  status: string;
+  http_status?: number;
+  error?: string;
+  quota?: WebImageAuthAccount['quota'];
+}
+
+export interface WebImageQuotaRefreshStatus {
+  id?: string;
+  running: boolean;
+  started_at?: string;
+  finished_at?: string;
+  total: number;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  current_auth?: string;
+  message?: string;
+  results?: WebImageQuotaRefreshResult[];
+}
+
 interface WebImageAuthsResponse {
   accounts?: WebImageAuthAccount[];
   total?: number;
@@ -74,6 +97,16 @@ export const webImageApi = {
     return apiClient.post('/web-image-auths', payload);
   },
 
+  batchCreateAuths(payload: {
+    text: string;
+    plan_type?: string;
+    proxy_url?: string;
+    note?: string;
+    disabled?: boolean;
+  }) {
+    return apiClient.post('/web-image-auths/batch', payload);
+  },
+
   importCodex() {
     return apiClient.post('/web-image-auths/import-codex');
   },
@@ -86,8 +119,51 @@ export const webImageApi = {
     return apiClient.delete(`/web-image-auths?name=${encodeURIComponent(name)}`);
   },
 
-  refreshQuota() {
-    return apiClient.post('/web-image-auths/quota-refresh');
+  refreshQuota(payload?: { concurrency?: number; auth_ids?: string[] }) {
+    return apiClient.post<WebImageQuotaRefreshStatus>('/web-image-auths/quota-refresh', payload || {});
+  },
+
+  getRefreshQuotaStatus() {
+    return apiClient.get<WebImageQuotaRefreshStatus>('/web-image-auths/quota-refresh');
+  },
+
+  async streamRefreshQuota(
+    onProgress: (status: WebImageQuotaRefreshStatus) => void,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const response = await fetch(apiClient.buildUrl('/web-image-auths/quota-refresh/events'), {
+      method: 'GET',
+      headers: {
+        ...apiClient.authHeaders(),
+        Accept: 'text/event-stream',
+      },
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(`quota refresh stream failed: HTTP ${response.status}`);
+    }
+    if (!response.body) {
+      throw new Error('quota refresh stream is empty');
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split(/\n\n/);
+      buffer = events.pop() || '';
+      for (const event of events) {
+        const data = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart())
+          .join('\n');
+        if (!data) continue;
+        onProgress(JSON.parse(data) as WebImageQuotaRefreshStatus);
+      }
+    }
   },
 
   async listTasks(): Promise<WebImageTask[]> {

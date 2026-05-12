@@ -250,6 +250,15 @@ class ApiClient {
   async requestRaw(config: ApiRequestConfig): Promise<AxiosResponse> {
     return this.instance.request(config);
   }
+
+  buildUrl(path: string): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${this.apiBase}${normalizedPath}`;
+  }
+
+  authHeaders(): Record<string, string> {
+    return this.managementKey ? { Authorization: `Bearer ${this.managementKey}` } : {};
+  }
 }
 
 // 导出单例
